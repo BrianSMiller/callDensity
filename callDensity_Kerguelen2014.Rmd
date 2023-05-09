@@ -1,0 +1,186 @@
+---
+title: "Main high-level RMarkdown script for estimating call density"
+author: "Brian Miller"
+date: "2022-10-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+## Background and method
+
+This is a high-level script to estimate call densities from automated detections of whales in a single site-year dataset from the AAD.
+
+This script is essentially a wrapper around code originally written by Danielle Harris and Franciele Castro.
+
+$D_c = \frac{N_c*(1-c)}{kTp_a{\pi}w^2}$
+
+where:
+
+$D_c$ is call density
+
+$N_c$ is number of calls
+
+$c$ is false discovery rate
+
+$k$ is number of sensors (here always 1)
+
+$T$ is the duration of data analysed
+
+$p_a$ is the probability of detection in the study area
+
+${\pi}w^2$ is the study area (in km\^2)
+
+## Define data files, subsets, and constants
+
+This script uses as it's inputs a lot of files that are generated from the Matlab script prepareForDensityEstimation.m
+
+```{r}
+rm(list=ls())
+
+# Source support functions for converting data from AcTUP, CaptureHistoryTable, 
+# Matlab, etc. Also includes source function probabilityOfDetectionInArea.R
+source('callDensitySupport.R') 
+
+### Hard-coded parameters for each site (TODO: standardize file naming)
+siteCode <- 'Kerguelen2014'
+p <- read.csv(paste0(siteCode, '_callDensityParams.csv'))
+snrLim <- c(-10,20)
+pDetLim <- c(0,1)
+seasons <- factor(c('summer', 'autumn', 'winter', 'spring', 'year'))
+seasons <- factor(c('01','02','03','04','05','06','07','08','09','10','11','12'))
+
+```
+
+Run the density estimation script for each season and year
+
+## Density of blue whale ABZ calls in long-term moored recording dataset from `r siteCode`
+
+### Before calculating call-density, explore which detection function is sensible
+
+#### First check whether a GLM is sensible
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+plotList <- list()
+plotCount = 1;
+for (season in seasons ){
+  p <- defaultOutputFileNames(p,season)
+  p$useGLM <- TRUE
+  snrInfo <- capHist2snrInfo(p$capHistFile, season=season)
+  gDetSnr <- showSNRdetectionFunc(fitSNRdetectionFunc(snrInfo, useGLM=p$useGLM) ) +
+    ggtitle(paste(p$siteCode, season,'n=',dim(snrInfo)[1]) ) +
+    xlim(snrLim) +
+    ylim(pDetLim) +
+    theme(text=element_text(size=10), #change font size of all text
+        plot.title=element_text(size=10))
+  
+  plotList[[plotCount]] <- gDetSnr;
+  plotCount =plotCount +1; 
+}
+
+gridExtra::grid.arrange(grobs=plotList,ncol=3)
+
+```
+
+#### Check that GAMs are sensible
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+plotList <- list()
+plotCount = 1;
+for (season in seasons ){
+  p <- defaultOutputFileNames(p,season)
+  p$useGLM <- FALSE
+  p$useSCAM <-FALSE
+  p$numKnots <- 5
+
+  snrInfo <- capHist2snrInfo(p$capHistFile, season=season)
+  gDetSnr <- showSNRdetectionFunc(
+    fitSNRdetectionFunc(snrInfo, useGLM=p$useGLM, useSCAM=p$useSCAM,
+                        numKnots = p$numKnots) 
+  ) +
+    ggtitle(paste(p$siteCode, season,'n=',dim(snrInfo)[1]) ) +
+    xlim(snrLim) +
+    ylim(pDetLim) +
+    theme(text=element_text(size=10), #change font size of all text
+          plot.title=element_text(size=10))
+  
+  plotList[[plotCount]] <- gDetSnr;
+  plotCount =plotCount +1; 
+}
+
+gridExtra::grid.arrange(grobs=plotList,ncol=3)
+
+
+```
+
+#### Finally, see if a constrained GAM is sensible
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+plotList <- list()
+plotCount = 1;
+for (season in seasons ){
+  p <- defaultOutputFileNames(p,season)
+  p$useGLM <- FALSE
+  p$useSCAM <-TRUE
+  p$numKnots <- 5
+
+  snrInfo <- capHist2snrInfo(p$capHistFile, season=season)
+  gDetSnr <- showSNRdetectionFunc(
+    fitSNRdetectionFunc(snrInfo, useGLM=p$useGLM, useSCAM=p$useSCAM,
+                        numKnots = p$numKnots)
+  ) +
+    ggtitle(paste(p$siteCode, season,'n=',dim(snrInfo)[1]) ) +
+    xlim(snrLim) +
+    ylim(pDetLim) +
+    theme(text=element_text(size=10), #change font size of all text
+          plot.title=element_text(size=10))
+
+  plotList[[plotCount]] <- gDetSnr;
+  plotCount =plotCount +1;
+}
+
+gridExtra::grid.arrange(grobs=plotList,ncol=3)
+
+
+```
+
+Regular GAMs are problematic for some spring & full year, so either GLM or constrained GAM are the way to go here.
+
+## Estimate $p_a$, probability of detection in area separately for each season
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, cache=TRUE}
+
+for (season in seasons ){
+  print(season) 
+  p <- defaultOutputFileNames(p,season)
+  p$outerloop <- 10
+  p$useGLM <- FALSE
+  p$useSCAM <-TRUE
+  p$numKnots<-5
+  p$useSeparateFPdata <-TRUE
+  options(knitr.duplicate.label = 'allow')
+  source(knitr::purl("callDensityCoreScript.Rmd",output=tempfile(),
+                     documentation=0,quiet=TRUE))
+}
+
+
+```
+
+## Load and plot call density estimates from `r siteCode` of Bm-Ant-ABZ
+
+```{r, fig.height=6, fig.width=3.0, warning=FALSE, dev='ragg_png'}
+
+options(knitr.duplicate.label = 'allow') 
+source(knitr::purl("callDensityTablesAndPlots.Rmd",output=tempfile(),
+                     documentation=2,quiet=TRUE))
+common
+inputs
+result
+
+```
