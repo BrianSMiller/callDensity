@@ -1,5 +1,5 @@
 pDetInArea <- 
-  function(SNRinfo, SL, TLlookup,  NL, # Sonar equation inputs
+  function(res.1, SL, TLlookup,  NL, # Sonar equation inputs
            transectFile, simResultsFile, paFile, # file output names
            useGLM = FALSE, useSCAM=FALSE, numKnots = 3, # detector SNR curves
            output.resolution.m = 100, outerloop = 1000) {
@@ -10,7 +10,7 @@ pDetInArea <-
   # This version edited by FRC up to apr21
   # Latest version adapted by BSM on 12 Oct 2022 
   #   INPUT/OUTPUT changes
-  #   -Bring all user-selectable input parameters up to top of script
+  #   -Bring all user-selectable parameters
   #   -Change names of output files based on siteCode and season
   #   -Replace all hard-coded "magic" numbers with correct, and full dimensions 
   #     from input files
@@ -28,109 +28,60 @@ pDetInArea <-
   # Further modified by BSM on 12 Dec 2022:
   #   -Move all user-adjustable parameters into parameter data.frame, p. 
   #     This includes all input and output file names, as well as numeric params.
-  
+  # Further modified by BSM in Apr 2023 to make into a function
+  #   - All parameters now adjustable in function call
   
   # Simulation to predict average probability of detection
   #The simulation has several steps:
-  #(1) load the files needed for
-  #(a) SNR regression plot
-  #(b) TL lookup table x `no.profiles` for the different transects
-  # NB: Thin original TL data so have a 100m range step, not 20m
+  #(1) SNR regression and TL data now passed in via function call
+  #(a)Thin original TL data so have a 100m range step, not 20m
   #   The resolution given in the propagation model output may be too fine a
   #   resolution, and will increase the code run time.
-  #(2) calculate the GAM for the SNR regression - initial model does not need to
-  #   be in the loop
-  
-  ## In this code GLM was executed instead of GAM
+  #(2) GAM for the SNR regression passed in via function call - 
+  #   initial model does not need to be in the loop
   
   #(3) The outer loop (to be run 1000 times): (a) Generate a possible mean and
-  #standard deviations for source level using a parametric bootstrap approach (b)
-  #Generate a possible mean and standard deviations for noise level using a
-  #parametric bootstrap approach (c) Generate a set of coefficients for the
-  #detector characterisation curve (4) For each combination of outer loop
-  #parameters: For each column of TL lookup table : (a) draw ~10000 source level
-  #values from a distribution generated in outer loop and apply to all of the
-  #virtual calls along the transect (b) draw ~10000 noise level values from a
-  #distribution generated in outer loop and apply to all of the range steps along
-  #the transect (c) using the TL values, calculate the RL given the SL for each
-  #virtual call (d) calculate the SNR of each virtual call, given the assigned
-  #noise levels (e) predict prob(detect) given the SNR for all SNR values (~10000
-  #per profile) (5) for all p(det), calculate a weighted average (weighting by
-  #distance) Weight each prob(detect) by the range (i.e. multiply the p(det) by
-  #the range) Then divide all weighted p(dets) for a transect by the sum of ALL
-  #ranges across each transect. Having run the outer loop 1000 times, have 1000
-  #weighted-average p(det) per transect (6) Final p(det) calculations (a)
-  #Calculate a transect-specific mean p(det) for each transect (b) Calculate an
-  #overall p(det) for the whole simulation (c) Save results in a results table (7)
-  #Variance calculations (a) Need to calculate the standard error of
-  #transect-specific p(det) values (b) Need to calculate the standard deviation of
-  #transect-specific p(det) values (c) Save results in a results table and print
-  #the table for future calculations
-  #*******************************************************************************
-  #All input parameters brought up to top, but now provided externally by sourcing
-  #a paramter script
-  
-  # siteCode <- 'Kerguelen2014'
-  # season <- 'year'
-  
-  # capHistFile <-"S:/manuscripts/2021-Fran_Postdoc/Last tests/1_ Monte Carlo simulation/Original spreadsheets/captureHistory (Kerguelen2014 BmAntABZ) ravenAnnotation vs Ishmael_spectrogram_correlation_00320_events.csv" 
-  # tlFile <- paste0(siteCode, "_TL_woa2018_meanSSP_",season,".csv")
-  
-  # SLmean <- 191.0 # See Miller et al 2021 Source Level of Blue and Fin whale
-  # SLsd <- 8.0
-  # SLsamplesize<-350 #(needed for step 4a).
-  
-  # Transmission loss for MC model of probability of detection in area Pa, and its CV
-  # tlFile <- tlFile
-  
-  # NL$mean
-  # NL$sd
-  # NL$sampleSize
-  
-  # useGLM = TRUE # If this is true, then p(det)~SNR will be modelled with a GLM instead of GAM
-  
-  # #number of iterations for the outer loop
-  # outerloop<-1000
-  # 
-  # # range resolution in m for detection probabilities along  each transect
-  # output.resolution.m <- 100
-  # 
-  # # Number of knots used in GAM
-  # numKnots <- 3
-  
-  #*****************************************************************************
-  # output parameters
-  # paFile <- paste0("Pa_", siteCode, "_", season, ".txt")
-  # transectFile <- paste0("pDet_",siteCode,'_',season,'_transects.csv')
-  # simResultsFile <- paste0('simResult_', siteCode, '_',season,'.txt')
-  
-  ### VERSION Fran:
-  #STEP 1(a) - Read data in for SNR regression
-  
-  # Number of measurements i.e. number of rows - needed for later
-  numrow<-dim(SNRinfo)[1]
-  
-  ### Estimate distribution of noise levels calibrated SNR measurements 
-  # NL <- noiseLevelDistribution(noiseCSV,season)
-  #*******************************************************************************
-  #STEP 1(b)
-  
-  #(if TL data is in csv file)
-  # TLlookup<-read.csv(tlFile)
-  # head(TLlookup)
+  #   standard deviations for source level using a parametric bootstrap approach (b)
+  #   Generate a possible mean and standard deviations for noise level using a
+  #   parametric bootstrap approach (c) Generate a set of coefficients for the
+  #   detector characterisation curve 
+  #
+  #(4) For each combination of outer loop parameters: For each column of TL 
+  #   lookup table : (a) draw ~10000 source level values from a distribution
+  #   generated in outer loop and apply to all of the virtual calls along the
+  #   transect (b) draw ~10000 noise level values from a distribution generated
+  #   in outer loop and apply to all of the range steps along the transect (c)
+  #   using the TL values, calculate the RL given the SL for each virtual call
+  #   (d) calculate the SNR of each virtual call, given the assigned noise
+  #   levels (e) predict prob(detect) given the SNR for all SNR values (~10000
+  #   per profile)
+  #
+  #(5) for all p(det), calculate a weighted average (weighting by
+  #   distance) Weight each prob(detect) by the range (i.e. multiply the p(det) by
+  #   the range) Then divide all weighted p(dets) for a transect by the sum of ALL
+  #   ranges across each transect. Having run the outer loop 1000 times, have 1000
+  #   weighted-average p(det) per transect 
+  #(6) Final p(det) calculations 
+  # (a) Calculate a transect-specific mean p(det) for each transect 
+  # (b) Calculate an overall p(det) for the whole simulation
+  # (c) Save results in a results table
+  #(7) Variance calculations 
+  # (a) Calculate the standard error of transect-specific p(det) values 
+  # (b) Calculate the standard deviation of transect-specific p(det) values 
+  # (c) Save results in a table and print the table for future calculations
+#*******************************************************************************
+  #STEP 1(a) - Thin TL data
   
   # Number of measurements i.e. number of rows
   numTLrow<-dim(TLlookup)[1]
   
-  # Define the number of profiles that are being used:
-  # no.profiles<-8
   # Use all TL columns from TLlookup file (1st column is range)
   no.profiles <- dim(TLlookup)[2]-1;
-  # no.profiles
   
   # Convert to matrix:
   allTLlookup_h <- as.matrix(TLlookup) # to convert to matrix, with no header
-  allTLlookup <- matrix(allTLlookup_h, ncol = ncol(allTLlookup_h), dimnames=NULL)
+  allTLlookup <- matrix(allTLlookup_h, ncol = ncol(allTLlookup_h), 
+                        dimnames=NULL)
   
   #Now thin the data, so that there is only a TL value every 100m; Presently this
   #step just uses every nth measurement based on the spacing, but could instead
@@ -158,18 +109,11 @@ pDetInArea <-
   #*******************************************************************************
   
   # STEP 2
-  
-  library(boot)       # for the inv.logit function - It is no longer necessary 
   library(MASS)       # for the mvrnorm
   library(mgcv)
-  
   # Reference: https://smolski.github.io/livroavancado/reglog.html#o-modelo
   # "Dispersion of" events "and" non-events "(binary response variable)":
-  
-  
-  # Initial GLM or GAM:
-  res.1 <- fitSNRdetectionFunc(SNRinfo, 
-                               useGLM=useGLM, useSCAM=useSCAM, numKnots)
+
   
   #*******************************************************************************
   # STEP 3

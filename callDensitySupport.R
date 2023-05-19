@@ -1,7 +1,14 @@
 
 library(dplyr,quietly = T, warn.conflicts = F)
-
+library(ggplot2,quietly=T,warn.conflicts = F)
+library(gridExtra,quietly = T,warn.conflicts = F)
+library(kableExtra, quietly=T, warn.conflicts = F)
+library(latex2exp, quietly=T, warn.conflicts=F)
+library(lubridate, quietly = T, warn.conflicts = F)
+library(epitools,quietly = T,warn.conflicts = F)
+library(dplyr,quietly = T,warn.conflicts = F)
 source('probabilityOfDetectionInArea.R')
+source('callDensityEstimate.R')
 
 # Convert matlab datenum to R POSIXct
 mat2Rdate <- function (x) as.POSIXct((x - 719529)*86400, origin = "1970-01-01",
@@ -29,8 +36,6 @@ time2monthCode <- function(x) {
                               '07','08','09','10','11','12'))
 }
 
-
-
 # Add R datetime and season to a capture history table
 capHistTimeSeason <- function(x){
   x$t <- mat2Rdate(x$t0_table1)
@@ -49,6 +54,26 @@ capHistTimeSeason2 <- function(x){
   return(x)
 }
 
+# Subset a data.frame by season, where timeCode can be either a 'season'
+# (summer, autumn, winter, spring), a month characters ('01'-'12'), or 'year',
+# with 'year' the same as including all data
+subsetByTimeCode<- function(df, dt, timeCode){
+  #df is the data.frame
+  #dt is a posixCT datetime
+  #timeCode is the season, month, or 'year' for all data
+  
+  if (timeCode !='year'){
+    if (timeCode == 'summer' || timeCode=='autumn' || 
+        timeCode=='winter' || timeCode=='spring'){
+      times <- time2season(dt)
+    } else {
+      times <- time2monthCode(dt)
+    }
+    df <- df[times==timeCode,]
+  }
+  return(df)
+}
+  
 # Given data.frame of call density parameters, p, create default parameters and
 # output file-names for Monte-Carlo modelling and estimating call-density. 
 # Append all of these parameters to the data.frame and return it.
@@ -85,10 +110,10 @@ defaultOutputFileNames <- function(p,season){
   p$output.resolution.m <- 100
   
   # Seasonal TL file name  
-  p$tlFile <- paste0('TL_', siteCode, '_woa2018_meanSSP_', 
+  p$tlFile <- paste0('TL/TL_', siteCode, '_woa2018_meanSSP_', 
                      p$output.resolution.m, 'm_res_', season, '.csv')
   p$tlFile <- ifelse(file.exists(p$tlFile), p$tlFile,
-                     paste0('TL_', siteCode, '_woa2018_meanSSP_', season, '.csv') )
+                     paste0('TL/TL_', siteCode, '_woa2018_meanSSP_', season, '.csv') )
   
   ### Outputs
   ## Output file names of Monte-Carlo model of Pa
@@ -163,6 +188,23 @@ capHist2snrInfo <- function(capHistFile,season='year'){
   return(SNRinfo)
 }
 
+var.wtd.mean.cochran <- function(x,w){
+  library(Hmisc,quietly = T, warn.conflicts = F)
+  ix <- !is.na(x)
+  x <- x[ix]
+  w <- w[ix]
+  # Computes the variance of a weighted mean following Cochran 1977 definition
+  n = length(w)
+  xWbar = wtd.mean(x,w, na.rm = TRUE)
+  wbar = mean(w, na.rm=TRUE)
+  out = n/( (n-1)*sum(w)^2)*
+    (sum((w*x-wbar*xWbar)^2)-2*xWbar*
+       sum((w-wbar)*(w*x-wbar*xWbar))+xWbar^2*sum((w-wbar)^2)
+    )
+  return(out)
+}
+
+
 
 fitSNRdetectionFunc <- function(SNRinfo, useGLM=TRUE, useSCAM=TRUE, numKnots=3){
   # Initial glm:
@@ -235,3 +277,109 @@ fitSNRbySeason <- function(SNRinfo, season=year, useGLM=TRUE, numKnots=3){
   # summary(res.2)# preds <- ggpredict(res.1,terms = c("SNR [-10:15]"))
   return(p2)
 }
+
+collect.density.results <- function (path, siteCode){
+  files <- dir(path=path, pattern = paste0('^density_',siteCode),
+               full.names = TRUE)
+  d <- read.csv(files[1])
+  
+  for (i in 2:length(files))   {
+    d <- rbind(d,read.csv(files[i]))
+  }
+  d$Dc <- d$Dc*1e3
+  d$season <- factor(d$season, levels=c('1','2','3','4','5','6',
+                                        '7','8','9','10','11','12',
+                                        'summer','autumn','winter','spring','year') )
+  d<- with(d, d[order(season),])
+  
+  # Trying to get 95% confidence intervals here, but not very confident 
+  d$CI.low <- (d$Dc-(1.96*d$Dc*d$CV.Dc))
+  d$CI.high <- (d$Dc+(1.96*d$Dc*d$CV.Dc))
+  # d <- format(d,digits=3,nsmall=0, scientific=T)
+  return(d)
+}
+
+show.density.input.table <-function(d, separateCommon=TRUE){
+  
+  if (separateCommon){
+    commonTable <- subset(d[1,], select=c('k','w','SLmean','SLsd'))
+    rownames(commonTable) <- 'All'
+    common <- kbl(commonTable, row.names=TRUE) %>% 
+      kable_classic_2(full_width=FALSE)
+
+    inputTable <- subset(d,select=c('season','Nc','c','T','pa',
+                                    'NLmean','NLsd') )
+    inputs <- kbl( inputTable, row.names = FALSE,
+                   digits=c(0,0,3,1,4,1,1) ) %>% 
+      kable_classic_2(full_width=FALSE)
+    
+    return(list(inputTable,inputs,commonTable,common))
+  } else {
+    inputTable <- subset(d,select=c('season','Nc','c','k','T','w','pa',
+                                    'NLmean','NLsd','SLmean','SLsd') )
+    
+    inputs <- kbl( inputTable, row.names = FALSE,
+                   digits=c(0,0,3,0,1,0,4,1,1,1,1) ) %>% 
+      kable_classic_2(full_width=FALSE)
+  }
+  return(list(inputTable,inputs))
+}
+
+density.results.table<- function (d){
+
+  resultsTable <- subset(d, select=c('season','Dc',
+                                     'CV.Nc','CV.c','CV.pa','CV.Dc') )
+  
+  result<- kbl( resultsTable, row.names = FALSE, digits=c(0,3,4,3,3,3) ) %>% 
+    kable_classic_2(full_width = FALSE)
+  return (list(resultsTable,result))
+}
+
+detection.rate.plot <- function(d){
+  
+  gRate <- ggplot(data=d, aes(x=season, y=Nc/T, fill=season))+
+    geom_bar(stat="identity",show.legend=F)+
+    # scale_y_continuous(limits=c(0,15))+
+    # geom_errorbar(aes(ymin=CI.low, ymax=CI.high), width=0.5, position=position_dodge(0.9))+
+    ylab( TeX("Mean detection rate ($ calls \\cdot h^{-1})" ) )+
+    xlab('')+
+    ggtitle(siteCode, )+
+    labs(tag="(A)") + 
+    theme_minimal()+
+    theme(plot.tag = element_text(),
+          plot.tag.position = c(0.2, 0.975),
+          plot.title = element_text(hjust = 0.5))
+}
+
+detection.rate.corrected.plot<- function(d){
+
+  gRateCorrected <- ggplot(data=d, aes(x=season, y=(Nc*c)/T, fill=season))+
+    geom_bar(stat="identity",show.legend=F)+
+    # scale_y_continuous(limits=c(0,15))+
+    # geom_errorbar(aes(ymin=CI.low, ymax=CI.high), width=0.5, position=position_dodge(0.9))+
+    ylab( TeX("Mean detection rate ($ calls \\cdot h^{-1})" ) )+
+    xlab('')+
+    ggtitle(siteCode, )+
+    labs(tag="(A)") + 
+    theme_minimal()+
+    theme(plot.tag = element_text(),
+          plot.tag.position = c(0.2, 0.975),
+          plot.title = element_text(hjust = 0.5))
+}
+
+
+density.plot<- function(d){
+  
+  gDen <- ggplot(data=d, aes(x=season, y=Dc, fill=season))+
+    geom_bar(stat="identity",show.legend=F)+
+    geom_errorbar(aes(ymin=CI.low, ymax=CI.high), width=0.5,)+
+    # scale_y_continuous(limits=c(0,0.25))+
+    ylab( TeX("Call density ($ calls \\cdot h^{-1} \\cdot 1000 \\cdot km^{-2}$)" ) )+
+    xlab('')+
+    labs(tag="(B)") + 
+    theme_minimal()+
+    theme(plot.tag = element_text(), 
+          plot.tag.position = c(0.225, 0.975))
+}
+
+

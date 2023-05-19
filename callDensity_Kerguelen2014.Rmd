@@ -52,7 +52,9 @@ snrLim <- c(-10,20)
 pDetLim <- c(0,1)
 seasons <- factor(c('summer', 'autumn', 'winter', 'spring', 'year'))
 seasons <- factor(c('01','02','03','04','05','06','07','08','09','10','11','12'))
-
+seasons <- factor(c('01','02','03','04','05','06',
+                    '07','08','09','10','11','12',
+                    'summer', 'autumn', 'winter', 'spring', 'year'))
 ```
 
 Run the density estimation script for each season and year
@@ -63,7 +65,7 @@ Run the density estimation script for each season and year
 
 #### First check whether a GLM is sensible
 
-```{r echo=TRUE, message=FALSE, warning=FALSE}
+```{r echo=TRUE, fig.height=12, fig.width=6, message=FALSE, warning=FALSE}
 
 plotList <- list()
 plotCount = 1;
@@ -82,13 +84,13 @@ for (season in seasons ){
   plotCount =plotCount +1; 
 }
 
-gridExtra::grid.arrange(grobs=plotList,ncol=3)
+gridExtra::grid.arrange(grobs=plotList,ncol=2)
 
 ```
 
 #### Check that GAMs are sensible
 
-```{r echo=TRUE, message=FALSE, warning=FALSE}
+```{r echo=TRUE,fig.height=12, fig.width=6, message=FALSE, warning=FALSE}
 
 plotList <- list()
 plotCount = 1;
@@ -113,14 +115,14 @@ for (season in seasons ){
   plotCount =plotCount +1; 
 }
 
-gridExtra::grid.arrange(grobs=plotList,ncol=3)
+gridExtra::grid.arrange(grobs=plotList,ncol=2)
 
 
 ```
 
 #### Finally, see if a constrained GAM is sensible
 
-```{r echo=TRUE, message=FALSE, warning=FALSE}
+```{r echo=TRUE,fig.height=12, fig.width=6, message=FALSE, warning=FALSE}
 
 plotList <- list()
 plotCount = 1;
@@ -145,7 +147,7 @@ for (season in seasons ){
   plotCount =plotCount +1;
 }
 
-gridExtra::grid.arrange(grobs=plotList,ncol=3)
+gridExtra::grid.arrange(grobs=plotList,ncol=2)
 
 
 ```
@@ -159,14 +161,14 @@ Regular GAMs are problematic for some spring & full year, so either GLM or const
 for (season in seasons ){
   print(season) 
   p <- defaultOutputFileNames(p,season)
-  p$outerloop <- 10
+  p$outerloop <- 1000
   p$useGLM <- FALSE
   p$useSCAM <-TRUE
   p$numKnots<-5
   p$useSeparateFPdata <-TRUE
-  options(knitr.duplicate.label = 'allow')
-  source(knitr::purl("callDensityCoreScript.Rmd",output=tempfile(),
-                     documentation=0,quiet=TRUE))
+  
+  # Call density estimation for season and parameters, p:
+  cde(p,season)
 }
 
 
@@ -174,13 +176,25 @@ for (season in seasons ){
 
 ## Load and plot call density estimates from `r siteCode` of Bm-Ant-ABZ
 
-```{r, fig.height=6, fig.width=3.0, warning=FALSE, dev='ragg_png'}
+```{r, fig.height=6, fig.width=6.0, warning=FALSE, dev='ragg_png'}
 
-options(knitr.duplicate.label = 'allow') 
-source(knitr::purl("callDensityTablesAndPlots.Rmd",output=tempfile(),
-                     documentation=2,quiet=TRUE))
-common
-inputs
-result
+d<- collect.density.results('.',p$siteCode)
+inputs <- show.density.input.table(d,T)
+results <- density.results.table(d)
+
+
+# Separate monthly vs seasonal results for plotting
+dSeason <- subset(d,subset =  (d$season=='summer'| d$season=='autumn' | 
+                  d$season=='winter' | d$season=='spring' | d$season=='year') )
+dMonth <-   subset(d,subset =  !(d$season=='summer'| d$season=='autumn' | 
+                  d$season=='winter' | d$season=='spring' | d$season=='year') )
+
+gRateSeason<- detection.rate.plot(dSeason)
+gDenSeason <- density.plot(dSeason)
+gRateMonth<- detection.rate.plot(dMonth)
+gDenMonth <- density.plot(dMonth)
+grid.arrange(gRateSeason, gRateMonth, gDenSeason, gDenMonth,ncol=2)
+
 
 ```
+
