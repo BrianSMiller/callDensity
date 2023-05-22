@@ -435,6 +435,7 @@ densityResultsTable<- function (d){
 #' @param d Data.frame of call density results
 #'
 #' @importFrom ggplot2 ggplot geom_bar geom_errorbar ylab xlab labs aes
+#'   theme_minimal theme element_text
 #' @export
 detectionRatePlot <- function(d){
 
@@ -456,6 +457,7 @@ detectionRatePlot <- function(d){
 #' @param d Data.frame of call density results
 #'
 #' @importFrom ggplot2 ggplot geom_bar geom_errorbar ylab xlab labs aes
+#'   theme_minimal theme element_text
 #' @export
 detectionRateCorrectedPlot <- function(d){
 
@@ -476,9 +478,10 @@ detectionRateCorrectedPlot <- function(d){
 #' Bar-plot of call density by timeCodes (ggplot2)
 #' @param d Data.frame of call density results
 #'
-#' @export
 #' @importFrom ggplot2 ggplot geom_bar geom_errorbar ylab xlab labs aes
-
+#'   theme_minimal theme element_text
+#' @importFrom latex2exp TeX
+#' @export
 densityPlot <- function(d){
 
   gDen <- ggplot2::ggplot(data=d, aes(x=season, y=Dc, fill=season))+

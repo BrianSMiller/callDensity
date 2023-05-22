@@ -181,7 +181,7 @@ cde <- function (p,season){
         fp<-  ffp %>%
           dplyr::mutate(date_col = season ) %>%
           dplyr::group_by(date_col) %>%
-          dplyr::summarize(detection.num = n(),
+          dplyr::summarize(detection.num = dplyr::n(),
                            true.pos.num = sum(`True positive rate`),
                            false.pos.num = detection.num-true.pos.num,
                            c = false.pos.num/(false.pos.num+true.pos.num)
@@ -192,7 +192,7 @@ cde <- function (p,season){
         fp<-  ffp %>%
           dplyr::mutate(date_col = month ) %>%
           dplyr::group_by(date_col) %>%
-          dplyr::summarize(detection.num = n(),
+          dplyr::summarize(detection.num = dplyr::n(),
                            true.pos.num = sum(`True positive rate`),
                            false.pos.num = detection.num-true.pos.num,
                            c = false.pos.num/(false.pos.num+true.pos.num)
@@ -216,7 +216,7 @@ cde <- function (p,season){
     fp<-  ffp %>%
       dplyr::mutate(date_col = lubridate::date(dt0) ) %>%
       dplyr::group_by(date_col) %>%
-      dplyr::summarize(detection.num = n(),
+      dplyr::summarize(detection.num = dplyr::n(),
                        true.pos.num = sum(`True positive rate`),
                        false.pos.num = detection.num-true.pos.num,
                        c = false.pos.num/(false.pos.num+true.pos.num)
@@ -237,7 +237,8 @@ cde <- function (p,season){
   ## ---- echo=TRUE, result='hide', message=F, warning=F, cache=TRUE-------------------------------------
 
   SNRinfo <- capHist2snrInfo(p$capHistFile,season)
-  NL <- SNRinfo %>% dplyr::summarise(mean=mean(NoiseRL), sd=sd(NoiseRL), sampleSize=n())
+  NL <- SNRinfo %>% dplyr::summarise(mean=mean(NoiseRL), sd=sd(NoiseRL),
+                                     sampleSize=dplyr::n())
   SL <- data.frame(mean=p$SLmean, sd=p$slStd, sampleSize=p$SLsamplesize);
   TL<-utils::read.csv(p$tlFile)
   # Initial GLM or GAM:
