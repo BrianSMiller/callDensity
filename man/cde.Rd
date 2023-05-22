@@ -11,6 +11,8 @@ cde(p, season)
 \arguments{
 \item{p}{A data.frame containing parameters for call density estimation.
 Usually created by calling function defaultOutputFileNames}
+
+\item{season}{TimeCode specifying month, season, or year for outputs}
 }
 \value{
 data.frame containing call density inputs, results, and CVs

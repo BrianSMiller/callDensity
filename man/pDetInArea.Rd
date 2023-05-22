@@ -26,6 +26,32 @@ pDetInArea(
   outerloop = 1000
 )
 }
+\arguments{
+\item{res.1}{SNR-Detection function from fitSNRdetectionFunc}
+
+\item{SL}{Distribution of source levels (data.frame with columns mean,sd)}
+
+\item{TLlookup}{Transmission loss lookup table with range in the first column
+and TL in dB along an azimuth for columns 2-n}
+
+\item{NL}{Noise level distribution (data.frame with columns mean,sd)}
+
+\item{transectFile}{File name base for writing transect outputs}
+
+\item{simResultsFile}{File name base for writing simulation results}
+
+\item{paFile}{File name for writing probability of detection in the area, pa}
+
+\item{useGLM}{Boolean - set true if res.1 contains a GLM}
+
+\item{useSCAM}{Boolean - set true if res.1 contains a SCAM}
+
+\item{numKnots}{Number of knots in GAM or SCAM}
+
+\item{output.resolution.m}{Spatial resolution of density/transect output in m}
+
+\item{outerloop}{Number of iterations in outerloop (default 1000)}
+}
 \description{
 (3) The outer loop (to be run 1000 times): (a) Generate a possible mean and
    standard deviations for source level using a parametric bootstrap approach (b)

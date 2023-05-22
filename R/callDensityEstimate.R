@@ -17,11 +17,12 @@
 #' ${\\pi}w^2$ is the study area (in km\\^2)
 #' @param p A data.frame containing parameters for call density estimation.
 #'     Usually created by calling function defaultOutputFileNames
-#'
+#' @param season TimeCode specifying month, season, or year for outputs
 #' @returns data.frame containing call density inputs, results, and CVs
 #'
 #' @importFrom stats rnorm sd vcov
 #' @importFrom utils read.csv write.table
+#' @importFrom magrittr %>%
 #' @export
 #'
 cde <- function (p,season){
@@ -153,7 +154,7 @@ cde <- function (p,season){
   SEc=sqrt(var.wtd.mean.cochran(x,wgts))/sqrt(sum(!is.na(x)))
   SEc
 
-  CV.c=SEc/wtd.mean(x,wgts)
+  CV.c=SEc/Hmisc::wtd.mean(x,wgts)
   CV.c
 
   #  The above calculation uses the annotated library, and requires that you
@@ -227,7 +228,7 @@ cde <- function (p,season){
     SEc=sqrt(var.wtd.mean.cochran(x,wgts))/sqrt(sum(!is.na(x)))
     SEc
 
-    CV.c=SEc/wtd.mean(x,wgts)
+    CV.c=SEc/Hmisc::wtd.mean(x,wgts)
     CV.c
   }
 
@@ -236,9 +237,9 @@ cde <- function (p,season){
   ## ---- echo=TRUE, result='hide', message=F, warning=F, cache=TRUE-------------------------------------
 
   SNRinfo <- capHist2snrInfo(p$capHistFile,season)
-  NL <- SNRinfo %>% summarise(mean=mean(NoiseRL), sd=sd(NoiseRL), sampleSize=n())
+  NL <- SNRinfo %>% dplyr::summarise(mean=mean(NoiseRL), sd=sd(NoiseRL), sampleSize=n())
   SL <- data.frame(mean=p$SLmean, sd=p$slStd, sampleSize=p$SLsamplesize);
-  TL<-read.csv(p$tlFile)
+  TL<-utils::read.csv(p$tlFile)
   # Initial GLM or GAM:
   snr.det.fun <- fitSNRdetectionFunc(SNRinfo,
                                      useGLM=p$useGLM, useSCAM=p$useSCAM, p$numKnots)

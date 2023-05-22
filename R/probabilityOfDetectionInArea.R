@@ -1,4 +1,4 @@
-library(MASS, quietly = T, warn.conflicts = F)     # for the mvrnorm
+# library(MASS, quietly = T, warn.conflicts = F)     # for the mvrnorm
 
 #'  Simulation to predict average probability of detection
 #' The simulation has several steps:
@@ -38,6 +38,21 @@ library(MASS, quietly = T, warn.conflicts = F)     # for the mvrnorm
 #'  (a) Calculate the standard error of transect-specific p(det) values
 #'  (b) Calculate the standard deviation of transect-specific p(det) values
 #'  (c) Save results in a table and print the table for future calculations
+#'
+#' @param res.1 SNR-Detection function from fitSNRdetectionFunc
+#' @param SL Distribution of source levels (data.frame with columns mean,sd)
+#' @param TLlookup Transmission loss lookup table with range in the first column
+#'     and TL in dB along an azimuth for columns 2-n
+#' @param NL Noise level distribution (data.frame with columns mean,sd)
+#' @param transectFile File name base for writing transect outputs
+#' @param simResultsFile File name base for writing simulation results
+#' @param paFile File name for writing probability of detection in the area, pa
+#' @param useGLM Boolean - set true if res.1 contains a GLM
+#' @param useSCAM Boolean - set true if res.1 contains a SCAM
+#' @param numKnots Number of knots in GAM or SCAM
+#' @param output.resolution.m Spatial resolution of density/transect output in m
+#' @param outerloop Number of iterations in outerloop (default 1000)
+#'
 #' @export
 pDetInArea <-
   function(res.1, SL, TLlookup,  NL, # Sonar equation inputs
@@ -151,7 +166,7 @@ pDetInArea <-
     SLdist<-stats::rnorm(SL$sampleSize, SL$mean, SL$sd)
 
     #calculate mean & stdev of set of resamples and save in main results matrix
-    results1000sim[i,1]<-stats::mean(SLdist)
+    results1000sim[i,1]<-mean(SLdist)
     results1000sim[i,2]<-stats::sd(SLdist)
     #***************************************************************************
     #STEP 3(b) - bootstrap from the assumed noise distribuation and calculate
@@ -163,7 +178,7 @@ pDetInArea <-
     NLdist<-stats::rnorm(NL$sampleSize, NL$mean, NL$sd)
 
     #calculate mean & stdev of set of resamples and save in main results matrix
-    results1000sim[i,3]<-stats::mean(NLdist)
+    results1000sim[i,3]<-mean(NLdist)
     results1000sim[i,4]<-stats::sd(NLdist)
     #***************************************************************************
     #STEP 3(c) - produce a random realisation of the detector characterisation

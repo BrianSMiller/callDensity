@@ -1,9 +1,9 @@
-library("stats",quietly = T, warn.conflicts = F)
-library("dplyr",quietly = T, warn.conflicts = F)
-library("ggplot2",quietly=T,warn.conflicts = F)
-library("kableExtra", quietly=T, warn.conflicts = F)
-library("lubridate", quietly = T, warn.conflicts = F)
-library("Hmisc",quietly = T, warn.conflicts = F)
+# library("stats",quietly = T, warn.conflicts = F)
+# library("dplyr",quietly = T, warn.conflicts = F)
+# library("ggplot2",quietly=T,warn.conflicts = F)
+# library("kableExtra", quietly=T, warn.conflicts = F)
+# library("lubridate", quietly = T, warn.conflicts = F)
+# library("Hmisc",quietly = T, warn.conflicts = F)
 
 #' Convert matlab datenum to R POSIXct
 #'
@@ -310,8 +310,6 @@ fitSNRdetectionFunc <- function(SNRinfo, useGLM=TRUE, useSCAM=TRUE, numKnots=3){
 #' @export
 showSNRdetectionFunc <-  function(res.1){
 
-  require(ggplot2)
-  require(marginaleffects)
   p1 <- marginaleffects::plot_cap(res.1, condition='SNR',
                                   type='response',conf_level=0.95)+
     ggplot2::labs(x = c("SNR (dB)"), y = "P(detecting a call)" , title = NULL)+
@@ -363,8 +361,8 @@ fitSNRbySeason <- function(SNRinfo, season=year, useGLM=TRUE, numKnots=3){
 #'
 #' @param siteCode Prefix of _density files to be loaded
 #'
-#' @export collect.density.results
-collect.density.results <- function (path, siteCode){
+#' @export
+collectDensityResults <- function (path, siteCode){
   files <- dir(path=path, pattern = paste0('^density_',siteCode),
                full.names = TRUE)
   d <- utils::read.csv(files[1])
@@ -392,8 +390,8 @@ collect.density.results <- function (path, siteCode){
 #' @param separateCommon Boolean - if true input parameters k, w, SLmean, SLsd
 #'     will be put into a separate table with only a single row.
 #'
-#' @export collect.density.results
-show.density.input.table <-function(d, separateCommon=TRUE){
+#' @export
+densityInputTable <-function(d, separateCommon=TRUE){
 
   if (separateCommon){
     commonTable <- subset(d[1,], select=c('k','w','SLmean','SLsd'))
@@ -421,8 +419,8 @@ show.density.input.table <-function(d, separateCommon=TRUE){
 
 #' Table of call densities including CVs (ggplot2)
 #' @param d Data.frame of call density results#'
-#' @export density.results.table
-density.results.table<- function (d){
+#' @export
+densityResultsTable<- function (d){
 
   resultsTable <- subset(d, select=c('season','Dc',
                                      'CV.Nc','CV.c','CV.pa','CV.Dc') )
@@ -436,8 +434,9 @@ density.results.table<- function (d){
 #' Bar-plot of detection rates by timeCodes (ggplot2)
 #' @param d Data.frame of call density results
 #'
-#' @export detection.rate.plot
-detection.rate.plot <- function(d){
+#' @importFrom ggplot2 ggplot geom_bar geom_errorbar ylab xlab labs aes
+#' @export
+detectionRatePlot <- function(d){
 
   gRate <- ggplot2::ggplot(data=d, aes(x=season, y=Nc/T, fill=season))+
     ggplot2::geom_bar(stat="identity",show.legend=F)+
@@ -456,8 +455,9 @@ detection.rate.plot <- function(d){
 #' Bar-plot of detection rates by timeCodes and scaled (corrected) by precision (ggplot2)
 #' @param d Data.frame of call density results
 #'
-#' @export detection.rate.corrected.plot
-detection.rate.corrected.plot <- function(d){
+#' @importFrom ggplot2 ggplot geom_bar geom_errorbar ylab xlab labs aes
+#' @export
+detectionRateCorrectedPlot <- function(d){
 
   gRateCorrected <- ggplot2::ggplot(data=d, aes(x=season, y=(Nc*c)/T, fill=season))+
     ggplot2::geom_bar(stat="identity",show.legend=F)+
@@ -476,8 +476,10 @@ detection.rate.corrected.plot <- function(d){
 #' Bar-plot of call density by timeCodes (ggplot2)
 #' @param d Data.frame of call density results
 #'
-#' @export density.plot
-density.plot <- function(d){
+#' @export
+#' @importFrom ggplot2 ggplot geom_bar geom_errorbar ylab xlab labs aes
+
+densityPlot <- function(d){
 
   gDen <- ggplot2::ggplot(data=d, aes(x=season, y=Dc, fill=season))+
     ggplot2::geom_bar(stat="identity",show.legend=F)+
