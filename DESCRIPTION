@@ -1,0 +1,30 @@
+Package: callDensity
+Type: Package
+Title: (Analysis of Baleen-whale) Call Density Estimates from Geophones and Hydrophones (ABCDEfGH)
+Version: 0.1.0
+Author: Danielle Harris, Franciele R Castro, and Brian S Miller
+Maintainer: Brian S Miller <Brian.Miller@aad.gov.aut>
+Description: Software for estimating the density of animal vocalisations (calls)
+    This package includes functions for estimating call density of animal 
+    sounds, especially those of low-frequency baleen whales, by applying 
+    the algorithms described by Danielle Harris. In particular these algorithms 
+    can be used to estimate call density using auxiliary information to estimate
+    the probability of detection within an area. The specific auxiliary 
+    information required by this package comes from the sonar equation, 
+    specifically, distributions of source levels (SL), transmission losses (TL),
+    and noise levels (NL). 
+License: What license is it under?
+Imports:
+    stats,
+    utils,
+    dplyr,
+    ggplot2,
+    kableExtra,
+    lubridate,
+    Hmisc,
+    marginaleffects,
+    MASS,
+    data.table
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.2.3
