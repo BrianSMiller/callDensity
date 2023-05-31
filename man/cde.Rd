@@ -6,13 +6,18 @@
 author: "Brian Miller"
 date: "2022-10-12"}
 \usage{
-cde(p, season)
+cde(p, season, snrDetFun = NULL)
 }
 \arguments{
 \item{p}{A data.frame containing parameters for call density estimation.
 Usually created by calling function defaultOutputFileNames}
 
 \item{season}{TimeCode specifying month, season, or year for outputs}
+
+\item{snrDetFun}{OPTIONAL linear-model like structure (GLM,GAM,SCAM,etc)
+specifying the SNR-detection function to use. If this is not included,
+then the SNR-detection function will be derived from the capture history
+table.}
 }
 \value{
 data.frame containing call density inputs, results, and CVs

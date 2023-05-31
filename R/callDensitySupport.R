@@ -442,8 +442,10 @@ detectionRatePlot <- function(d){
   gRate <- ggplot2::ggplot(data=d, aes(x=season, y=Nc/T, fill=season))+
     ggplot2::geom_bar(stat="identity",show.legend=F)+
     # scale_y_continuous(limits=c(0,15))+
-    # geom_errorbar(aes(ymin=CI.low, ymax=CI.high), width=0.5, position=position_dodge(0.9))+
-    ggplot2::ylab( TeX("Mean detection rate ($ calls \\cdot h^{-1})" ) )+
+    # geom_errorbar(aes(ymin=CI.low, ymax=CI.high),
+    #      width=0.5, position=position_dodge(0.9))+
+    ggplot2::ylab(latex2exp::TeX(
+      "Mean detection rate ($ calls \\cdot h^{-1})" ) )+
     ggplot2::xlab('')+
     ggplot2::ggtitle(siteCode, )+
     ggplot2::labs(tag="(A)") +
@@ -464,8 +466,10 @@ detectionRateCorrectedPlot <- function(d){
   gRateCorrected <- ggplot2::ggplot(data=d, aes(x=season, y=(Nc*c)/T, fill=season))+
     ggplot2::geom_bar(stat="identity",show.legend=F)+
     # scale_y_continuous(limits=c(0,15))+
-    # geom_errorbar(aes(ymin=CI.low, ymax=CI.high), width=0.5, position=position_dodge(0.9))+
-    ggplot2::ylab( TeX("Mean detection rate ($ calls \\cdot h^{-1})" ) )+
+    # geom_errorbar(aes(ymin=CI.low, ymax=CI.high),
+    #               width=0.5, position=position_dodge(0.9))+
+    ggplot2::ylab(latex2exp::TeX(
+      "Mean detection rate ($ calls \\cdot h^{-1})" ) )+
     ggplot2::xlab('')+
     ggplot2::ggtitle(siteCode, )+
     ggplot2::labs(tag="(A)") +
@@ -488,7 +492,8 @@ densityPlot <- function(d){
     ggplot2::geom_bar(stat="identity",show.legend=F)+
     ggplot2::geom_errorbar(aes(ymin=CI.low, ymax=CI.high), width=0.5,)+
     # scale_y_continuous(limits=c(0,0.25))+
-    ggplot2::ylab(TeX("Call density ($ calls \\cdot h^{-1} \\cdot 1000 \\cdot km^{-2}$)" ) )+
+    ggplot2::ylab(latex2exp::TeX(
+      "Call density ($ calls \\cdot h^{-1} \\cdot 1000 \\cdot km^{-2}$)" ) )+
     ggplot2::xlab('')+
     ggplot2::labs(tag="(B)") +
     ggplot2::theme_minimal()+

@@ -30,7 +30,8 @@ Imports:
     mgcv,
     scam,
     magrittr,
-    rlang (>= 0.4.11)
+    rlang (>= 0.4.11),
+    latex2exp
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.2.3
