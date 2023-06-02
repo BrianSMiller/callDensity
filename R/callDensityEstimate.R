@@ -56,13 +56,8 @@ cde <- function (p,season, snrDetFun=NULL){
   T <- deploymentDuration(p,season)
   c <- falseDiscoveryRate(p,season)
   CV.c <- falseDiscoveryCV(p,season)
-  #  The above calculation uses the annotated library, and requires that you
-  #  have defined effort periods for which you've measured the false discovery
-  #  rate.
-  #
-  #  Below is an alternative measure of false-discovery-rate where the analyst
-  #  has inspected every nth detection to determine if it is true or false
-  #  positive.
+
+  #  alternative measure of FDR where analyst inspected every nth detection
   if (p$useSeparateFPdata){
     c <- falseDiscoveryRateFromNth(p,season)
     # CV.c and c are packed in a data frame, so unpack
@@ -70,7 +65,7 @@ cde <- function (p,season, snrDetFun=NULL){
     c <- c$c
   }
 
-  #  ### $P_a$ (Overall probability of detection)
+  # $p_a$ (Overall probability of detection)
   #
   SNRinfo <- capHist2snrInfo(p$capHistFile,season)
   NL <- SNRinfo %>% dplyr::summarise(mean=mean(NoiseRL), sd=sd(NoiseRL),
@@ -78,12 +73,12 @@ cde <- function (p,season, snrDetFun=NULL){
   SL <- data.frame(mean=p$SLmean, sd=p$slStd, sampleSize=p$SLsamplesize);
   TL<-utils::read.csv(p$tlFile)
 
+  # Check whether user supplied an snr detection function or estimate from data
   if (is.null(snrDetFun)){
-  # Initial GLM or GAM:
+  # Estimate snrDetFun from SNRinfo
     snrDetFun <- fitSNRdetectionFunc(SNRinfo,
-                                     useGLM=p$useGLM, useSCAM=p$useSCAM, p$numKnots)
+                                useGLM=p$useGLM, useSCAM=p$useSCAM, p$numKnots)
   }
-
 
   pDetInArea(snrDetFun, SL, TL,  NL, # Sonar equation inputs
              p$transectFile, p$simResultsFile, p$paFile, # file output names

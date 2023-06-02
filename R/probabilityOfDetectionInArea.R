@@ -174,7 +174,7 @@ pDetInArea <-
     #reflects the sample size used to create the original distribution (defined
     #outside the loop)
 
-    # NL now sampled from hour-long LTSA for each site-year (from Brian)
+    # NL now calculated outside this function and specified as input parameter
     NLdist<-stats::rnorm(NL$sampleSize, NL$mean, NL$sd)
 
     #calculate mean & stdev of set of resamples and save in main results matrix
@@ -238,16 +238,22 @@ pDetInArea <-
       # Create dataset using allSNR - this will be used to create predictions of p(dets) using the GAM
       newd<-data.frame(SNR=allSNR[,j])
 
-      # Generate the lpmatrix for the values (if GAM)
-      # See 'mgcv' documentation for more information about the predict function
-      # The lpmatrix contains values which when multiplied by the coefficients, gives predicted values (on the scale of the link function)
+      # Generate the lpmatrix for the values (if GAM) See 'mgcv' documentation
+      # for more information about the predict function The lpmatrix contains
+      # values which when multiplied by the coefficients, gives predicted values
+      # (on the scale of the link function)
+      #   Xp<-predict(res.1,newd,type="lpmatrix")
+      #   #multiply the lpmatrix by the randomly chosen coefficient values. Use
+      #   #inv.logit to put the predicted values on the scale of the response
+      #   #function (i.e p(det) values)
+      #   predmatrix<-boot::inv.logit(Xp %*% br)
 
-      # For GLM, we need to do something different. We will swap the resampled coefficents into the res.1 model, then predict on the scale of the response using the new dataset
-
+      # Code above only seems to apply for standard MGCV GAMs Since we might
+      # have a GAM, GLM, or SCAM we need to do something different. We will swap
+      # the resampled coefficents into the res.1 model, then predict on the
+      # scale of the response using the new dataset
       res.1.newcoeff<-res.1
       res.1.newcoeff$coefficients<-br
-
-
       predmatrix<-predict(res.1.newcoeff,newd,type="response")
 
       # Save the prob(det) in allpdet

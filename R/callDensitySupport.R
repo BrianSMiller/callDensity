@@ -120,7 +120,7 @@ subsetByTimeCode<- function(df, dt, timeCode){
 #' @returns Parameter file with file names corresponding to the correct timeCode
 #'
 #' @export
-defaultOutputFileNames <- function(p,season){
+defaultOutputFileNames <- function(p,season, outputFolder='.'){
 
   ### Inputs
   ## Density equation
@@ -160,12 +160,21 @@ defaultOutputFileNames <- function(p,season){
 
   ### Outputs
   ## Output file names of Monte-Carlo model of Pa
-  p$paFile <- paste0("Pa_", p$siteCode, "_", season, ".txt")
-  p$transectFile <- paste0("pDet_",p$siteCode,'_',season,'_transects.csv')
-  p$simResultsFile <- paste0('simResult_', p$siteCode, '_',season,'.txt')
+  p$paFile <- file.path(outputFolder,
+                        paste0("Pa_", p$siteCode, "_", season, ".txt") )
+  p$transectFile <- file.path(outputFolder,
+                        paste0("pDet_",p$siteCode,'_',season,'_transects.csv') )
+  p$simResultsFile <- file.path(outputFolder,
+                        paste0('simResult_', p$siteCode, '_',season,'.txt') )
 
   ## Overall call density output file name
-  p$densityResultsFile <- paste0('density_',p$siteCode, '_', season,'.csv')
+  p$densityResultsFile <- file.path(outputFolder,
+                        paste0('density_',p$siteCode, '_', season,'.csv') )
+
+  p$outputFolder <- outputFolder
+  if (!dir.exists(outputFolder)){
+    dir.create(outputFolder)
+  }
 
   return(p)
 }

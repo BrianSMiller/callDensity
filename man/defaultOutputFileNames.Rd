@@ -4,7 +4,7 @@
 \alias{defaultOutputFileNames}
 \title{Default names of output files for call density estimation}
 \usage{
-defaultOutputFileNames(p, season)
+defaultOutputFileNames(p, season, outputFolder = ".")
 }
 \arguments{
 \item{p}{Data.frame containing parameters for call density estimation}
