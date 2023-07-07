@@ -39,7 +39,9 @@
 #'  (b) Calculate the standard deviation of transect-specific p(det) values
 #'  (c) Save results in a table and print the table for future calculations
 #'
-#' @param res.1 SNR-Detection function from fitSNRdetectionFunc
+#' @param res.1 SNR-Detection function from fitSNRdetectionFunc. Must be an
+#'   object of class GLM, GAM, SCAM, or VGLM that can be passed to functions
+#'   coef() and vcov()
 #' @param SL Distribution of source levels (data.frame with columns mean,sd)
 #' @param TLlookup Transmission loss lookup table with range in the first column
 #'     and TL in dB along an azimuth for columns 2-n
@@ -47,9 +49,6 @@
 #' @param transectFile File name base for writing transect outputs
 #' @param simResultsFile File name base for writing simulation results
 #' @param paFile File name for writing probability of detection in the area, pa
-#' @param useGLM Boolean - set true if res.1 contains a GLM
-#' @param useSCAM Boolean - set true if res.1 contains a SCAM
-#' @param numKnots Number of knots in GAM or SCAM
 #' @param output.resolution.m Spatial resolution of density/transect output in m
 #' @param outerloop Number of iterations in outerloop (default 1000)
 #'
@@ -57,7 +56,6 @@
 pDetInArea <-
   function(res.1, SL, TLlookup,  NL, # Sonar equation inputs
            transectFile, simResultsFile, paFile, # file output names
-           useGLM = FALSE, useSCAM=FALSE, numKnots = 3, # detector SNR curves
            output.resolution.m = 100, outerloop = 1000) {
     ### A5.2 Code used for the Monte Carlo Simulation
 
@@ -70,10 +68,7 @@ pDetInArea <-
   #   -Change names of output files based on siteCode and season
   #   -Replace all hard-coded "magic" numbers with correct, and full dimensions
   #     from input files
-  #   -User selectable option, useGLM to switch between using GLM or GAM when
-  #     modelling p(det)~SNR
-  #   -New required input for GAMs: numKnots, the number of knots to use
-  #   -Load NL from a separate csv that contains datetime, t, and noise level,
+    #   -Load NL from a separate csv that contains datetime, t, and noise level,
   #     with nl being in the same units & frequency band as SL (dB re 1 uPa RMS).
   #     Previously calibrated NL and RL were loaded from the capture-history file.
   #     This provides the option to use a NL distribution that is representative
@@ -139,11 +134,7 @@ pDetInArea <-
   # plus 2 or more  columns for coef values
   no.core.params <- 4;
 
-  if (useGLM){
-    no.coef <-2
-  }else {
-    no.coef <- numKnots+1;
-  }
+  no.coef <- length(coef(res.1))
   no.model.params <- no.core.params  + no.coef
 
   results1000sim<-matrix(NA,outerloop,no.model.params)
@@ -184,14 +175,13 @@ pDetInArea <-
     #STEP 3(c) - produce a random realisation of the detector characterisation
     #curve The random part involves taking a random set of the coefficients for
     #the model - these will be used later
-    if (useGLM==TRUE){
-      # vcov adopted in the place of Vp for GAM
-      br<-MASS::mvrnorm(1,coef(res.1),vcov(res.1))
-      results1000sim[i,5:6]<-br # save in parameter matrix
-    }else{
+    # vcov adopted in the place of Vp for GAM
+    if (any(class(res.1)=='scam') | any(class(res.1)=='gam') ){
       br<-MASS::mvrnorm(1,as.vector(coef(res.1)),res.1$Vp)
-      results1000sim[i,5:(5+numKnots-1)]<-br #save in results matrix
+    }else { # Class is a glm or vglm
+      br<-MASS::mvrnorm(1,as.vector(coef(res.1)),vcov(res.1))
     }
+    results1000sim[i,5:no.model.params]<-br # save in parameter matrix
 
     #********************************************************************************
     #STEP 4
@@ -253,8 +243,21 @@ pDetInArea <-
       # the resampled coefficents into the res.1 model, then predict on the
       # scale of the response using the new dataset
       res.1.newcoeff<-res.1
-      res.1.newcoeff$coefficients<-br
-      predmatrix<-predict(res.1.newcoeff,newd,type="response")
+
+      # VGLMs handled a bit differently than GAMs, SCAMs, and GLMs
+      if (any(class(res.1)=='vglm')){
+        res.1.newcoeff@coefficients<-br
+        predmatrix<-VGAM::predict(res.1.newcoeff,newdata=newd,type="response")
+
+        index = ifelse(is.null(res.1.newcoeff@extra$whichObserver),
+               dim(predmatrix)[2],
+               which(colnames(predmatrix)==res.1.newcoeff@extra$whichObserver) )
+        ## HARD CODED WHILE I WORK THINGS OUT TODO: FIX
+        predmatrix<- predmatrix[,index]
+      }else {
+        res.1.newcoeff$coefficients<-br
+        predmatrix<-predict(res.1.newcoeff,newd,type="response")
+      }
 
       # Save the prob(det) in allpdet
       allpdet[,j]<-predmatrix

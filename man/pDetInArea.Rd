@@ -19,15 +19,14 @@ pDetInArea(
   transectFile,
   simResultsFile,
   paFile,
-  useGLM = FALSE,
-  useSCAM = FALSE,
-  numKnots = 3,
   output.resolution.m = 100,
   outerloop = 1000
 )
 }
 \arguments{
-\item{res.1}{SNR-Detection function from fitSNRdetectionFunc}
+\item{res.1}{SNR-Detection function from fitSNRdetectionFunc. Must be an
+object of class GLM, GAM, SCAM, or VGLM that can be passed to functions
+coef() and vcov()}
 
 \item{SL}{Distribution of source levels (data.frame with columns mean,sd)}
 
@@ -41,12 +40,6 @@ and TL in dB along an azimuth for columns 2-n}
 \item{simResultsFile}{File name base for writing simulation results}
 
 \item{paFile}{File name for writing probability of detection in the area, pa}
-
-\item{useGLM}{Boolean - set true if res.1 contains a GLM}
-
-\item{useSCAM}{Boolean - set true if res.1 contains a SCAM}
-
-\item{numKnots}{Number of knots in GAM or SCAM}
 
 \item{output.resolution.m}{Spatial resolution of density/transect output in m}
 

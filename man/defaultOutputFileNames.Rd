@@ -10,6 +10,9 @@ defaultOutputFileNames(p, season, outputFolder = ".")
 \item{p}{Data.frame containing parameters for call density estimation}
 
 \item{season}{TimeCode to filter month, season, or full year}
+
+\item{outputFolder}{Location/path/folder where output files will be saved
+default is '.' (the current working directory).}
 }
 \value{
 Parameter file with file names corresponding to the correct timeCode

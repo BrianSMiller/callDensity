@@ -59,7 +59,7 @@ cde <- function (p,season, snrDetFun=NULL){
 
   #  alternative measure of FDR where analyst inspected every nth detection
   if (p$useSeparateFPdata){
-    c <- falseDiscoveryRateFromNth(p,season)
+    c <- falseDiscoveryRateFromNth(p$manualFPfileName,season)
     # CV.c and c are packed in a data frame, so unpack
     CV.c <- c$CV.c
     c <- c$c
@@ -77,12 +77,11 @@ cde <- function (p,season, snrDetFun=NULL){
   if (is.null(snrDetFun)){
   # Estimate snrDetFun from SNRinfo
     snrDetFun <- fitSNRdetectionFunc(SNRinfo,
-                                useGLM=p$useGLM, useSCAM=p$useSCAM, p$numKnots)
+                                modelType=p$modelType, p$numKnots)
   }
 
   pDetInArea(snrDetFun, SL, TL,  NL, # Sonar equation inputs
              p$transectFile, p$simResultsFile, p$paFile, # file output names
-             useGLM=p$useGLM, useSCAM=p$useSCAM, numKnots=p$numKnots, # detector SNR curves
              output.resolution.m=p$output.resolution.m, outerloop=p$outerloop)
 
   # The above function, pDetInArea writes results to a bunch of files
@@ -138,10 +137,10 @@ cde <- function (p,season, snrDetFun=NULL){
   ## ----------------------------------------------------------------------------------------------------
 
   result <- data.frame(season, p$siteCode,Nc,c,p$k,T,p$w,pa,
-                       p$SLmean,p$SLsd,NL$mean,NL$sd,p$useGLM,
+                       p$SLmean,p$SLsd,NL$mean,NL$sd,p$modelType,
                        CV.Nc,CV.c,CV.pa,Dc,CV.Dc)
   names(result) <- c('season','siteCode','Nc','c','k','T','w','pa',
-                     'SLmean','SLsd','NLmean','NLsd','useGLM',
+                     'SLmean','SLsd','NLmean','NLsd','modelType',
                      'CV.Nc','CV.c','CV.pa','Dc','CV.Dc')
 
   utils::write.csv(result, file = p$densityResultsFile, row.names=F)
@@ -250,8 +249,18 @@ falseDiscoveryCV <- function(p,season){
   CV.c
 }
 
-falseDiscoveryRateFromNth<- function(p,season){
-  ffp <- readxl::read_xlsx(p$manualFPfileName,sheet = 'conference')
+#' False discovery rate from inspection of every Nth detection
+#' @param falsePositiveXlsx Excel spreadsheet with timestamp of false positives.
+#' This spreadsheet requires two columns: one called UTC and the other called
+#' 'True Positive Rate.' These should be in a worksheet called 'conference'.
+#'
+#' @param season Month or season over which to subset the data. Months can be
+#' 01-12, and seasons can be 'summer','autumn','winter','spring', or 'year'.
+#'
+#' @export
+#'
+falseDiscoveryRateFromNth<- function(falsePositiveXlsx,season='year'){
+  ffp <- readxl::read_xlsx(falsePositiveXlsx,sheet = 'conference')
 
   ffp$dt0 <-lubridate::ymd_hms(ffp$UTC)
   ffp$season <- time2season(ffp$dt0)

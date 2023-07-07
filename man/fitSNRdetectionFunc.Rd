@@ -4,15 +4,14 @@
 \alias{fitSNRdetectionFunc}
 \title{Fit an SNR-detection function}
 \usage{
-fitSNRdetectionFunc(SNRinfo, useGLM = TRUE, useSCAM = TRUE, numKnots = 3)
+fitSNRdetectionFunc(SNRinfo, modelType = "gam", numKnots = 3)
 }
 \arguments{
 \item{SNRinfo}{A data.frame containing detection information in columns
 Detected and SNR}
 
-\item{useGLM}{Boolean - if true a GLM will be fit instead of a GAM}
-
-\item{useSCAM}{Boolean - if true a shape constrained model will be fit instead of a GAM}
+\item{modelType}{one of either 'GAM', 'GLM', or 'SCAM'. ModelType determines
+which type of model will be used to estimate the detection-SNR function.}
 
 \item{numKnots}{Number of knots in the GAM or SCAM}
 }

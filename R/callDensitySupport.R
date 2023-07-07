@@ -9,6 +9,7 @@
 #'
 #' @param x List of Matlab datenums
 #' @returns posixCT corresponding to the Matlab datenum that was input
+#' @export
 mat2Rdate <- function (x){ as.POSIXct((x - 719529)*86400, origin = "1970-01-01",
                                      tz = "UTC")}
 
@@ -116,6 +117,8 @@ subsetByTimeCode<- function(df, dt, timeCode){
 #'
 #' @param p Data.frame containing parameters for call density estimation
 #' @param season TimeCode to filter month, season, or full year
+#' @param outputFolder Location/path/folder where output files will be saved
+#'   default is '.' (the current working directory).
 #'
 #' @returns Parameter file with file names corresponding to the correct timeCode
 #'
@@ -139,10 +142,11 @@ defaultOutputFileNames <- function(p,season, outputFolder='.'){
   p$SLsd <- 8.0;
   p$SLsamplesize <- 350;
 
-  # Whether to use GLM (faster) or GAM (better)
-  p$useGLM <- TRUE;
+  # Whether to use GLM, GAM, SCAM, or VGLM (not yet implemented)
+  # p$useGLM <- TRUE;
   # Whether to constrained gam from scam or plain mgcv::gam
-  p$useSCAM <- TRUE;
+  # p$useSCAM <- TRUE;
+  p$modelType <- 'scam';
     # Number of knots used in GAM
   p$numKnots <- 3
 
@@ -288,30 +292,70 @@ var.wtd.mean.cochran <- function(x,w){
 #' @param SNRinfo A data.frame containing detection information in columns
 #'     Detected and SNR
 #'
-#' @param useGLM Boolean - if true a GLM will be fit instead of a GAM
-#' @param useSCAM Boolean - if true a shape constrained model will be fit instead of a GAM
+#' @param modelType one of either 'GAM', 'GLM', or 'SCAM'. ModelType determines
+#' which type of model will be used to estimate the detection-SNR function.
+#'
 #' @param numKnots Number of knots in the GAM or SCAM
 #'
 #' @importFrom stats binomial coef predict quasibinomial rnorm sd vcov
 #'
 #' @export
-fitSNRdetectionFunc <- function(SNRinfo, useGLM=TRUE, useSCAM=TRUE, numKnots=3){
-  # Initial glm:
+fitSNRdetectionFunc <- function(SNRinfo, modelType='gam', numKnots=3){
+  modelType <- tolower(modelType)
 
-  if (useGLM==TRUE){
+  if (modelType == 'glm'){
     res.1=stats::glm(Detected~(SNR), data = SNRinfo,
               family = binomial(link="logit")) # or: family quasibinomial
-  } else {
-    if (useSCAM==TRUE){
+  }
+  if (modelType == 'scam'){
       res.1<-scam::scam(Detected~s(SNR, k=numKnots,bs="mpi"),
                         data=SNRinfo,family=binomial)
-    } else {
-      res.1<-mgcv::gam(Detected~s(SNR, k=numKnots), data=SNRinfo,
-                       family=quasibinomial) # Test to include k=3
-    }
-    return(res.1)
   }
+  if (modelType == 'gam'){
+      res.1<-mgcv::gam(Detected~s(SNR, k=numKnots), data=SNRinfo,
+                       family=quasibinomial)
+  }
+    return(res.1)
 }
+
+#' Fit an SNR-detection function with a closed population capture-recapture glm
+#'
+#' @description
+#' VGLM SNR-detection functions are positive bernoulli models of the form
+#' (y1,y2,...yN) ~ SNR. Here yi is a column of detections from the ith observer
+#' (with a 1 for detected and 0 for not detected by that observer). The
+#' assumptions for these models is that detection probability depends on
+#' heterogeneity from SNR, observers are independent, and there are
+#' no false positive detections included in the data for either observer.
+#' Models are fitted using the VGAM package (Yee, Stoklosa & Huggins 2015).
+#'
+#' Yee, Thomas W., Jakub Stoklosa, and Richard M. Huggins. “The VGAM Package for
+#'  Capture-Recapture Data Using the Conditional Likelihood.” Journal of
+#'  Statistical Software 65 (June 1, 2015): 1–33.
+#'  https://doi.org/10.18637/jss.v065.i05.
+#'
+#' @param SNRinfo A data.frame containing detection information in columns
+#'     Detected and SNR
+#'
+#' @param yColNames a list of strings containing the column names for each
+#' set of observer detections (default: 'detect_observer1','detect_observer2')
+#'
+#' @param whichObserver column name of the observer to use for predictions
+#'
+#'
+#' @export
+fitSNRvglm <- function(SNRinfo,
+                       yColNames = c('detect_observer1','detect_observer2'),
+                       whichObserver='detect_observer2'){
+
+  res.1 <- VGAM::vglm(SNRinfo[,yColNames] ~SNR,
+                posbernoulli.t, data=SNRinfo )
+  res.1@extra$whichObserver <- whichObserver
+
+  return(res.1)
+}
+
+
 
 #' Plot SNR-detection function (ggplot2)
 #' @param res.1 An SNR-detection function from fitSNRdetectionFunc
