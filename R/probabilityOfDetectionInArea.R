@@ -279,21 +279,22 @@ pDetInArea <-
 
   # STEPS 5 - for all p(det), calculate a weighted average (weighting by distance)
 
-  #Weight each prob(detect) by the range (i.e. multiply the p(det) by the range)
-  #Then divide all weighted p(dets) for a transect by the sum of ALL ranges across
-  #each transect.
-  #want to save the 1000 weighted mean p(dets) for each transect
-  #a bit easier to handle than resultsallpdets
+  # Weight each prob(detect) by the range (i.e. multiply the p(det) by the range)
+  # Then divide all weighted p(dets) for a transect by the sum of ALL ranges across
+  # each transect.
+  # want to save the 1000 weighted mean p(dets) for each transect
+  # a bit easier to handle than resultsallpdets
   # alltransectspdetsweight1000<-matrix(NA,8,1000)
   alltransectspdetsweight1000<-matrix(NA,no.profiles,outerloop)
   #repeat all steps for each transect
   for (i in 1:no.profiles){
-    #extract the transect specific data (10000x1000) for each transect
+    # extract the data (10000x1000) for each transect
     transectallpdets<-resultsallpdets[,seq(i,dim(resultsallpdets)[2],no.profiles)]
     #check dimensions are ok
-    dim(transectallpdets)
-    #Now want to weight the pdets using the ranges
-    #define a matrix to save the results - will be 10000 x 1000 for each transect
+    #dim(transectallpdets)
+    # Now want to weight the pdets using the ranges
+    # define a matrix to save the results - will be numTLrowsubset x outerloop
+    # for each transect
     transectallpdetsweight<-matrix(NA,numTLrowsubset,outerloop)
     #For each range step, multiply the 1000 x p(det) values by the range
 
@@ -312,7 +313,7 @@ pDetInArea <-
     #Save in alltransectspdetsweight1000 matrix
     alltransectspdetsweight1000[i,]<-transectpdetsweight1000
   }
-  #So now have a results matrix with 8x1000 average weighted p(dets)
+  #So now have a results matrix with no.profilesx1000 average weighted p(dets)
   #********************************************************************************
   # STEP 6 - Final p(det) calculations
   # STEP 6(a) Calculate a transect-specific mean p(det) for each transect
