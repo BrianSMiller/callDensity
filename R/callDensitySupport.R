@@ -348,8 +348,9 @@ fitSNRvglm <- function(SNRinfo,
                        yColNames = c('detect_observer1','detect_observer2'),
                        whichObserver='detect_observer2'){
 
-  res.1 <- VGAM::vglm(SNRinfo[,yColNames] ~SNR,
-                posbernoulli.t, data=SNRinfo )
+
+  res.1 <- VGAM::vglm(as.matrix(SNRinfo[,yColNames]) ~SNR,
+                posbernoulli.t(link="logitlink"), data=SNRinfo )
   res.1@extra$whichObserver <- whichObserver
 
   return(res.1)
@@ -363,7 +364,7 @@ fitSNRvglm <- function(SNRinfo,
 #' @export
 showSNRdetectionFunc <-  function(res.1){
 
-  p1 <- marginaleffects::plot_cap(res.1, condition='SNR',
+  p1 <- marginaleffects::plot_predictions(res.1, condition='SNR',
                                   type='response',conf_level=0.95)+
     ggplot2::labs(x = c("SNR (dB)"), y = "P(detecting a call)" , title = NULL)+
       ggplot2::theme(legend.position="bottom",

@@ -22,6 +22,9 @@
 #'    specifying the SNR-detection function to use. If this is not included,
 #'    then the SNR-detection function will be derived from the capture history
 #'    table.
+#' @param truncationDistance scalar or matrix of truncation distances.
+#'    If a matrix is provided, then the dimensions should be 1xN with N being
+#'    the same as the number of transects
 #' @returns data.frame containing call density inputs, results, and CVs
 #'
 #' @importFrom stats rnorm sd vcov
@@ -29,7 +32,7 @@
 #' @importFrom magrittr %>%
 #' @export
 #'
-cde <- function (p,season, snrDetFun=NULL){
+cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf){
   # Check inputs and create outputs
   # Store all parameters for call-density estimation in data frame called 'p'
   #
@@ -82,7 +85,8 @@ cde <- function (p,season, snrDetFun=NULL){
 
   pDetInArea(snrDetFun, SL, TL,  NL, # Sonar equation inputs
              p$transectFile, p$simResultsFile, p$paFile, # file output names
-             output.resolution.m=p$output.resolution.m, outerloop=p$outerloop)
+             output.resolution.m=p$output.resolution.m, outerloop=p$outerloop,
+             truncationDistance=truncationDistance)
 
   # The above function, pDetInArea writes results to a bunch of files
   # Load the file that we need that has the p_a in them, and ignore the others
@@ -117,11 +121,29 @@ cde <- function (p,season, snrDetFun=NULL){
   SDn=sqrt(varn)
   CV.Nc=SDn/Nc
 
+  #  ### Calculate study area
+  #
+  # At most baisc study area is a circle of pi*w^2 radius. If different
+  # truncation distances are used for each transect, then need to estimate
+  # the area of each transect as sectors of a circle of r=truncation distance
+  ## ---------------------------------------------------------------------------
+
+  A = pi*p$w^2
+  if (any(truncationDistance < p$w)     ){
+     if (length(truncationDistance) == 1) {
+       A = pi*truncationDistance^2
+     } else {
+       A = sum(pi*truncationDistance^2/length(truncationDistance))
+     }
+
+
+  }
+
   #  ### Finally, estimate Dc (Density of calls) [calls $h^{-1} km^{-2}$]
   #
   ## ----------------------------------------------------------------------------------------------------
 
-  Dc <- (Nc * (1-c) )/( p$k * pi*p$w^2 * pa * T )
+  Dc <- (Nc * (1-c) )/( p$k * A * pa * T )
   Dc     # per h per km^2
   Dc*1e3 # per h per 1000 km^2?
 
