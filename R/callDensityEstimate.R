@@ -25,6 +25,9 @@
 #' @param truncationDistance scalar or matrix of truncation distances.
 #'    If a matrix is provided, then the dimensions should be 1xN with N being
 #'    the same as the number of transects
+#' @param snrTruncationThreshold scalar SNR in dB below which the probability of
+#'    detection will be forcibly set to zero.
+#'
 #' @returns data.frame containing call density inputs, results, and CVs
 #'
 #' @importFrom stats rnorm sd vcov
@@ -32,7 +35,8 @@
 #' @importFrom magrittr %>%
 #' @export
 #'
-cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf){
+cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
+                 snrTruncationThreshold=-Inf){
   # Check inputs and create outputs
   # Store all parameters for call-density estimation in data frame called 'p'
   #
@@ -86,7 +90,8 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf){
   pDetInArea(snrDetFun, SL, TL,  NL, # Sonar equation inputs
              p$transectFile, p$simResultsFile, p$paFile, # file output names
              output.resolution.m=p$output.resolution.m, outerloop=p$outerloop,
-             truncationDistance=truncationDistance)
+             truncationDistance=truncationDistance,
+             snrTruncationThreshold= snrTruncationThreshold)
 
   # The above function, pDetInArea writes results to a bunch of files
   # Load the file that we need that has the p_a in them, and ignore the others

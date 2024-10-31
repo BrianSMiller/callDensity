@@ -54,13 +54,15 @@
 #' @param truncationDistance scalar or matrix of truncation distances.
 #'    If a matrix is provided, then the dimensions should be 1xN with N being
 #'    the number of transects
+#' @param snrTruncationThreshold scalar SNR in dB below which the probability of
+#'    detection will be forcibly set to zero.
 #'
 #' @export
 pDetInArea <-
   function(res.1, SL, TLlookup,  NL, # Sonar equation inputs
            transectFile, simResultsFile, paFile, # file output names
            output.resolution.m = 100, outerloop = 1000,
-           truncationDistance=(Inf), snrTruncationTreshold=-Inf) {
+           truncationDistance=(Inf), snrTruncationThreshold=-Inf) {
     ### A5.2 Code used for the Monte Carlo Simulation
 
   # Written (started) 04 Jul 10 by Danielle Harris
@@ -300,7 +302,7 @@ pDetInArea <-
       }
 
       # set pdet<-0 when SNR is below the truncation threshold
-      predmatrix[which(newd< snrTruncationTreshold)]<-0
+      predmatrix[which(newd< snrTruncationThreshold)]<-0
 
       # set pdet<-NA when the distance along radial[,j] >= truncDistance[,j]
       predmatrix <- predmatrix + allTrunc[,j]
