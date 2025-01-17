@@ -307,9 +307,18 @@ pDetInArea <-
       # set pdet<-NA when the distance along radial[,j] >= truncDistance[,j]
       predmatrix <- predmatrix + allTrunc[,j]
 
-      # Check that: 0 <= allpdet <= 1 or else throw an error
-      if (!all( predmatrix >= 0  & predmatrix <= 1, na.rm = TRUE))
-      {  browser() }
+      # Check that: 0 <= predmatrix/probabilities <= 1 or else force them to be
+      # This is needed because some models (looking at you VGAMs) produce
+      # probabilities below zero or above 1 (e.g. -Inf and Inf)
+      if (any( predmatrix < 0, na.rm = TRUE)){
+        warning("Probabilities <0 encountered and set to zero")
+        predmatrix[which(predmatrix < 0)]<-0
+      }
+
+      if (any( predmatrix > 1, na.rm = TRUE)){
+        warning("Probabilities >1 encountered and set to 1")
+        predmatrix[which(predmatrix > 1)]<-1
+      }
 
       # Save the prob(det) in allpdet
       allpdet[,j]<-predmatrix

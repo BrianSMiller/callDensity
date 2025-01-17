@@ -6,7 +6,13 @@
 author: "Brian Miller"
 date: "2022-10-12"}
 \usage{
-cde(p, season, snrDetFun = NULL)
+cde(
+  p,
+  season,
+  snrDetFun = NULL,
+  truncationDistance = Inf,
+  snrTruncationThreshold = -Inf
+)
 }
 \arguments{
 \item{p}{A data.frame containing parameters for call density estimation.
@@ -18,6 +24,13 @@ Usually created by calling function defaultOutputFileNames}
 specifying the SNR-detection function to use. If this is not included,
 then the SNR-detection function will be derived from the capture history
 table.}
+
+\item{truncationDistance}{scalar or matrix of truncation distances.
+If a matrix is provided, then the dimensions should be 1xN with N being
+the same as the number of transects}
+
+\item{snrTruncationThreshold}{scalar SNR in dB below which the probability of
+detection will be forcibly set to zero.}
 }
 \value{
 data.frame containing call density inputs, results, and CVs

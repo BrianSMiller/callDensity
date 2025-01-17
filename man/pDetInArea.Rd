@@ -20,7 +20,9 @@ pDetInArea(
   simResultsFile,
   paFile,
   output.resolution.m = 100,
-  outerloop = 1000
+  outerloop = 1000,
+  truncationDistance = (Inf),
+  snrTruncationThreshold = -Inf
 )
 }
 \arguments{
@@ -44,6 +46,13 @@ and TL in dB along an azimuth for columns 2-n}
 \item{output.resolution.m}{Spatial resolution of density/transect output in m}
 
 \item{outerloop}{Number of iterations in outerloop (default 1000)}
+
+\item{truncationDistance}{scalar or matrix of truncation distances.
+If a matrix is provided, then the dimensions should be 1xN with N being
+the number of transects}
+
+\item{snrTruncationThreshold}{scalar SNR in dB below which the probability of
+detection will be forcibly set to zero.}
 }
 \description{
 (3) The outer loop (to be run 1000 times): (a) Generate a possible mean and

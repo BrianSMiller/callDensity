@@ -138,9 +138,9 @@ defaultOutputFileNames <- function(p,season, outputFolder='.'){
   ## P_a & Monte-Carlo model
 
   # Source level distribution
-  p$SLmean <- 189;
-  p$SLsd <- 8.0;
-  p$SLsamplesize <- 350;
+  # p$SLmean <- 189;
+  # p$SLsd <- 8.0;
+  # p$SLsamplesize <- 350;
 
   # Whether to use GLM, GAM, SCAM, or VGLM (not yet implemented)
   # p$useGLM <- TRUE;
@@ -183,7 +183,23 @@ defaultOutputFileNames <- function(p,season, outputFolder='.'){
   return(p)
 }
 
-#' Mean and standard deviation of noise levels by month, season, or year.
+#' @description Return a list of existing TL files associated with the call density
+#' parameters 'p'
+#'
+#' @param p Data.frame containing parameters for call density estimation
+#' @param season TimeCode to filter month, season, or full year
+#'
+#' @returns
+#' @export
+listTLFiles <- function(p,season=''){
+  # Seasonal TL file name
+  tlFiles <- dir(p$tlParams$tl_root, pattern=paste0(season,'*.csv'))
+  tlFiles <- paste0(p$tlParams$tl_root,tlFiles)
+
+  return(tlFiles)
+}
+
+#' @title Mean and standard deviation of noise levels by month, season, or year.
 #'
 #' @description
 #' Read a table of noise levels containing a columns t and NL for time and

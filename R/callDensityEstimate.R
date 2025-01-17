@@ -40,7 +40,7 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   # Check inputs and create outputs
   # Store all parameters for call-density estimation in data frame called 'p'
   #
-  ## ----------------------------------------------------------------------------------------------------
+  # InputCheck------------------------------------------------------------------
 
   # Require that parameters have already been defined and are in data.frame, p
   if (!exists("p")){
@@ -59,6 +59,9 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
     season <-'year'
   }
 
+  #   ### Nc, T, c, CV_c
+  #
+  # Nc, T, c, CV_c--------------------------------------------------------------
   Nc <- countDetections(p,season)
   T <- deploymentDuration(p,season)
   c <- falseDiscoveryRate(p,season)
@@ -72,12 +75,16 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
     c <- c$c
   }
 
-  # $p_a$ (Overall probability of detection)
+
+  #   ### $p_a$ (Overall probability of detection)
   #
+  # Pa--------------------------------------------------------------------------
   SNRinfo <- capHist2snrInfo(p$capHistFile,season)
-  NL <- SNRinfo %>% dplyr::summarise(mean=mean(NoiseRL), sd=sd(NoiseRL),
-                                     sampleSize=dplyr::n())
-  SL <- data.frame(mean=p$SLmean, sd=p$slStd, sampleSize=p$SLsamplesize);
+  NL <- SNRinfo %>% dplyr::summarise(mean=mean(NoiseRL,na.rm = TRUE),
+                                     sd=sd(NoiseRL,na.rm = TRUE),
+                                     sampleSize=dplyr::n()-sum(is.na(NoiseRL)))
+  SL <- data.frame(mean=p$slParams$slMean, sd=p$slParams$slStd, sampleSize=p$slParams$slSampleSize)
+
   TL<-utils::read.csv(p$tlFile)
 
   # Check whether user supplied an snr detection function or estimate from data
@@ -104,7 +111,7 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   #
   #  Approach is to calculate CV using mean and SD from each radial?
   #
-  ## ----------------------------------------------------------------------------------------------------
+  #CV_Pa------------------------------------------------------------------------
   # Coef. of variation - Pa
 
   names(pa.all.transects)<-c('Mean','SD')
@@ -122,6 +129,7 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
 
   #  ### $CV_{N_c}$ (see Harris, 2012 for details);
   # Confirm how to calculate SD and CV (?)
+  # CV_Nc-----------------------------------------------------------------------
   varn=Nc*(pa)*(1-pa)
   SDn=sqrt(varn)
   CV.Nc=SDn/Nc
@@ -131,7 +139,7 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   # At most baisc study area is a circle of pi*w^2 radius. If different
   # truncation distances are used for each transect, then need to estimate
   # the area of each transect as sectors of a circle of r=truncation distance
-  ## ---------------------------------------------------------------------------
+  # A---------------------------------------------------------------------------
 
   A = pi*p$w^2
   if (any(truncationDistance < p$w)     ){
@@ -146,7 +154,7 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
 
   #  ### Finally, estimate Dc (Density of calls) [calls $h^{-1} km^{-2}$]
   #
-  ## ----------------------------------------------------------------------------------------------------
+  # Dc --------------------------------------------------------------------------
 
   Dc <- (Nc * (1-c) )/( p$k * A * pa * T )
   Dc     # per h per km^2
@@ -154,17 +162,17 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
 
   #  ### CV_Total (Delta Method)
   #
-  ## ----------------------------------------------------------------------------------------------------
+  # CV_Total--------------------------------------------------------------------
 
   CV.Dc<-sqrt((CV.Nc^2)+(CV.pa^2)+(CV.c^2))
   CV.Dc
 
 
   #  ## Collate into data frame and write to csv file
-  ## ----------------------------------------------------------------------------------------------------
+  # Format output---------------------------------------------------------------
 
   result <- data.frame(season, p$siteCode,Nc,c,p$k,T,p$w,pa,
-                       p$SLmean,p$SLsd,NL$mean,NL$sd,p$modelType,
+                         SL$mean,SL$sd,NL$mean,NL$sd,p$modelType,
                        CV.Nc,CV.c,CV.pa,Dc,CV.Dc)
   names(result) <- c('season','siteCode','Nc','c','k','T','w','pa',
                      'SLmean','SLsd','NLmean','NLsd','modelType',
@@ -175,17 +183,19 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
 }
 
 ### Supporting functions are all below
-## ----------------------------------------------------------------------------------------------------
+#
+# Supporting functions----------------------------------------------------------
 
 # ### $N_c$ (number of detections).
 #
 # $T$ and $N_c$ were calculated based, respectively, in the raw data duration
 # and number of automatic detections correspondent to the full dataset.
 #
-## ----------------------------------------------------------------------------------------------------
+## CountDetections--------------------------------------------------------------
 countDetections <- function(p,season) {
-  det <- read.csv(p$fullYearDetectionCsv,sep=',')
-  det$t <- as.POSIXct(det$UTC, tz='UTC')
+  det <- read.csv(p$detectorParams$fullYearDetectionCsv,sep=',')
+  det$t <- mat2Rdate(det$t0)
+
   det$season <- time2season(det$t)
   det$month <- time2monthCode(det$t)
 
@@ -199,9 +209,10 @@ countDetections <- function(p,season) {
 #
 #  Sum the duration of the audio that has been analysed
 #
-## ----------------------------------------------------------------------------------------------------
+## deploymentDuration-----------------------------------------------------------
 deploymentDuration <- function(p,season){
-  wavInfo <- read.csv(p$fullYearEffortFile) # File generated from Matlab wavFolderInfo
+  # File generated from Matlab wavFolderInfo
+  wavInfo <- read.csv(p$detectorParams$fullYearEffortFile)
   # wavInfo$season <- time2season( mat2Rdate(wavInfo$startDate) )
   wavInfo <- subsetByTimeCode(wavInfo,mat2Rdate(wavInfo$startDate),season)
 
@@ -210,31 +221,38 @@ deploymentDuration <- function(p,season){
 }
 
 
-#  ### Estimate $c$ (False discovery rate)
-#
-#  False discovery rate, c, is defined as: FP/(FP+TP), where FP is the number
-#  of false-positives and TP is the number of true positives
-#  (https://en.wikipedia.org/wiki/Precision_and_recall; TODO: find a primary
-#  literature citation to use instead of citing wikipedia).
-#
-#  Here we estimate false-positive rate of the automated detector from the
-#  manually annotated dataset. The data-file for this is the capture-history
-#  table that contains reconciled annotated, and automated detections.
-#
-#  First, we count the number of FP that the AI produced from the capture
-#  history table. These are the sum of the rows where detect_table2==T &
-#  detect_table1==F. Then we calculate the number of true positives, the sum
-#  of the rows where detect_table2==T & detect_table1==T.
-#
-#  Alternatively, we could use the double observer mark-recapture to estimate
-#  the total number of calls in the dataset (see Miller et al 2022 - AI bests
-#  human observer - RSEC). This would require incorporating the Huggins/RMark
-#  script that can be found in the supplement to the Miller et al 2022 paper.
-##
-#----------------------------------------------------------------------------------------------------
+
+#' #  ### Estimate $c$ (False discovery rate)
+#'
+#'  False discovery rate, c, is defined as: FP/(FP+TP), where FP is the number
+#'  of false-positives and TP is the number of true positives
+#'  (https://en.wikipedia.org/wiki/Precision_and_recall; TODO: find a primary
+#'  literature citation to use instead of citing wikipedia).
+#'
+#'  Here we estimate false-positive rate of the automated detector from the
+#'  manually annotated dataset. The data-file for this is the capture-history
+#'  table that contains reconciled annotated, and automated detections.
+#'
+#'  First, we count the number of FP that the AI produced from the capture
+#'  history table. These are the sum of the rows where detect_table2==T &
+#'  detect_table1==F. Then we calculate the number of true positives, the sum
+#'  of the rows where detect_table2==T & detect_table1==T.
+#'
+#'  Alternatively, we could use the double observer mark-recapture to estimate
+#'  the total number of calls in the dataset (see Miller et al 2022 - AI bests
+#'  human observer - RSEC). This would require incorporating the Huggins/RMark
+#'  script that can be found in the supplement to the Miller et al 2022 paper.
+#'
+#' @param p
+#' @param season
+#'
+#' @returns
+#' @export
+#'
+#' @examples
 falseDiscoveryRate <- function(p,season){
 
-  effort <- readxl::read_excel(p$effortFile);
+  effort <- readxl::read_excel(p$annotationParams$effortFile);
   effort$season <- time2season(effort$StartTime)
   effort$month <- time2monthCode(effort$StartTime)
   ch <- read.csv(file = p$capHistFile)
@@ -249,12 +267,21 @@ falseDiscoveryRate <- function(p,season){
   c
 }
 
+#' CV of false discovery rate using Cochran approximation
+#'
+#' @param p
+#' @param season
+#'
+#' @returns CV of false discovery rate using Cochran approximation
+#' @export
+#'
+#' @examples
 falseDiscoveryCV <- function(p,season){
   #  ### $CV_c$ (Cochran approx.);
   #
   #  First calculate using annotated library
   #
-  ## ----------------------------------------------------------------------------------------------------
+
 
   fp <- read.csv(p$hourlyFalsePosFile)
   fp <- subsetByTimeCode(fp,lubridate::dmy_hms(fp$dt0), season)
