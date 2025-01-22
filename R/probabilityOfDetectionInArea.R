@@ -143,8 +143,7 @@ pDetInArea <-
   #delete the range column (first column) of allTLlookup - for matrix of TL only
   #will be used later in the loop
   allTLsubset<-allTLlookupsubset[,2:(no.profiles+1)]
-  allTrunc <- matrix(data=0,
-                           nrow=dim( allTLsubset)[1], ncol=dim(allTLsubset)[2] )
+  allTrunc<-matrix(data=0, nrow=dim( allTLsubset)[1], ncol=dim(allTLsubset)[2])
   for (i in 1:no.profiles){
     na.index <- allTLlookupsubset[,1]>truncationDistance[i]
     allTrunc[na.index,i]<-rep(NA)

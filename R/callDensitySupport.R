@@ -199,6 +199,30 @@ listTLFiles <- function(p,season=''){
   return(tlFiles)
 }
 
+#' Change path to detection csv files
+#'
+#' @param d Call density detector parameter data.frame
+#' @param newFolder relative or absolute path to where the detection files are
+#'   located
+#'
+#' @returns new detection parameters with filenames that have updated folders
+#' @export
+#'
+#' @examples
+updateDetectionFolder <- function(p, newFolder){
+  d <- p$detectorParams
+  d$folder <- newFolder
+  d$fullYearDetectionCsv <- file.path(newFolder,basename(d$fullYearDetectionCsv))
+  d$subsetDetCsv <- file.path(newFolder,basename(d$subsetDetCsv))
+  d$fullYearEffortFile <- file.path(newFolder, basename(d$fullYearEffortFile))
+  p$annotationParams$annotationFile <- file.path(
+    newFolder, basename(p$annotationParams$annotationFile) )
+  p$detectorParams <- d
+  return(p)
+}
+
+
+
 #' @title Mean and standard deviation of noise levels by month, season, or year.
 #'
 #' @description
@@ -366,12 +390,49 @@ fitSNRvglm <- function(SNRinfo,
 
 
   res.1 <- VGAM::vglm(as.matrix(SNRinfo[,yColNames]) ~SNR,
-                posbernoulli.t(link="logitlink"), data=SNRinfo )
+                posbernoulli.t, data=SNRinfo )
   res.1@extra$whichObserver <- whichObserver
 
   return(res.1)
 }
 
+#' Fit an SNR-detection function with a closed population capture-recapture gam
+#'
+#' @description
+#' VGAM SNR-detection functions are positive bernoulli models of the form
+#' (y1,y2,...yN) ~ SNR. Here yi is a column of detections from the ith observer
+#' (with a 1 for detected and 0 for not detected by that observer). The
+#' assumptions for these models is that detection probability depends on
+#' heterogeneity from SNR, observers are independent, and there are
+#' no false positive detections included in the data for either observer.
+#' Models are fitted using the VGAM package (Yee, Stoklosa & Huggins 2015).
+#'
+#' Yee, Thomas W., Jakub Stoklosa, and Richard M. Huggins. “The VGAM Package for
+#'  Capture-Recapture Data Using the Conditional Likelihood.” Journal of
+#'  Statistical Software 65 (June 1, 2015): 1–33.
+#'  https://doi.org/10.18637/jss.v065.i05.
+#'
+#' @param SNRinfo A data.frame containing detection information in columns
+#'     Detected and SNR
+#'
+#' @param yColNames a list of strings containing the column names for each
+#' set of observer detections (default: 'detect_observer1','detect_observer2')
+#'
+#' @param whichObserver column name of the observer to use for predictions
+#'
+#'
+#' @export
+fitSNRvgam <- function(SNRinfo,
+                       yColNames = c('detect_observer1','detect_observer2'),
+                       whichObserver='detect_observer2'){
+
+  res.1 <- VGAM::vgam(as.matrix(SNRinfo[,yColNames]) ~bs(SNR, df=6),
+                      posbernoulli.t, data=SNRinfo,
+                      na.action = 'na.omit')
+  res.1@extra$whichObserver <- whichObserver
+
+  return(res.1)
+}
 
 
 #' Plot SNR-detection function (ggplot2)

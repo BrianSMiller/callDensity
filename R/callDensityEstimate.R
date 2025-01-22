@@ -85,7 +85,7 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
                                      sampleSize=dplyr::n()-sum(is.na(NoiseRL)))
   SL <- data.frame(mean=p$slParams$slMean, sd=p$slParams$slStd, sampleSize=p$slParams$slSampleSize)
 
-  TL<-utils::read.csv(p$tlFile)
+  TL<-utils::read.csv(p$tlParams$tlFile)
 
   # Check whether user supplied an snr detection function or estimate from data
   if (is.null(snrDetFun)){
