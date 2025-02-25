@@ -183,13 +183,12 @@ defaultOutputFileNames <- function(p,season, outputFolder='.'){
   return(p)
 }
 
-#' @description Return a list of existing TL files associated with the call density
-#' parameters 'p'
+#' Return a list of existing TL files associated with the call density
 #'
 #' @param p Data.frame containing parameters for call density estimation
 #' @param season TimeCode to filter month, season, or full year
 #'
-#' @returns
+#' @returns a list of all transmission loss files
 #' @export
 listTLFiles <- function(p,season=''){
   # Seasonal TL file name
@@ -208,7 +207,6 @@ listTLFiles <- function(p,season=''){
 #' @returns new detection parameters with filenames that have updated folders
 #' @export
 #'
-#' @examples
 updateDetectionFolder <- function(p, newFolder){
   d <- p$detectorParams
   d$folder <- newFolder

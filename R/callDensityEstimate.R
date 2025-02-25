@@ -63,7 +63,11 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   #
   # Nc, T, c, CV_c--------------------------------------------------------------
   Nc <- countDetections(p,season)
-  T <- deploymentDuration(p,season)
+
+                        snrTruncationThreshold=snrTruncationThreshold)
+
+  T <- deploymentDuration(p$detectorParams$fullYearEffortFile, season)
+
   c <- falseDiscoveryRate(p,season)
   CV.c <- falseDiscoveryCV(p,season)
 
@@ -192,8 +196,17 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
 # and number of automatic detections correspondent to the full dataset.
 #
 ## CountDetections--------------------------------------------------------------
-countDetections <- function(p,season) {
-  det <- read.csv(p$detectorParams$fullYearDetectionCsv,sep=',')
+countDetections <- function(detectionFile,season,snrTruncationThreshold=-Inf) {
+  det <- read.csv(detectionFile,sep=',')
+
+  if (snrTruncationThreshold != -Inf){ # Only if truncation requested
+    if ( "snr" %in% colnames(det) ){
+      subset(det,det$snr>=snrTruncationThreshold)
+    }  else {
+      stop("Truncation by SNR requires column `snr` in fullYearDetectionCsv.\n\nSNR Truncation not applied\n\n")
+    }
+  }
+
   det$t <- mat2Rdate(det$t0)
 
   det$season <- time2season(det$t)
@@ -210,10 +223,9 @@ countDetections <- function(p,season) {
 #  Sum the duration of the audio that has been analysed
 #
 ## deploymentDuration-----------------------------------------------------------
-deploymentDuration <- function(p,season){
+deploymentDuration <- function(fullYearEffortFile, season){
   # File generated from Matlab wavFolderInfo
-  wavInfo <- read.csv(p$detectorParams$fullYearEffortFile)
-  # wavInfo$season <- time2season( mat2Rdate(wavInfo$startDate) )
+  wavInfo <- read.csv(fullYearEffortFile)
   wavInfo <- subsetByTimeCode(wavInfo,mat2Rdate(wavInfo$startDate),season)
 
   T <- sum(wavInfo$duration)/3600 # in hours
@@ -224,32 +236,34 @@ deploymentDuration <- function(p,season){
 
 #' #  ### Estimate $c$ (False discovery rate)
 #'
-#'  False discovery rate, c, is defined as: FP/(FP+TP), where FP is the number
-#'  of false-positives and TP is the number of true positives
-#'  (https://en.wikipedia.org/wiki/Precision_and_recall; TODO: find a primary
-#'  literature citation to use instead of citing wikipedia).
+#' False discovery rate, c, is defined as: FP/(FP+TP), where FP is the number of
+#' false-positives and TP is the number of true positives
+#' (https://en.wikipedia.org/wiki/Precision_and_recall; TODO: find a primary
+#' literature citation to use instead of citing wikipedia).
 #'
-#'  Here we estimate false-positive rate of the automated detector from the
-#'  manually annotated dataset. The data-file for this is the capture-history
-#'  table that contains reconciled annotated, and automated detections.
+#' Here we estimate false-positive rate of the automated detector from the
+#' manually annotated dataset. The data-file for this is the capture-history
+#' table that contains reconciled annotated, and automated detections.
 #'
-#'  First, we count the number of FP that the AI produced from the capture
-#'  history table. These are the sum of the rows where detect_table2==T &
-#'  detect_table1==F. Then we calculate the number of true positives, the sum
-#'  of the rows where detect_table2==T & detect_table1==T.
+#' First, we count the number of FP that the AI produced from the capture
+#' history table. These are the sum of the rows where detect_table2==T &
+#' detect_table1==F. Then we calculate the number of true positives, the sum of
+#' the rows where detect_table2==T & detect_table1==T.
 #'
-#'  Alternatively, we could use the double observer mark-recapture to estimate
-#'  the total number of calls in the dataset (see Miller et al 2022 - AI bests
-#'  human observer - RSEC). This would require incorporating the Huggins/RMark
-#'  script that can be found in the supplement to the Miller et al 2022 paper.
+#' Alternatively, we could use the double observer mark-recapture to estimate
+#' the total number of calls in the dataset (see Miller et al 2022 - AI bests
+#' human observer - RSEC). This would require incorporating the Huggins/RMark
+#' script that can be found in the supplement to the Miller et al 2022 paper.
 #'
-#' @param p
-#' @param season
+#' @param p data.frame containing top-level parameters for a call density
+#'   estimate
+#' @param season a character indicating the season or month for which to
+#'   estimate call density
 #'
-#' @returns
+#' @returns c, the false discovery rate (1-precision) for detector2 assuming
+#'   detector1 is ground truth for detections within the specified season
 #' @export
 #'
-#' @examples
 falseDiscoveryRate <- function(p,season){
 
   effort <- readxl::read_excel(p$annotationParams$effortFile);
@@ -269,13 +283,13 @@ falseDiscoveryRate <- function(p,season){
 
 #' CV of false discovery rate using Cochran approximation
 #'
-#' @param p
-#' @param season
+#' @param p data.frame containing all parameters for call density estimate
+#' @param season string or number corresponding to the time of year for which
+#'   call densities should be estimated (and data subsetted).
 #'
 #' @returns CV of false discovery rate using Cochran approximation
 #' @export
 #'
-#' @examples
 falseDiscoveryCV <- function(p,season){
   #  ### $CV_c$ (Cochran approx.);
   #

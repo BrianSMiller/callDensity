@@ -8,25 +8,35 @@ falseDiscoveryRate(p, season)
 }
 \arguments{
 \item{season}{}
+\item{p}{data.frame containing top-level parameters for a call density
+estimate}
+
+\item{season}{a character indicating the season or month for which to
+estimate call density}
+}
+\value{
+c, the false discovery rate (1-precision) for detector2 assuming
+  detector1 is ground truth for detections within the specified season
 }
 \description{
-False discovery rate, c, is defined as: FP/(FP+TP), where FP is the number
- of false-positives and TP is the number of true positives
- (https://en.wikipedia.org/wiki/Precision_and_recall; TODO: find a primary
- literature citation to use instead of citing wikipedia).
+False discovery rate, c, is defined as: FP/(FP+TP), where FP is the number of
+false-positives and TP is the number of true positives
+(https://en.wikipedia.org/wiki/Precision_and_recall; TODO: find a primary
+literature citation to use instead of citing wikipedia).
 }
 \details{
 Here we estimate false-positive rate of the automated detector from the
- manually annotated dataset. The data-file for this is the capture-history
- table that contains reconciled annotated, and automated detections.
+manually annotated dataset. The data-file for this is the capture-history
+table that contains reconciled annotated, and automated detections.
 
- First, we count the number of FP that the AI produced from the capture
- history table. These are the sum of the rows where detect_table2==T &
- detect_table1==F. Then we calculate the number of true positives, the sum
- of the rows where detect_table2==T & detect_table1==T.
+First, we count the number of FP that the AI produced from the capture
+history table. These are the sum of the rows where detect_table2==T &
+detect_table1==F. Then we calculate the number of true positives, the sum of
+the rows where detect_table2==T & detect_table1==T.
 
- Alternatively, we could use the double observer mark-recapture to estimate
- the total number of calls in the dataset (see Miller et al 2022 - AI bests
  human observer - RSEC). This would require incorporating the Huggins/RMark
- script that can be found in the supplement to the Miller et al 2022 paper.
+Alternatively, we could use the double observer mark-recapture to estimate
+the total number of calls in the dataset (see Miller et al 2022 - AI bests
+human observer - RSEC). This would require incorporating the Huggins/RMark
+script that can be found in the supplement to the Miller et al 2022 paper.
 }
