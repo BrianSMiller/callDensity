@@ -7,8 +7,8 @@
 falseDiscoveryCV(p, season)
 }
 \arguments{
-\item{season}{}
 \item{p}{data.frame containing all parameters for call density estimate}
+
 \item{season}{string or number corresponding to the time of year for which
 call densities should be estimated (and data subsetted).}
 }

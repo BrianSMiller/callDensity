@@ -62,8 +62,7 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   #   ### Nc, T, c, CV_c
   #
   # Nc, T, c, CV_c--------------------------------------------------------------
-  Nc <- countDetections(p,season)
-
+  Nc <- countDetections(p$detectorParams$fullYearDetectionCsv,season,
                         snrTruncationThreshold=snrTruncationThreshold)
 
   T <- deploymentDuration(p$detectorParams$fullYearEffortFile, season)
@@ -196,12 +195,31 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
 # and number of automatic detections correspondent to the full dataset.
 #
 ## CountDetections--------------------------------------------------------------
+#' Title
+#'
+#' @param detectionFile - File containing detections for the full dataset.
+#'   File format must be tab separated with header, and must contain the
+#'   following columns:
+#'    t0: <double> Matlab datenum
+#'    snr: <double> Signal to noise ratio of that detection (required only if
+#'      snrTruncationThreshold is other than default value of -Inf)
+#' @param season - Time period over which to subset detections. Can follow World
+#'   Ocean Atlas numeric time codes (0-16), or be name of season
+#'   ('summer','autumn','winter','spring'), month name/abbreviation, or 'year'.
+#' @param snrTruncationThreshold <double> detections with SNR less than
+#'   snrTruncation threshold will be excluded from count
+#'
+#' @returns <numeric> number of detections in the detectionFile within specified
+#'   season and >= snrTruncationThreshold
+#' @export
+#'
 countDetections <- function(detectionFile,season,snrTruncationThreshold=-Inf) {
-  det <- read.csv(detectionFile,sep=',')
+  # detectionFile must be
+  det <- read.delim(detectionFile, sep = '\t', header = TRUE)
 
   if (snrTruncationThreshold != -Inf){ # Only if truncation requested
     if ( "snr" %in% colnames(det) ){
-      subset(det,det$snr>=snrTruncationThreshold)
+      det <- subset(det,det$snr>=snrTruncationThreshold)
     }  else {
       stop("Truncation by SNR requires column `snr` in fullYearDetectionCsv.\n\nSNR Truncation not applied\n\n")
     }

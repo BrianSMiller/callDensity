@@ -7,7 +7,6 @@
 falseDiscoveryRate(p, season)
 }
 \arguments{
-\item{season}{}
 \item{p}{data.frame containing top-level parameters for a call density
 estimate}
 
@@ -34,7 +33,6 @@ history table. These are the sum of the rows where detect_table2==T &
 detect_table1==F. Then we calculate the number of true positives, the sum of
 the rows where detect_table2==T & detect_table1==T.
 
- human observer - RSEC). This would require incorporating the Huggins/RMark
 Alternatively, we could use the double observer mark-recapture to estimate
 the total number of calls in the dataset (see Miller et al 2022 - AI bests
 human observer - RSEC). This would require incorporating the Huggins/RMark
