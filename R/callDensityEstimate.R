@@ -27,6 +27,8 @@
 #'    the same as the number of transects
 #' @param snrTruncationThreshold scalar SNR in dB below which the probability of
 #'    detection will be forcibly set to zero.
+#' @param NL data.frame containing distribution of noise level parameters. This
+#'   data.frame must contain the rows mean, sd, and sampleSize (similar to SL).
 #'
 #' @returns data.frame containing call density inputs, results, and CVs
 #'
@@ -36,7 +38,7 @@
 #' @export
 #'
 cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
-                 snrTruncationThreshold=-Inf){
+                 snrTruncationThreshold=-Inf, NL=NULL){
   # Check inputs and create outputs
   # Store all parameters for call-density estimation in data frame called 'p'
   #
@@ -83,9 +85,15 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   #
   # Pa--------------------------------------------------------------------------
   SNRinfo <- capHist2snrInfo(p$capHistFile,season)
-  NL <- SNRinfo %>% dplyr::summarise(mean=mean(NoiseRL,na.rm = TRUE),
+
+  # If user has not specified NL distribution (data.frame with columns mean, sd,
+  # samplesize), then extract this information it from SNRinfo
+  if (is.null(NL)){
+      NL <- SNRinfo %>% dplyr::summarise(mean=mean(NoiseRL,na.rm = TRUE),
                                      sd=sd(NoiseRL,na.rm = TRUE),
                                      sampleSize=dplyr::n()-sum(is.na(NoiseRL)))
+  }
+
   SL <- data.frame(mean=p$slParams$slMean, sd=p$slParams$slStd, sampleSize=p$slParams$slSampleSize)
 
   TL<-utils::read.csv(p$tlParams$tlFile)

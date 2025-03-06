@@ -11,7 +11,8 @@ cde(
   season,
   snrDetFun = NULL,
   truncationDistance = Inf,
-  snrTruncationThreshold = -Inf
+  snrTruncationThreshold = -Inf,
+  NL = NULL
 )
 }
 \arguments{
@@ -31,6 +32,9 @@ the same as the number of transects}
 
 \item{snrTruncationThreshold}{scalar SNR in dB below which the probability of
 detection will be forcibly set to zero.}
+
+\item{NL}{data.frame containing distribution of noise level parameters. This
+data.frame must contain the rows mean, sd, and sampleSize (similar to SL).}
 }
 \value{
 data.frame containing call density inputs, results, and CVs
