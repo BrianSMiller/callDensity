@@ -89,9 +89,7 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   # If user has not specified NL distribution (data.frame with columns mean, sd,
   # samplesize), then extract this information it from SNRinfo
   if (is.null(NL)){
-      NL <- SNRinfo %>% dplyr::summarise(mean=mean(NoiseRL,na.rm = TRUE),
-                                     sd=sd(NoiseRL,na.rm = TRUE),
-                                     sampleSize=dplyr::n()-sum(is.na(NoiseRL)))
+      NL <- nlFromSnrInfo(SNRinfo)
   }
 
   SL <- data.frame(mean=p$slParams$slMean, sd=p$slParams$slStd, sampleSize=p$slParams$slSampleSize)
