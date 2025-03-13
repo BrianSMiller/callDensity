@@ -87,19 +87,25 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   SNRinfo <- capHist2snrInfo(p$capHistFile,season)
 
   # If user has not specified NL distribution (data.frame with columns mean, sd,
-  # samplesize), then extract this information it from SNRinfo
+  # samplesize), then extract this information it from SNRinfo.
+  # NB: This needs to occur prior to SNR truncation
   if (is.null(NL)){
       NL <- nlFromSnrInfo(SNRinfo)
   }
 
-  SL <- data.frame(mean=p$slParams$slMean, sd=p$slParams$slStd, sampleSize=p$slParams$slSampleSize)
+  # Read SL distribution parameters from overall parameters.
+  SL <- data.frame(mean=p$slParams$slMean,
+                   sd=p$slParams$slStd,
+                   sampleSize=p$slParams$slSampleSize)
 
   TL<-utils::read.csv(p$tlParams$tlFile)
 
   # Check whether user supplied an snr detection function or estimate from data
+  # NB: This needs to occur AFTER any SNR truncation.
   if (is.null(snrDetFun)){
   # Estimate snrDetFun from SNRinfo
-    snrDetFun <- fitSNRdetectionFunc(SNRinfo,
+    snrDetFun <- fitSNRdetectionFunc(
+      subset(SNRinfo,SNR>=snrTruncationThreshold),
                                 modelType=p$modelType, p$numKnots)
   }
 

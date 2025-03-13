@@ -261,7 +261,8 @@ pDetInArea <-
     # for each range
 
     for (j in 1:no.profiles){
-      # Create dataset using allSNR - this will be used to create predictions of p(dets) using the GAM
+      # Create dataset using allSNR - this will be used to create predictions of
+      # p(dets) using the GAM
       newd<-data.frame(SNR=allSNR[,j])
 
       # Generate the lpmatrix for the values (if GAM) See 'mgcv' documentation
@@ -275,8 +276,8 @@ pDetInArea <-
       #   predmatrix<-boot::inv.logit(Xp %*% br)
 
       # Code above only seems to apply for standard MGCV GAMs Since we might
-      # have a GAM, GLM, or SCAM we need to do something different. We will swap
-      # the resampled coefficents into the res.1 model, then predict on the
+      # have a GAM, GLM, SCAM or VGLMwe need to do something different. We will
+      # swap the resampled coefficents into the res.1 model, then predict on the
       # scale of the response using the new dataset
       res.1.newcoeff<-res.1
 
@@ -291,6 +292,8 @@ pDetInArea <-
         res.1.newcoeff@coefficients<-br
         predmatrix<-VGAM::predict(res.1.newcoeff,newdata=newd,type="response")
 
+        # VGLMs can have multiple observers, so we need to know which of these
+        # to use for probability of detection.
         index = ifelse(is.null(res.1.newcoeff@extra$whichObserver),
                dim(predmatrix)[2],
                which(colnames(predmatrix)==res.1.newcoeff@extra$whichObserver) )
@@ -402,6 +405,7 @@ pDetInArea <-
   # STEP 7 - Variance calculations
   # STEP 7(a) Need to calculate the standard error of the transect-specific p(det) values
   st.errorPt<-sd(transectavgweightpdets,na.rm = T)/sqrt(no.profiles)
+
   # STEP 7(b) Need to calculate the standard deviation of the transect-specific p(det) values
   st.devPt<-c()
   for (i in 1:no.profiles){
@@ -436,6 +440,9 @@ pDetInArea <-
 
   ## Average across transects to produce an overall det function ###############
   averagecombineddetfunc<-colMeans(combineddetfunc, na.rm=T)
+
+  return(list(Pa = overallpdet,
+              meanOfAllTransects = averagecombineddetfunc))
 
   ### If W ok, FINAL ###
 
