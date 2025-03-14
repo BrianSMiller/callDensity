@@ -113,9 +113,7 @@ pDetInArea <-
   numTruncDist <- length(truncationDistance)
   if  (is.null(numTruncDist) | numTruncDist == 1) { # Default or single value
     truncationDistance = rep(truncationDistance, no.profiles)
-  }
-
-  if (dim(truncationDistance)[2] != no.profiles){
+  }else if (dim(truncationDistance)[2] != no.profiles){
     errorText <-"Error: Number of Transect Truncation Distances must be 1 or
                         the same as the number of TL transects. "
     stop(errorText)
@@ -142,10 +140,11 @@ pDetInArea <-
 
   #delete the range column (first column) of allTLlookup - for matrix of TL only
   #will be used later in the loop
+  output_range_m <- allTLlookupsubset[,1]
   allTLsubset<-allTLlookupsubset[,2:(no.profiles+1)]
   allTrunc<-matrix(data=0, nrow=dim( allTLsubset)[1], ncol=dim(allTLsubset)[2])
   for (i in 1:no.profiles){
-    na.index <- allTLlookupsubset[,1]>truncationDistance[i]
+    na.index <- output_range_m > truncationDistance[i]
     allTrunc[na.index,i]<-rep(NA)
   }
 
@@ -441,8 +440,13 @@ pDetInArea <-
   ## Average across transects to produce an overall det function ###############
   averagecombineddetfunc<-colMeans(combineddetfunc, na.rm=T)
 
-  return(list(Pa = overallpdet,
-              meanOfAllTransects = averagecombineddetfunc))
+  meanOfAllTransects = data.frame(
+    range_m=output_range_m,
+    pDet = averagecombineddetfunc
+  )
+  return(list(overall = overallpdet,
+              perTransectMeanSD = pdetsandvar,
+              meanOfAllTransects = meanOfAllTransects))
 
   ### If W ok, FINAL ###
 
