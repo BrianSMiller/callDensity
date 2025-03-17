@@ -371,7 +371,7 @@ fitSNRdetectionFunc <- function(SNRinfo, modelType='gam', numKnots=3){
   }
   if (modelType == 'gam'){
       res.1<-mgcv::gam(Detected~s(SNR, k=numKnots), data=SNRinfo,
-                       family=quasibinomial)
+                       family=binomial)
   }
     return(res.1)
 }
