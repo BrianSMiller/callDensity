@@ -5,6 +5,7 @@ vignette: >
   %\VignetteIndexEntry{callDensity}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
+bibliography: references.bib
 ---
 
 ```{r, include = FALSE}
@@ -25,8 +26,8 @@ library(kableExtra)
 
 # Simple test of callDensity R package
 
-Create a synthetic dataset with known (specified) values for all parameters for testing the callDensity R package which implements the methods described by (@Castro2024). This package implements a solution for call density estimation from single sensors (hydrophones) via the density equation
-    
+Create a synthetic dataset with known (specified) values for all parameters for testing the callDensity R package which implements the methods described by @castro2024. This package implements a solution for call density estimation from single sensors (hydrophones) via the density equation
+
 \begin{equation}
 D_c = \frac{N_c(1-c)}{kTp_aA}
 \end{equation}
@@ -35,7 +36,7 @@ where: $D_c$ is call density, $N_c$ is number of calls, $c$ is false discovery r
 
 ## 1) Generate known call distribution in space.
 
-Start with _n_ calls within radius _R_ of the hydrophone. This should produce a known call density with a uniform random distribution in a circle around the hydrophone. 
+Start with *n* calls within radius *R* of the hydrophone. This should produce a known call density with a uniform random distribution in a circle around the hydrophone.
 
 ```{r call.spatial.distribution, warning=FALSE, message=FALSE}
 # Pseudo-code to check callDensity 
@@ -84,14 +85,13 @@ ggplot(data=sim, aes(x=x/1e3,y=y/1e3))+
 
 ```
 
-## 2) Calculate distances of calls. 
+## 2) Calculate distances of calls.
 
 Assume recorder is located at centre of study area.
 
-Distances are the magnitude of the x & y location. 
+Distances are the magnitude of the x & y location.
 
 Uniform density and increasing area with larger distances should yield a triangular distance distribution.
-
 
 ```{r call.distance.distribution.check,  warning=FALSE, message=FALSE}
 
@@ -106,11 +106,12 @@ ggplot(data=sim, aes(x=d/1e3))+
 ## 3) Assign sonar equation parameters to each call (SL,NL,TL)
 
 ### a) Source Level (SL)
-Assume source level, SL, is that of Antarctic blue whale song (@Castro2024). 
 
-However, to keep things clearer in this simple example, we use a lower standard deviation than was used by @Castro2024.
+Assume source level, SL, is that of Antarctic blue whale song (as in @castro2024).
 
-The values we chose match reasonably well with those that have been estimated for this animal mean of 189 dB and standard deviation of 3-8 dB. Realistic values should help make our simulation better match reality. 
+However, to keep things clearer in this simple example, we use a lower standard deviation than was used by @castro2024.
+
+The values we chose match reasonably well with those that have been estimated for this animal mean of 189 dB and standard deviation of 3-8 dB. Realistic values should help make our simulation better match reality.
 
 ```{r sonar.eq.SL}
 
@@ -119,13 +120,11 @@ sim$SL <- rnorm(n, mean=SL$mean, sd=SL$sd)
 
 ```
 
-
-### b) Noise Level (NL). 
+### b) Noise Level (NL).
 
 We assign NL to each call using a similarly realistic parameters for the distribution of NL.
 
-Our NL distribution resembles the same real-world measurements used by @Castro2024 that were derived from noise samples in the same band, but adjacent in time to the Antarctic blue whale calls they detected. Again, this helps ensure our acoustic environment is somewhat grounded in reality and enhances the plausibility and realism of our simulation. 
-
+Our NL distribution resembles the same real-world measurements used by @Castro2024 that were derived from noise samples in the same band, but adjacent in time to the Antarctic blue whale calls they detected. Again, this helps ensure our acoustic environment is somewhat grounded in reality and enhances the plausibility and realism of our simulation.
 
 ```{r sonar.eq.NL}
 
@@ -142,7 +141,7 @@ We assign TL to each call using a simple spherical spreading propagation model:
 TL = 20 log10 d
 \end{equation}
 
-This TL model is a commonly used analytical expression for transmission loss. Despite it's simplicity, it remains physically plausible and interpretable. 
+This TL model is a commonly used analytical expression for transmission loss. Despite it's simplicity, it remains physically plausible and interpretable.
 
 ```{r sonar.eq.TL}
 
@@ -186,8 +185,7 @@ ggplot(data=TL, aes(x=range_m/1e3, y=tl000))+
 
 ## 6) Calculate SNR for each call
 
-Passive sonar equation (in dB): 
-\begin{equation}
+Passive sonar equation (in dB): \begin{equation}
 SNR = SL-TL-NL
 \end{equation}
 
@@ -219,15 +217,15 @@ ggplot(data=sim, aes(x=d/1e3, y=snr))+
 
 ## 7) Simulate detection process
 
-To simulate the detection process we need to make some assumptions about the behaviour of the detector. 
+To simulate the detection process we need to make some assumptions about the behaviour of the detector.
 
 Generally, it is assumed the detector has a high probability of detection at high SNR, and a low(er) probability of detection at low SNR. In quantitative sonar performance modelling sometimes a step-function or logistic curve is used when an analytical expression is required. If ground truth data on the detectors performance are available, these models can be fit to the detection data.
 
 #### a) Detector 1
 
-Assume probability of detection, p_det, for detector 1 follows a logistic curve with SNR as the only independent variable. 
+Assume probability of detection, p_det, for detector 1 follows a logistic curve with SNR as the only independent variable.
 
-We can assign a location/intercept for this curve (i.e. location along x-axis where p_det=0.5). We can also assign a scale/slope of the curve to represent the steepness of the transition between low proability and high probability. 
+We can assign a location/intercept for this curve (i.e. location along x-axis where p_det=0.5). We can also assign a scale/slope of the curve to represent the steepness of the transition between low proability and high probability.
 
 ```{r simulate.detector, warning=FALSE, message=FALSE}
 
@@ -277,7 +275,6 @@ ggplot(data=sim, aes(x=d/1e3, y=snr, colour=detected_observer1))+
 ## 8) Simulate false positives
 
 In addition to the probability of detection, there is also a probability of false alarm (false positive predictions) that we would like to simulate as well. There can be multiple mechanisms that can produce false positives. For example, they could be triggered by intense high-SNR sound in the same band as the signal, but from a different source. For some signal types, false positives can also arise from small deviations in ambient noise (producing false positive detections that contain very low SNR). Again, if ground truth data are available then the relationship between false positive detections and false-positive power to noise ratio (SNR of false positives) can be modeled in a similar manner to that of probability of detection.
-
 
 ```{r simulate.false.positives, warning=FALSE, message=FALSE}
 
@@ -424,7 +421,7 @@ ggplot(data=Pa.glm$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
 
 ```
 
-### b) GAM fit to SNR detection function 
+### b) GAM fit to SNR detection function
 
 A GAM should also be able to provide a good fit to a logistic function.
 
@@ -470,9 +467,9 @@ ggplot(data=Pa.gam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
 
 ```
 
-### c) SCAM fit to SNR detection function 
+### c) SCAM fit to SNR detection function
 
-Shape constrained additive models (SCAMs) should also provide a good fit to a logistic function. 
+Shape constrained additive models (SCAMs) should also provide a good fit to a logistic function.
 
 ```{r SCAM p.det, warning=FALSE, message=FALSE, cache=TRUE}
 
@@ -517,8 +514,7 @@ ggplot(data=Pa.scam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
 
 ## Results
 
-Table showing how the the results of each call density estimate compare to the true values.
-The only difference between the three estimates is type of model used to fit the SNR-detection function (glm, gam, scam). 
+Table showing how the the results of each call density estimate compare to the true values. The only difference between the three estimates is type of model used to fit the SNR-detection function (glm, gam, scam).
 
 ```{r Call.Density.Results, echo=TRUE}
 
@@ -540,3 +536,6 @@ kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 3, 3, 4),
   kableExtra::kable_classic(full_width=FALSE)
 
 ```
+
+# References
+
