@@ -19,6 +19,7 @@ knitr::opts_chunk$set(
 ```{r setup}
 library(callDensity)
 library(ggplot2)
+library(scales)
 library(kableExtra)
 ```
 
@@ -102,28 +103,46 @@ ggplot(data=sim, aes(x=d/1e3))+
 
 ```
 
-## 3) Assign SL,NL, and TL to each call
+## 3) Assign sonar equation parameters to each call (SL,NL,TL)
 
-Use SL from studies of ABW SL_ABW: mean=190, sd=3 dB re 1 uPa
+### a) Source Level (SL)
+Assume source level, SL, is that of Antarctic blue whale song (@Castro2024). 
 
-### a) Assign NL to each call from plausible distribution of NL:
+However, to keep things clearer in this simple example, we use a lower standard deviation than was used by @Castro2024.
 
-NL: mean= 90, sd=4 dB re 1 uPa
+The values we chose match reasonably well with those that have been estimated for this animal mean of 189 dB and standard deviation of 3-8 dB. Realistic values should help make our simulation better match reality. 
 
-```{r sonar.eq.SL.NL}
+```{r sonar.eq.SL}
 
-SL <- data.frame(mean=190, sd=8, sampleSize=350)
-
+SL <- data.frame(mean=190, sd=4, sampleSize=350)
 sim$SL <- rnorm(n, mean=SL$mean, sd=SL$sd)
+
+```
+
+
+### b) Noise Level (NL). 
+
+We assign NL to each call using a similarly realistic parameters for the distribution of NL.
+
+Our NL distribution resembles the same real-world measurements used by @Castro2024 that were derived from noise samples in the same band, but adjacent in time to the Antarctic blue whale calls they detected. Again, this helps ensure our acoustic environment is somewhat grounded in reality and enhances the plausibility and realism of our simulation. 
+
+
+```{r sonar.eq.NL}
 
 NL = data.frame(mean=84, sd = 4, sampleSize = n)
 sim$NL <- rnorm(n, mean=NL$mean, sd=NL$sd)
 
 ```
 
-### b) Assign TL to each call using spherical spreading propagation model:
+### c) Transmission Loss (TL)
 
+We assign TL to each call using a simple spherical spreading propagation model:
+
+\begin{equation}
 TL = 20 log10 d
+\end{equation}
+
+This TL model is a commonly used analytical expression for transmission loss. Despite it's simplicity, it remains physically plausible and interpretable. 
 
 ```{r sonar.eq.TL}
 
@@ -147,8 +166,11 @@ TL <- data.frame(
 
 ```{r plot TL, include=FALSE, eval=FALSE}
 
-# # NOT RUN & NOT INCLUDED IN RMARKDOWN 
+# NOT RUN & NOT INCLUDED IN RMARKDOWN 
 
+# Plot the transmission loss model. Such a plot isn't usually needed for very
+# simple models, such as spherical spreading. But if using more complex models
+# it can be useful to visualise them to check their validity/plausibility.
 ggplot(data=TL, aes(x=range_m/1e3, y=tl000))+
   geom_point(alpha=0.1,size=0.1)+
   scale_x_log10(limits=c(0.1,1000),
@@ -157,30 +179,37 @@ ggplot(data=TL, aes(x=range_m/1e3, y=tl000))+
   xlab("Distance (km)")+
   ylab("TL (dB)")+
   annotation_logticks(sides='') +
+  label_log+
   theme_bw()
 
 ```
 
 ## 6) Calculate SNR for each call
 
-Passive sonar equation (in dB): SNR = SL-TL-NL
+Passive sonar equation (in dB): 
+\begin{equation}
+SNR = SL-TL-NL
+\end{equation}
 
 ```{r call.snr.check,  warning=FALSE, message=FALSE}
 
 sim$snr <- with(sim,SL-TL-NL)
 
+# Visualise SNR distribution
 ggplot(data=sim, aes(x=snr))+
   geom_histogram()+
   xlab("SNR (dB)")
 
+# SNR as a function of distance
 ggplot(data=sim, aes(x=d/1e3, y=snr))+
   geom_point(alpha=0.1,size=0.1)+
   geom_density_2d()+
   xlab("Distance (km)")+
   ylab("SNR (dB)")+
   scale_x_log10(limits=c(0.01,1000),
+                labels=label_log(),
                 breaks=10^(-1:7),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
+                minor_breaks = rep(1:9,6)*(10^rep(-1:7,each=9)))+
   annotation_logticks(sides='') +
   theme_bw()
 
@@ -236,6 +265,7 @@ ggplot(data=sim, aes(x=d/1e3, y=snr, colour=detected_observer1))+
   xlab("Distance (km)")+
   ylab("SNR (dB)")+
   scale_x_log10(limits=c(0.1,1000),
+                labels=label_log(),
                 breaks=10^(-1:7),
                 minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
   annotation_logticks(sides='') +
@@ -281,7 +311,10 @@ fp$NL <- rnorm(n_fp_det1, mean=90, sd=4)
 # analysts
 fp$snr <- rnorm(n_fp_det1, mean=1, sd=2) 
 
-simWithFP <- rbind(sim,fp)
+simWithFP <- rbind(sim,fp) # Make sure not to confuse simWithFP and sim. 
+
+# Nc total number of detected calls, including both true and false positive
+Nc <- sum(simWithFP$detected_observer1)
 
 # We've generated the right number of false positive detections now and merged
 # these into our simulation. 
@@ -346,18 +379,14 @@ truncationDistances <- R
 ## 10) Calculate call densities using callDensity package
 
 ### a) GLM fit to SNR detection function
-```{r GLM p.det, warning=FALSE, message=FALSE}
+
+The detector was a logistic function, so fitting a GLM should provide good results.
+
+```{r GLM p.det, warning=FALSE, message=FALSE, cache=TRUE}
 
 snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
                                               modelType = "glm")
-
-# View logistic function
-p0<- ggplot(data=sim, aes(x=snr, y=p_det))+
-  geom_point(alpha=0.1,color='red',size=0.1)
-
-p1<-showSNRdetectionFunc(snrDetFun.glm)
-
-gridExtra::grid.arrange(grobs=list(p0,p1))
+snrDetFun.glm$r.sq <- with(summary(snrDetFun.glm), 1 - deviance/null.deviance)
 
 Pa.glm <- callDensity::pDetInArea(snrDetFun.glm, SL=SL, TLlookup = TL, NL=NLsamp,
            transectFile = 'pDet_test_glm_year_transects.csv',
@@ -370,11 +399,23 @@ Pa.glm <- callDensity::pDetInArea(snrDetFun.glm, SL=SL, TLlookup = TL, NL=NLsamp
 pa.glm <- Pa.glm$overall
 
 
+# Density estimation equation
+Dc.glm <- (Nc * (1 - c_subsample) )/( k * A * pa.glm * Time )
+
+results.glm <- data.frame(Dc=Dc.glm, SampleSize=n_subsample, A = A,# Environment
+                      NLmean = NLsamp$mean, NLsd = NLsamp$sd,      # Noise
+                        # Detector params
+                        model='glm', R2=snrDetFun.glm$r.sq,
+                        AIC =AIC(snrDetFun.glm), c=c_subsample, Pa=pa.glm,  
+                      row.names = 'Estimate1')
+
+
 ggplot(data=Pa.glm$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
   geom_point(alpha=0.1, size=0.1)+
   xlab("Range (km)")+
   ylab("Probability of detection\n(Mean across all transects)")+
   scale_x_log10(limits=c(0.1,1000),
+                labels=label_log(),
                 breaks=10^(-1:7),
                 minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
   annotation_logticks(sides='') +
@@ -385,29 +426,42 @@ ggplot(data=Pa.glm$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
 
 ### b) GAM fit to SNR detection function 
 
-```{r GAM p.det, warning=FALSE, message=FALSE}
+A GAM should also be able to provide a good fit to a logistic function.
+
+```{r GAM p.det, warning=FALSE, message=FALSE, cache=TRUE}
 
 
 snrDetFun.gam <- callDensity::fitSNRdetectionFunc(SNRinfo,
                                               modelType = "gam",
                                               numKnots = 3)
 
-
 Pa.gam <- callDensity::pDetInArea(snrDetFun.gam, SL=SL, TLlookup = TL, NL=NLsamp,
            transectFile = 'pDet_test_gam_year_transects.csv',
            simResultsFile = 'simResult_test_gam_year.txt',
            paFile= 'Pa_test_gam_year.txt',
            output.resolution.m=100,
-           outerloop = 10,
+           outerloop = 100,
            truncationDistance=R, # in m
            snrTruncationThreshold =-Inf)
 pa.gam <- Pa.gam$overall
+
+
+# Density estimation equation
+Dc.gam <- (Nc * (1 - c_subsample) )/( k * A * pa.gam * Time )
+
+results.gam<-data.frame(Dc=Dc.gam, SampleSize=n_subsample, A = A,# Environment
+                      NLmean = NLsamp$mean, NLsd = NLsamp$sd,    # Noise
+                        # Detector params
+                        model='gam', R2=summary(snrDetFun.gam)$r.sq,
+                        AIC =AIC(snrDetFun.gam), c=c_subsample, Pa=pa.gam,  
+                      row.names = 'Estimate2')
 
 ggplot(data=Pa.gam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
   geom_point(alpha=0.1, size=0.1)+
   xlab("Range (km)")+
   ylab("Probability of detection\n(Mean across all transects)")+
   scale_x_log10(limits=c(0.1,1000),
+                labels=label_log(),
                 breaks=10^(-1:7),
                 minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
   annotation_logticks(sides='') +
@@ -418,7 +472,9 @@ ggplot(data=Pa.gam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
 
 ### c) SCAM fit to SNR detection function 
 
-```{r SCAM p.det, warning=FALSE, message=FALSE}
+Shape constrained additive models (SCAMs) should also provide a good fit to a logistic function. 
+
+```{r SCAM p.det, warning=FALSE, message=FALSE, cache=TRUE}
 
 
 snrDetFun.scam <- callDensity::fitSNRdetectionFunc(SNRinfo,
@@ -435,11 +491,23 @@ Pa.scam <- callDensity::pDetInArea(snrDetFun.scam, SL=SL, TLlookup = TL, NL=NLsa
            snrTruncationThreshold =-Inf)
 pa.scam <- Pa.scam$overall
 
+
+# Density estimation equation
+Dc.scam <- (Nc * (1 - c_subsample) )/( k * A * pa.scam * Time )
+
+results.scam <- data.frame(Dc=Dc.scam, SampleSize=n_subsample, A = A,   # Environment
+                      NLmean = NLsamp$mean, NLsd = NLsamp$sd,# Noise
+                      # Detector params
+                        model='scam', R2=summary(snrDetFun.scam)$r.sq,
+                        AIC =AIC(snrDetFun.scam), c=c_subsample, Pa=pa.scam,  
+                      row.names = 'Estimate3')
+
 ggplot(data=Pa.scam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
   geom_point(alpha=0.1, size=0.1)+
   xlab("Range (km)")+
   ylab("Probability of detection\n(Mean across all transects)")+
   scale_x_log10(limits=c(0.1,1000),
+                labels=label_log(),
                 breaks=10^(-1:7),
                 minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
   annotation_logticks(sides='') +
@@ -447,59 +515,22 @@ ggplot(data=Pa.scam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
 
 ```
 
-```{r}
-
-Nc <- sum(simWithFP$detected_observer1)
-
-# Density estimation equation
-Dc.glm <- (Nc * (1 - c_subsample) )/( k * A * pa.glm * Time )
-Dc.gam <- (Nc * (1 - c_subsample) )/( k * A * pa.gam * Time )
-Dc.scam <- (Nc * (1 - c_subsample) )/( k * A * pa.scam * Time )
-
-
-```
-
 ## Results
 
-Table showing the results of each call density estimate.
+Table showing how the the results of each call density estimate compare to the true values.
+The only difference between the three estimates is type of model used to fit the SNR-detection function (glm, gam, scam). 
 
 ```{r Call.Density.Results, echo=TRUE}
 
-results <- data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,   # Environment 
-                      NLmean = NL$mean, NLsd = NL$sd,       # Noise
-                      # Detector params
-                        model=det1params$func, intercept=det1params$location,  
-                        slope = det1params$scale, c = det1params$c, 
+results = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
+                      NLmean = NL$mean, NLsd = NL$sd,            # Noise
+                        # Detector params
+                        model=det1params$func, R2=NA,  
+                        AIC =NA, c = det1params$c, 
                         Pa = mean(sim$p_det), 
                       row.names='Truth')
 
-snrDetFun.glm$r.sq <- with(summary(snrDetFun.glm), 1 - deviance/null.deviance)
-results<-rbind(
-           results, 
-           data.frame(Dc=Dc.glm, SampleSize=n_subsample, A = A,  # Environment
-                      NLmean = NLsamp$mean, NLsd = NLsamp$sd,# Noise
-                      # Detector params
-                        model='glm', intercept=snrDetFun.glm$r.sq,
-                        slope =AIC(snrDetFun.glm), c=c_subsample, Pa=pa.glm,  
-                      row.names = 'Estimate1'))
-
-results<-rbind(
-           results, 
-           data.frame(Dc=Dc.gam, SampleSize=n_subsample, A = A,           # Environment
-                      NLmean = NLsamp$mean, NLsd = NLsamp$sd,# Noise
-                      # Detector params
-                        model='gam', intercept=summary(snrDetFun.gam)$r.sq,
-                        slope =AIC(snrDetFun.gam), c=c_subsample, Pa=pa.gam,  
-                      row.names = 'Estimate2'))
-
-results<-rbind(
-           results, 
-           data.frame(Dc=Dc.scam, SampleSize=n_subsample, A = A,   # Environment
-                      NLmean = NLsamp$mean, NLsd = NLsamp$sd,# Noise
-                      # Detector params
-                        model='scam', intercept=summary(snrDetFun.scam)$r.sq,
-                        slope =AIC(snrDetFun.scam), c=c_subsample, Pa=pa.scam,  
-                      row.names = 'Estimate3'))
+results<-rbind( results, results.glm, results.gam, results.scam)
 
 
 
