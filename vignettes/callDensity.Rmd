@@ -22,7 +22,7 @@ library(ggplot2)
 library(kableExtra)
 ```
 
-#Simple test of callDensity R package
+# Simple test of callDensity R package
 
 Create a synthetic dataset with known (specified) values for all parameters for testing the callDensity R package which implements the methods described by (@Castro2024). This package implements a solution for call density estimation from single sensors (hydrophones) via the density equation
     
@@ -32,7 +32,7 @@ D_c = \frac{N_c(1-c)}{kTp_aA}
 
 where: $D_c$ is call density, $N_c$ is number of calls, $c$ is false discovery rate, $k$ is number of sensors (here always 1), $T$ is the duration of data analysed (in hours), $p_a$ is the probability of detection in the study area, and $A$ is the study area (in km\^2).
 
-##1) Generate known call distribution in space.
+## 1) Generate known call distribution in space.
 
 Start with _n_ calls within radius _R_ of the hydrophone. This should produce a known call density with a uniform random distribution in a circle around the hydrophone. 
 
@@ -47,7 +47,6 @@ Start with _n_ calls within radius _R_ of the hydrophone. This should produce a 
 
 n = 1e5; # 100k calls; 
 R = 1e6; # radius of 1000 km 
-
 
 
 # Call density, D_c is n/A 
@@ -69,8 +68,11 @@ minDate <- as.POSIXct("2025-01-01")
 maxDate <- as.POSIXct("2025-12-31")
 
 epoch <- "1970-01-01"
-sim$datetime <- as.POSIXct(pmax(runif(n, minDate, maxDate), runif(n, minDate, maxDate)), origin = epoch, tz="UTC")
+sim$datetime <- as.POSIXct(pmax(runif(n, minDate, maxDate),
+                                runif(n, minDate, maxDate) ), 
+                           origin = epoch, tz="UTC")
 
+# 'Spatial' map showing true location of all calls
 ggplot(data=sim, aes(x=x/1e3,y=y/1e3))+
   geom_point(colour = "black",alpha = 0.1, size=0.1)+
   coord_equal()+
@@ -81,13 +83,21 @@ ggplot(data=sim, aes(x=x/1e3,y=y/1e3))+
 
 ```
 
-## 2) Check distances from that uniform distribution are sensible (triangle distribution)
+## 2) Calculate distances of calls. 
+
+Assume recorder is located at centre of study area.
+
+Distances are the magnitude of the x & y location. 
+
+Uniform density and increasing area with larger distances should yield a triangular distance distribution.
+
 
 ```{r call.distance.distribution.check,  warning=FALSE, message=FALSE}
 
 sim$d <- sqrt(sim$x^2+sim$y^2)
+
 ggplot(data=sim, aes(x=d/1e3))+
-  geom_histogram(binwidth = 10)+
+  geom_histogram(binwidth = 5)+
   xlab("Distance (km)")
 
 ```
@@ -96,32 +106,36 @@ ggplot(data=sim, aes(x=d/1e3))+
 
 Use SL from studies of ABW SL_ABW: mean=190, sd=3 dB re 1 uPa
 
-#### Assign NL to each call from plausible distribution of NL:
+### a) Assign NL to each call from plausible distribution of NL:
 
 NL: mean= 90, sd=4 dB re 1 uPa
 
-#### Assign TL to each call using spherical spreading propagation model:
+```{r sonar.eq.SL.NL}
 
-TL = 20 log10 d
-
-```{r sonar.eq.properties}
-
-SL <- data.frame(mean=190, sd=3, sampleSize=350)
+SL <- data.frame(mean=190, sd=8, sampleSize=350)
 
 sim$SL <- rnorm(n, mean=SL$mean, sd=SL$sd)
 
-NL = data.frame(mean=90, sd = 4, sampleSize = n)
+NL = data.frame(mean=84, sd = 4, sampleSize = n)
 sim$NL <- rnorm(n, mean=NL$mean, sd=NL$sd)
+
+```
+
+### b) Assign TL to each call using spherical spreading propagation model:
+
+TL = 20 log10 d
+
+```{r sonar.eq.TL}
 
 range_m = seq(from=5, to=1e6, by=100)
 
 # Spherical spreading for a single transect
 tlTransectSpherical <- 20*log10(range_m)
 
-
 tlTransect <- tlTransectSpherical
 sim$TL <- 20*log10(sim$d)
 
+# Create additional transects here to better match with our real-world approach
 TL <- data.frame(
   range_m,
   tl000 = tlTransect,
@@ -131,7 +145,7 @@ TL <- data.frame(
 )
 ```
 
-```{r, include=FALSE, eval=FALSE}
+```{r plot TL, include=FALSE, eval=FALSE}
 
 # # NOT RUN & NOT INCLUDED IN RMARKDOWN 
 
@@ -146,55 +160,6 @@ ggplot(data=TL, aes(x=range_m/1e3, y=tl000))+
   theme_bw()
 
 ```
-
-```{r surface.duct.TL, include=FALSE, eval=FALSE}
-
-# NOT RUN & NOT INCLUDED IN RMARKDOWN 
-
-# Model transmission losses, TL as a simple surface duct: spherical spreading
-# out to transition range r0, and then cylindrical spreading beyond r0.
-tlType='surfaceDuct'
-
-# Simple surface duct model for a single transect:
-#  TL= 20*log10                  } d < r0;
-#  TL= 10*log10(ro)+10*log10(r0) } d>= r0;
-r0 <- 10000
-tlSurfaceDuct <- function (r){
-  tl<- ifelse(r<r0, 20*log10(r), 10*log10(r0) + 10*log10(r))
-  return(tl)
-}
-tlTransectSurfaceDuct <- sapply(range_m, tlSurfaceDuct)
-tlTransect <- tlTransectSurfaceDuct
-sim$TL = sapply(sim$d,tlSurfaceDuct)
-
-TL <- data.frame(
-  range_m,
-  tl000 = tlTransect,
-  tl090 = tlTransect,
-  tl180 = tlTransect,
-  tl270 = tlTransect
-)
-
-ggplot(data=TL, aes(x=range_m, y=tl000))+
-  geom_point(alpha=0.1)+
-  scale_x_log10(limits=c(0.1,100),
-                breaks=10^(-1:6),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:6,each=9)))+
-  xlab("Distance (km)")+
-  ylab("SNR (dB)")
-
-ggplot(data=sim, aes(x=d/1e3, y=TL))+
-  geom_point(alpha=0.1)+
-  scale_x_log10(limits=c(0.1,100),
-                breaks=10^(-1:6),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:6,each=9)))+
-  xlab("Distance (km)")+
-  ylab("SNR (dB)")
-
-
-
-```
-
 
 ## 6) Calculate SNR for each call
 
@@ -223,25 +188,26 @@ ggplot(data=sim, aes(x=d/1e3, y=snr))+
 
 ```
 
-## Simulate detection process
+## 7) Simulate detection process
 
-Here's where things start to get tricky. We need to make some assumptions about the behaviour of the detector. Generally, it is assumed the detector has a high probability of detection at high SNR, and a low(er) probability of detection at low SNR. In quantitative sonar performance modelling sometimes a step-function or logistic curve is used when an analytical expression is required. If ground truth data on the detectors performance are available, these models can be fit to the detection data.
+To simulate the detection process we need to make some assumptions about the behaviour of the detector. 
 
-In addition to the probability of detection, there is also a probability of false alarm (false positive predictions) that likely needs to be addressed. There can be multiple mechanisms that can produce false positives. For example, they could be triggered by intense high-SNR sound in the same band as the signal, but from a different source. For some signal types, false positives can also arise from small deviations in ambient noise (producing false positive detections that contain very low SNR). Again, if ground truth data are available then the relationship between false positive detections and false-positive power to noise ratio (SNR of false positives) can be modeled in a similar manner to that of probability of detection.
+Generally, it is assumed the detector has a high probability of detection at high SNR, and a low(er) probability of detection at low SNR. In quantitative sonar performance modelling sometimes a step-function or logistic curve is used when an analytical expression is required. If ground truth data on the detectors performance are available, these models can be fit to the detection data.
 
-#### Detector 1
+#### a) Detector 1
 
-Assume probability of detection, p_det, for detector 1 follows a logistic curve in SNR with location (p_det=0.5) at an SNR of 3 dB.
+Assume probability of detection, p_det, for detector 1 follows a logistic curve with SNR as the only independent variable. 
 
-Assume detector 1 does not produce false positives.
+We can assign a location/intercept for this curve (i.e. location along x-axis where p_det=0.5). We can also assign a scale/slope of the curve to represent the steepness of the transition between low proability and high probability. 
 
 ```{r simulate.detector, warning=FALSE, message=FALSE}
 
-det1params = data.frame( #detector 1 parameters
-  location=2,   # AKA intercept?
-  scale=2,      # AKA slope?
+#Specify parameters for detector 1
+det1params = data.frame( 
+  location=0,    # AKA intercept?
+  scale=2,       # AKA slope?
   func='plogis', # logistic function
-  c=0.1           # False discovery rate
+  c=0.1          # False discovery rate
 )
 
 # Probability of detection for each simulated call
@@ -249,18 +215,17 @@ sim$p_det = plogis(sim$snr,
                    location=det1params$location,
                    scale=det1params$scale)
 
-
-# Spatial distribution
-p0 <- ggplot(data=sim, aes(x=x/1e3, y=y/1e3, colour=detected_observer1))+
-  geom_point(alpha=0.1,size=0.1)+
-  coord_equal()+
-  xlab("X location (km)")+
-  ylab("Y location (km)")
-
 # Apply Bernoulli trial to SNRs to see which were detected
 sim$detected_observer1 <- as.logical(rbinom(n,size=1,prob=sim$p_det))
 
 # View spatial, distance, and SNR distributions of detections vs non-detections
+
+# Spatial distribution
+ggplot(data=sim, aes(x=x/1e3, y=y/1e3, colour=detected_observer1))+
+  geom_point(alpha=0.1,size=0.1)+
+  coord_equal()+
+  xlab("X location (km)")+
+  ylab("Y location (km)")
 
 # SNR Distribution
 ggplot(data=sim, aes(x=snr, group=detected_observer1, fill=detected_observer1) )+
@@ -279,11 +244,12 @@ ggplot(data=sim, aes(x=d/1e3, y=snr, colour=detected_observer1))+
 
 ```
 
-## Simulate false positives
+## 8) Simulate false positives
+
+In addition to the probability of detection, there is also a probability of false alarm (false positive predictions) that we would like to simulate as well. There can be multiple mechanisms that can produce false positives. For example, they could be triggered by intense high-SNR sound in the same band as the signal, but from a different source. For some signal types, false positives can also arise from small deviations in ambient noise (producing false positive detections that contain very low SNR). Again, if ground truth data are available then the relationship between false positive detections and false-positive power to noise ratio (SNR of false positives) can be modeled in a similar manner to that of probability of detection.
+
 
 ```{r simulate.false.positives, warning=FALSE, message=FALSE}
-
-set.seed(2)
 
 # Calculate number of false positives given the number of true positive
 # detections for the detector and the specified false discovery rate, c, for
@@ -341,13 +307,13 @@ simWithFP <- simWithFP[order(simWithFP$datetime),]
 
 ```
 
-## 7) Subsample data for detector characterisation
+## 9) Subsample data for detector characterisation
 
 Format results so that they can be used by the callDensity package for testing.
 
 ```{r subsample.for.detector.characterisation}
 
-n_subsample <- 30e3
+n_subsample <- 1e4
 
 subsample <- simWithFP[sample(nrow(simWithFP), n_subsample),]
 
@@ -377,22 +343,13 @@ truncationDistances <- R
 
 ```
 
-## 8) Write results 
-[not actually required]
-## 9) Calculate call densities using callDensity package
+## 10) Calculate call densities using callDensity package
 
-```{r probability.of.detection.in.area, warning=FALSE, message=FALSE}
-
+### a) GLM fit to SNR detection function
+```{r GLM p.det, warning=FALSE, message=FALSE}
 
 snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
                                               modelType = "glm")
-snrDetFun.gam <- callDensity::fitSNRdetectionFunc(SNRinfo,
-                                              modelType = "gam",
-                                              numKnots = 3)
-snrDetFun.scam <- callDensity::fitSNRdetectionFunc(SNRinfo,
-                                              modelType = "scam",
-                                              numKnots = 5)
-
 
 # View logistic function
 p0<- ggplot(data=sim, aes(x=snr, y=p_det))+
@@ -408,31 +365,9 @@ Pa.glm <- callDensity::pDetInArea(snrDetFun.glm, SL=SL, TLlookup = TL, NL=NLsamp
            paFile= 'Pa_test_glm_year.txt',
            output.resolution.m=100,
            outerloop = 100,
-           truncationDistance=1e6, # in m
+           truncationDistance=R, # in m
            snrTruncationThreshold =-Inf)
 pa.glm <- Pa.glm$overall
-
-
-Pa.gam <- callDensity::pDetInArea(snrDetFun.gam, SL=SL, TLlookup = TL, NL=NLsamp,
-           transectFile = 'pDet_test_gam_year_transects.csv',
-           simResultsFile = 'simResult_test_gam_year.txt',
-           paFile= 'Pa_test_gam_year.txt',
-           output.resolution.m=100,
-           outerloop = 100,
-           truncationDistance=1e6, # in m
-           snrTruncationThreshold =-Inf)
-pa.gam <- Pa.gam$overall
-
-Pa.scam <- callDensity::pDetInArea(snrDetFun.scam, SL=SL, TLlookup = TL, NL=NLsamp,
-           transectFile = 'pDet_test_scam_year_transects.csv',
-           simResultsFile = 'simResult_test_scam_year.txt',
-           paFile= 'Pa_test_scam_year.txt',
-           output.resolution.m=100,
-           outerloop = 100,
-           truncationDistance=1e6, # in m
-           snrTruncationThreshold =-Inf)
-pa.scam <- Pa.scam$overall
-
 
 
 ggplot(data=Pa.glm$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
@@ -445,6 +380,29 @@ ggplot(data=Pa.glm$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
   annotation_logticks(sides='') +
   theme_bw()
 
+
+```
+
+### b) GAM fit to SNR detection function 
+
+```{r GAM p.det, warning=FALSE, message=FALSE}
+
+
+snrDetFun.gam <- callDensity::fitSNRdetectionFunc(SNRinfo,
+                                              modelType = "gam",
+                                              numKnots = 3)
+
+
+Pa.gam <- callDensity::pDetInArea(snrDetFun.gam, SL=SL, TLlookup = TL, NL=NLsamp,
+           transectFile = 'pDet_test_gam_year_transects.csv',
+           simResultsFile = 'simResult_test_gam_year.txt',
+           paFile= 'Pa_test_gam_year.txt',
+           output.resolution.m=100,
+           outerloop = 10,
+           truncationDistance=R, # in m
+           snrTruncationThreshold =-Inf)
+pa.gam <- Pa.gam$overall
+
 ggplot(data=Pa.gam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
   geom_point(alpha=0.1, size=0.1)+
   xlab("Range (km)")+
@@ -455,6 +413,27 @@ ggplot(data=Pa.gam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
   annotation_logticks(sides='') +
   theme_bw()
 
+
+```
+
+### c) SCAM fit to SNR detection function 
+
+```{r SCAM p.det, warning=FALSE, message=FALSE}
+
+
+snrDetFun.scam <- callDensity::fitSNRdetectionFunc(SNRinfo,
+                                              modelType = "scam",
+                                              numKnots = 5)
+
+Pa.scam <- callDensity::pDetInArea(snrDetFun.scam, SL=SL, TLlookup = TL, NL=NLsamp,
+           transectFile = 'pDet_test_scam_year_transects.csv',
+           simResultsFile = 'simResult_test_scam_year.txt',
+           paFile= 'Pa_test_scam_year.txt',
+           output.resolution.m=100,
+           outerloop = 100,
+           truncationDistance=R, # in m
+           snrTruncationThreshold =-Inf)
+pa.scam <- Pa.scam$overall
 
 ggplot(data=Pa.scam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
   geom_point(alpha=0.1, size=0.1)+
@@ -470,7 +449,7 @@ ggplot(data=Pa.scam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
 
 ```{r}
 
-Nc <- sum(sim$detected_observer1)
+Nc <- sum(simWithFP$detected_observer1)
 
 # Density estimation equation
 Dc.glm <- (Nc * (1 - c_subsample) )/( k * A * pa.glm * Time )
@@ -482,7 +461,7 @@ Dc.scam <- (Nc * (1 - c_subsample) )/( k * A * pa.scam * Time )
 
 ## Results
 
-Check the effects
+Table showing the results of each call density estimate.
 
 ```{r Call.Density.Results, echo=TRUE}
 
@@ -497,7 +476,7 @@ results <- data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,   # Environme
 snrDetFun.glm$r.sq <- with(summary(snrDetFun.glm), 1 - deviance/null.deviance)
 results<-rbind(
            results, 
-           data.frame(Dc=Dc.glm, SampleSize=n_subsample, A = A,           # Environment
+           data.frame(Dc=Dc.glm, SampleSize=n_subsample, A = A,  # Environment
                       NLmean = NLsamp$mean, NLsd = NLsamp$sd,# Noise
                       # Detector params
                         model='glm', intercept=snrDetFun.glm$r.sq,
@@ -515,7 +494,7 @@ results<-rbind(
 
 results<-rbind(
            results, 
-           data.frame(Dc=Dc.scam, SampleSize=n_subsample, A = A,           # Environment
+           data.frame(Dc=Dc.scam, SampleSize=n_subsample, A = A,   # Environment
                       NLmean = NLsamp$mean, NLsd = NLsamp$sd,# Noise
                       # Detector params
                         model='scam', intercept=summary(snrDetFun.scam)$r.sq,
