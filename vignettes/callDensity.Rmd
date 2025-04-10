@@ -1,10 +1,14 @@
 ---
 title: "callDensity"
-output: rmarkdown::html_vignette
-vignette: >
-  %\VignetteIndexEntry{callDensity}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
+output: 
+  rmarkdown::html_vignette
+    vignette: >
+      %\VignetteIndexEntry{callDensity}
+      %\VignetteEngine{knitr::rmarkdown}
+      %\VignetteEncoding{UTF-8}
+  html_document:
+    toc: true
+    toc_depth: 2
 bibliography: references.bib
 ---
 
@@ -69,10 +73,8 @@ sim <- data.frame(x = r*cos(t), y = r*sin(t), groundTruth=1);
 minDate <- as.POSIXct("2025-01-01")
 maxDate <- as.POSIXct("2025-12-31")
 
-epoch <- "1970-01-01"
-sim$datetime <- as.POSIXct(pmax(runif(n, minDate, maxDate),
-                                runif(n, minDate, maxDate) ), 
-                           origin = epoch, tz="UTC")
+duration_s <- as.numeric(difftime(maxDate,minDate,unit="sec"))
+sim$datetime <- minDate + sort(runif(n, 0, duration_s))
 
 # 'Spatial' map showing true location of all calls
 ggplot(data=sim, aes(x=x/1e3,y=y/1e3))+
@@ -138,7 +140,7 @@ sim$NL <- rnorm(n, mean=NL$mean, sd=NL$sd)
 We assign TL to each call using a simple spherical spreading propagation model:
 
 \begin{equation}
-TL = 20 log10 d
+TL = 20  log_{10}  d
 \end{equation}
 
 This TL model is a commonly used analytical expression for transmission loss. Despite it's simplicity, it remains physically plausible and interpretable.
@@ -295,10 +297,7 @@ fp$detected_observer1 <- 1
 
 # Generate the right number of false positives uniformly over same time period
 # as true positives.
-epoch <- "1970-01-01"
-fp$datetime <- as.POSIXct(pmax(runif(n_fp_det1, minDate, maxDate), 
-                               runif(n_fp_det1, minDate, maxDate)),
-                          origin = epoch, tz="UTC")
+fp$datetime <- minDate + sort(runif(n_fp_det1, 0, duration_s))  
 
 # False positives don't have a location, SL, or TL, but do have NL and SNR
 # Use same distribution of NL as true positives
@@ -379,7 +378,7 @@ truncationDistances <- R
 
 The detector was a logistic function, so fitting a GLM should provide good results.
 
-```{r GLM p.det, warning=FALSE, message=FALSE, cache=TRUE}
+```{r GLM p.det, warning=FALSE, message=FALSE}
 
 snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
                                               modelType = "glm")
@@ -425,7 +424,7 @@ ggplot(data=Pa.glm$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
 
 A GAM should also be able to provide a good fit to a logistic function.
 
-```{r GAM p.det, warning=FALSE, message=FALSE, cache=TRUE}
+```{r GAM p.det, warning=FALSE, message=FALSE}
 
 
 snrDetFun.gam <- callDensity::fitSNRdetectionFunc(SNRinfo,
@@ -471,7 +470,7 @@ ggplot(data=Pa.gam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
 
 Shape constrained additive models (SCAMs) should also provide a good fit to a logistic function.
 
-```{r SCAM p.det, warning=FALSE, message=FALSE, cache=TRUE}
+```{r SCAM p.det, warning=FALSE, message=FALSE}
 
 
 snrDetFun.scam <- callDensity::fitSNRdetectionFunc(SNRinfo,

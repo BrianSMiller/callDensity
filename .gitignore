@@ -6,3 +6,4 @@ inst/doc
 *.txt
 *.csv
 /vignettes/callDensity_cache
+/vignettes/callDensity2_cache
