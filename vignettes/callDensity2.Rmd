@@ -1,5 +1,10 @@
 ---
 title: "callDensity: Two detector simulation"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Your Vignette Title}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
 output: html_document
 bibliography: references.bib
 ---
