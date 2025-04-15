@@ -444,7 +444,7 @@ fitSNRvgam <- function(SNRinfo,
                        yColNames = c('detect_observer1','detect_observer2'),
                        whichObserver='detect_observer2'){
 
-  res.1 <- VGAM::vgam(as.matrix(SNRinfo[,yColNames]) ~bs(SNR, ),
+  res.1 <- VGAM::vgam(as.matrix(SNRinfo[,yColNames]) ~ s(SNR),
                       posbernoulli.t, data=SNRinfo,
                       na.action = 'na.omit')
   res.1@extra$whichObserver <- whichObserver

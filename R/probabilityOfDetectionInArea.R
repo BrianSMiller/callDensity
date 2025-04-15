@@ -289,6 +289,8 @@ pDetInArea <-
       # is to use the response of the last observer.
       if (any(class(res.1)=='vglm')){
         res.1.newcoeff@coefficients<-br
+        # predmatrix<-VGAM::predict(res.1.newcoeff,newdata=newd,type="response",
+        #                           type.fitted='onempall0')
         predmatrix<-VGAM::predict(res.1.newcoeff,newdata=newd,type="response")
 
         # VGLMs can have multiple observers, so we need to know which of these
