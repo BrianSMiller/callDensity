@@ -1,14 +1,10 @@
 ---
 title: "callDensity"
-output: 
-  rmarkdown::html_vignette
-    vignette: >
-      %\VignetteIndexEntry{callDensity}
-      %\VignetteEngine{knitr::rmarkdown}
-      %\VignetteEncoding{UTF-8}
-  html_document:
-    toc: true
-    toc_depth: 2
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Your Vignette Title}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
 bibliography: references.bib
 ---
 
