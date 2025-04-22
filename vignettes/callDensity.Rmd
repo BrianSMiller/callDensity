@@ -77,7 +77,7 @@ sim$datetime <- minDate + sort(runif(n, 0, duration_s))
 
 # 'Spatial' map showing true location of all calls
 ggplot(data=sim, aes(x=x/1e3,y=y/1e3))+
-  geom_point(colour = "black",alpha = 0.1, size=0.1)+
+  geom_bin_2d(alpha=1,binwidth=c(10,10))+
   coord_equal()+
   xlab("X location (km)")+
   ylab("Y location (km)")

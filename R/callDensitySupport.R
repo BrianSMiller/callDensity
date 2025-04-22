@@ -408,7 +408,7 @@ fitSNRvglm <- function(SNRinfo,
 
 
   res.1 <- VGAM::vglm(as.matrix(SNRinfo[,yColNames]) ~SNR,
-                posbernoulli.t, data=SNRinfo )
+                posbernoulli.t(parallel.t = TRUE~0), data=SNRinfo )
   res.1@extra$whichObserver <- whichObserver
 
   return(res.1)
@@ -650,4 +650,29 @@ densityPlot <- function(d){
           plot.tag.position = c(0.225, 0.975))
 }
 
+#' Estimate study area for call density given a radius from the hydrophone. If
+#' only a radius is provided, then the area=pi*radius^2 is returned. Optionally,
+#' if a matrix of truncation distances are provided, then the study area is
+#' calculated as the sum of the areas of each radial transect (assuming N
+#' transects will have the same 360/N degrees of angular coverage around the
+#' circle).
+#'
+#' @param w  - Radius of study area
+#' @param truncationDistance - Matrix of truncation distances [1 x Nr]. Nr is
+#'   the number of radial transects in the simulation (i.e. the same as the
+#'   number of TL profiles).
+#'
+#' @returns Area of the simulation
+#' @export
+#'
+studyArea <- function(w, truncationDistance=w){
+  A = pi*w^2
+  if (any(truncationDistance < w)     ){
+    if (length(truncationDistance) == 1) {
+      A = pi*truncationDistance^2
+    } else {
+      A = sum(pi*truncationDistance^2/length(truncationDistance))
+    }
+  }
+}
 

@@ -179,7 +179,7 @@ Summary of detectors:
 # Good detector with low threshold (location) and low false positive rate.
 det1params = data.frame( 
   location=1,    # AKA intercept?
-  scale=1,       # AKA slope?
+  scale=2,       # AKA slope?
   func='plogis', # logistic function
   c=0.1,         # False discovery rate
   fpMean=0,      # Mean of distribution of false positives (in dB SNR)
@@ -190,7 +190,7 @@ det1params = data.frame(
 # than detector 1.
 det2params = data.frame( 
   location=2,    # AKA intercept?
-  scale=1,       # AKA slope?
+  scale=3,       # AKA slope?
   func='plogis', # logistic function
   c=0.3,         # False discovery rate
   fpMean=0,      # Mean of distribution of false positives (in dB SNR)
@@ -363,7 +363,7 @@ ggplot(subsampleDet1, aes(x=datetime, weights=detect_table) )+
 
 ggplot(subsampleDet2, aes(x=datetime, weights=detect_table) )+
   # geom_point(size=1,alpha=0.1)
-  geom_histogram(breaks=seq(from=minDate,to=maxDate,by='1 day'))
+  geom_histogram(breaks=seq(from=minDate,to=maxDate,by='12 h'))
 
 ```
 
@@ -858,5 +858,6 @@ legend( "bottomright",
         lwd=rep(2,6)
 )
 ```
+
 
 # References
