@@ -35,7 +35,7 @@ library(VGAM)
     A)  **Effect of land, ice, and other zero-probability areas**
     B)  Effect of non-uniform distribution of calls in area
 2)  Truncation in SNR
-3)  Detectors with different slopes
+3)  **Detectors with different slopes**
 4)  Minimum number of recaptures/effort required to get a reliable estimate
 5)  More realistic Transmission Loss models and effects of mismatch
 
@@ -194,8 +194,8 @@ det1params = data.frame(
 # Detector 2 has a higher threshold (location), scale, and false positive rate
 # than detector 1.
 det2params = data.frame( 
-  location=2,    # AKA intercept?
-  scale=1,       # AKA slope?
+  location=3,    # AKA intercept?
+  scale=2,       # AKA slope?
   func='plogis', # logistic function
   c=0.3,         # False discovery rate
   fpMean=0,      # Mean of distribution of false positives (in dB SNR)
@@ -432,7 +432,7 @@ Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLad
            simResultsFile = 'simResult_test_vglm_year.txt',
            paFile= 'Pa_test_vglm_year.txt',
            output.resolution.m=100,
-           outerloop = 10,
+           outerloop = 100,
            truncationDistance=truncDist, # in m
            snrTruncationThreshold =-Inf)
 pa.vglm <- Pa.vglm$overall
@@ -470,8 +470,45 @@ kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 3, 3, 4),
 
 ```
 
-The estimate of Dc derived from the vglm model is very close to the true value for this simulation.
+The estimate of Dc derived from the vglm model is very close to the true value for this simulation. 
+The spatial exclusions and differing slopes of the detectors appear to have been modelled with acceptable accuracy.
 
-Adjudicated capture-recapture along with independently estimated NL yields more accurate estimates of c and P_a.
+
+```{r compare snr detection functions, warning=FALSE}
+SNR <- seq(-20,20,0.5);
+snrs <- data.frame(SNR)
+
+cols = colorRampPalette(c('#EDB120','#D95319','#0072BD','#7E2F8E','#77AC30',
+                        '#4DBEEE','#A2142F'))
+# preds.glm= predict(snrDetFun.glm, type='response',newdata=snrs)
+preds.vglm=predict(snrDetFun.vglm,type='response',newdata=snrs)
+preds.vglm0=predict(snrDetFun.vglm,type='response',newdata=snrs,
+                    type.fitted='onempall0')# One minus probability of all zeros
+pr =apply(cbind(preds.vglm[,2],preds.vglm0),1,prod)
+
+
+par(cex=0.8,mar=c(3.1,3.1,0.25,0),mgp=c(2.1,1,0))
+plot(snrs$SNR, xlim= c(-5,10),  ylim= c(0,1),
+     xlab="SNR", ylab = "P(Detection)", type='n')
+grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
+# lines(snrs$SNR,preds.glm,col=cols(7)[4],lwd=2)
+lines(snrs$SNR,preds.vglm[,1],col=cols(7)[5],lwd=2) # Percep bias detector1
+lines(snrs$SNR,preds.vglm[,2],col=cols(7)[6],lwd=2) # Percep bias detector2
+lines(snrs$SNR,preds.vglm0,col=cols(7)[2],lwd=2) # 1-
+lines(snrs$SNR,pr,col=cols(7)[1],lwd=2)    # vglm 1-p(all zero)
+points(simDet2$snr,simDet2$p_det,pch='.')     # Actual probability of detection
+legend( "bottomright", 
+        legend =c("Detection function TRUE",
+                  "Detection function GLM",
+                  "Detection function VGLM",
+                  "Perception bias - detector1 (VGLM)",
+                  "Perception bias - detector2 (VGLM)",
+                  "One minus probability of all zeros (VGLM)"
+                  ),
+        col=c('black', cols(7)[4], cols(7)[1], cols(7)[5], cols(7)[6], cols(7)[2]), 
+        lty=rep('solid',6),
+        lwd=rep(2,6)
+)
+```
 
 # References

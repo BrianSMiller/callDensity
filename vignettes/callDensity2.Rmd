@@ -179,7 +179,7 @@ Summary of detectors:
 # Good detector with low threshold (location) and low false positive rate.
 det1params = data.frame( 
   location=1,    # AKA intercept?
-  scale=2,       # AKA slope?
+  scale=1,       # AKA slope?
   func='plogis', # logistic function
   c=0.1,         # False discovery rate
   fpMean=0,      # Mean of distribution of false positives (in dB SNR)
@@ -189,8 +189,8 @@ det1params = data.frame(
 # Detector 2 has a higher threshold (location), scale, and false positive rate
 # than detector 1.
 det2params = data.frame( 
-  location=2,    # AKA intercept?
-  scale=3,       # AKA slope?
+  location=3,    # AKA intercept?
+  scale=1,       # AKA slope?
   func='plogis', # logistic function
   c=0.3,         # False discovery rate
   fpMean=0,      # Mean of distribution of false positives (in dB SNR)
