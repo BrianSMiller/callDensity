@@ -366,7 +366,10 @@ SNRinfo <- with(subsample,
                 )
 )
 
-NLsamp <- callDensity::nlFromSnrInfo(SNRinfo)
+# Estimate NL from detections
+NLsamp <- SNRinfo %>% dplyr::summarise(mean=mean(NoiseRL,na.rm = TRUE),
+                             sd=sd(NoiseRL,na.rm = TRUE),
+                             sampleSize=dplyr::n()-sum(is.na(NoiseRL)))
 truncationDistances <- R 
 
 ```

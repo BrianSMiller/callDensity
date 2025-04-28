@@ -86,13 +86,6 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   # Pa--------------------------------------------------------------------------
   SNRinfo <- capHist2snrInfo(p$capHistFile,season)
 
-  # If user has not specified NL distribution (data.frame with columns mean, sd,
-  # samplesize), then extract this information it from SNRinfo.
-  # NB: This needs to occur prior to SNR truncation
-  if (is.null(NL)){
-      NL <- nlFromSnrInfo(SNRinfo)
-  }
-
   # Read SL distribution parameters from overall parameters.
   SL <- data.frame(mean=p$slParams$slMean,
                    sd=p$slParams$slStd,
@@ -107,6 +100,13 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
     snrDetFun <- fitSNRdetectionFunc(
       subset(SNRinfo,SNR>=snrTruncationThreshold),
                                 modelType=p$modelType, p$numKnots)
+  }
+
+  # If user has not specified NL distribution (data.frame with columns mean, sd,
+  # samplesize), then extract this information it from SNRinfo.
+  # NB: This needs to occur with untruncated SNRInfo (i.e. prior to truncation).
+  if (is.null(NL)){
+    NL <- nlFromSnrInfo(SNRinfo, snrDetFun)
   }
 
   pDetInArea(snrDetFun, SL, TL,  NL, # Sonar equation inputs

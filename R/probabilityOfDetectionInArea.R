@@ -438,7 +438,8 @@ pDetInArea <-
   allDetFunctions[,2:(no.profiles+1)]<-t(combineddetfunc)
   allDetFunctions<- data.table::as.data.table(allDetFunctions)
   names(allDetFunctions)<-dimnames(allTLlookup_h)[[2]]
-  system.time(data.table::fwrite(allDetFunctions, file=transectFile) )
+
+  data.table::fwrite(allDetFunctions, file=transectFile)
 
   ## Average across transects to produce an overall det function ###############
   averagecombineddetfunc<-colMeans(combineddetfunc, na.rm=T)

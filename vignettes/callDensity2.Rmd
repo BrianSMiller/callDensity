@@ -209,7 +209,7 @@ simulateDetector <- function(detParams,sim){
                      scale=detParams$scale)
   
   # Apply Bernoulli trial to SNRs to see which were detected
-  sim$detect_table <- as.logical(rbinom(n,size=1,prob=sim$p_det))
+  sim$detect_table <- as.logical(rbinom(dim(sim)[1],size=1,prob=sim$p_det))
   
   # Calculate number of false positives given the number of true positive
   # detections for the detector and the specified false discovery rate, c, for
@@ -479,7 +479,9 @@ truncationDistances <- R
 Nc <- sum(simDet2$detect_table)       
 
 # Noise level from subsampled Observer ground-truth
-NLsamp <- callDensity::nlFromSnrInfo(SNRinfo) 
+NLsamp <- SNRinfo %>% dplyr::summarise(mean=mean(NoiseRL,na.rm = TRUE),
+                             sd=sd(NoiseRL,na.rm = TRUE),
+                             sampleSize=dplyr::n()-sum(is.na(NoiseRL)))
 
 NLtable <- rbind(NL,NLsamp)
 rownames(NLtable)<- c('Actual','Estimated from subsample')
@@ -539,89 +541,6 @@ ggplot(data=Pa.glm$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
 ```
 
 
-```{r GAM p.det, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
-
-
-snrDetFun.gam <- callDensity::fitSNRdetectionFunc(SNRinfo,
-                                              modelType = "gam",
-                                              numKnots = 3)
-
-Pa.gam <- callDensity::pDetInArea(snrDetFun.gam, SL=SL, TLlookup = TL, NL=NLsamp,
-           transectFile = 'pDet_test_gam_year_transects.csv',
-           simResultsFile = 'simResult_test_gam_year.txt',
-           paFile= 'Pa_test_gam_year.txt',
-           output.resolution.m=100,
-           outerloop = 10,
-           truncationDistance=R, # in m
-           snrTruncationThreshold =-Inf)
-pa.gam <- Pa.gam$overall
-
-
-# Density estimation equation
-Dc.gam <- (Nc * (1 - c_subsample) )/( k * A * pa.gam * Time )
-
-results.gam<-data.frame(Dc=Dc.gam, SampleSize=n_subsample, A = A,# Environment
-                      NLmean = NLsamp$mean, NLsd = NLsamp$sd,    # Noise
-                        # Detector params
-                        model='gam', R2=summary(snrDetFun.gam)$r.sq,
-                        AIC =AIC(snrDetFun.gam), c=c_subsample, Pa=pa.gam,  
-                      row.names = 'Estimate2')
-
-ggplot(data=Pa.gam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
-  geom_point(alpha=0.1, size=0.1)+
-  xlab("Range (km)")+
-  ylab("Probability of detection\n(Mean across all transects)")+
-  scale_x_log10(limits=c(0.1,1000),
-                labels=label_log(),
-                breaks=10^(-1:7),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
-  annotation_logticks(sides='') +
-  theme_bw()
-
-
-```
-
-```{r SCAM p.det, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
-
-
-snrDetFun.scam <- callDensity::fitSNRdetectionFunc(SNRinfo,
-                                              modelType = "scam",
-                                              numKnots = 5)
-
-Pa.scam <- callDensity::pDetInArea(snrDetFun.scam, SL=SL, TLlookup = TL, NL=NLsamp,
-           transectFile = 'pDet_test_scam_year_transects.csv',
-           simResultsFile = 'simResult_test_scam_year.txt',
-           paFile= 'Pa_test_scam_year.txt',
-           output.resolution.m=100,
-           outerloop = 100,
-           truncationDistance=R, # in m
-           snrTruncationThreshold =-Inf)
-pa.scam <- Pa.scam$overall
-
-
-# Density estimation equation
-Dc.scam <- (Nc * (1 - c_subsample) )/( k * A * pa.scam * Time )
-
-results.scam <- data.frame(Dc=Dc.scam, SampleSize=n_subsample, A = A,   # Environment
-                      NLmean = NLsamp$mean, NLsd = NLsamp$sd,# Noise
-                      # Detector params
-                        model='scam', R2=summary(snrDetFun.scam)$r.sq,
-                        AIC =AIC(snrDetFun.scam), c=c_subsample, Pa=pa.scam,  
-                      row.names = 'Estimate3')
-
-ggplot(data=Pa.scam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
-  geom_point(alpha=0.1, size=0.1)+
-  xlab("Range (km)")+
-  ylab("Probability of detection\n(Mean across all transects)")+
-  scale_x_log10(limits=c(0.1,1000),
-                labels=label_log(),
-                breaks=10^(-1:7),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
-  annotation_logticks(sides='') +
-  theme_bw()
-
-```
-
 ## Results
 
 Table showing how the the results of each call density estimate compare to the true values. The only difference between the three estimates is type of model used to fit the SNR-detection function (glm, gam, scam).
@@ -669,9 +588,7 @@ snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
 snrDetFun.glm$r.sq <- with(summary(snrDetFun.glm), 1 - deviance/null.deviance)
 
 # 'Independent' estimate of NL 
-NLind<- NLsamp
-NLind$mean <- mean(subset(capHistTab$noiseRMSdB1,capHistTab$subset1),na.rm=T)
-NLind$sd <- sd(subset(capHistTab$noiseRMSdB1,capHistTab$subset1),na.rm=T)
+NLind <- callDensity::nlFromSnrInfo(SNRinfo, snrDetFun.glm)
 
 Pa.NLi <- callDensity::pDetInArea(snrDetFun.glm, SL=SL, TLlookup = TL, NL=NLind,
            transectFile = 'pDet_test_NLind_year_transects.csv',
@@ -758,17 +675,13 @@ tp <- subset(capHistTab, as.logical(capHistTab$detect_table2),
 precision <- sum(tp)/dim(tp)[1]
 adj_c <- 1-precision
 
-NLadj = adjudicated %>% dplyr::summarise(mean=mean(noiseRMSdB2,na.rm = TRUE),
-                             sd=sd(noiseRMSdB2,na.rm = TRUE),
-                             sampleSize=dplyr::n()-sum(is.na(noiseRMSdB2)))
-
-# 'Independent' estimate of NL 
-NLadj<- NLsamp
-NLadj$mean <- mean(subset(capHistTab$noiseRMSdB1,capHistTab$subset1),na.rm=T)
-NLadj$sd <- sd(subset(capHistTab$noiseRMSdB1,capHistTab$subset1),na.rm=T)
-
 observerNames = c("detect_table1", "detect_table2")
-snrDetFun.vglm <- fitSNRvglm(adjudicated, observerNames, whichObserver = "detect_table2")
+snrDetFun.vglm <- fitSNRvglm(adjudicated, observerNames, 
+                             whichObserver = "detect_table2")
+
+# Best estimate of NL 
+NLadj <- nlFromSnrInfo(SNRinfo, snrDetFun.vglm)
+
 
 Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
            transectFile = 'pDet_test_vglm_year_transects.csv',
@@ -823,8 +736,7 @@ Adjudicated capture-recapture along with independently estimated NL yields more 
 ## Inspect detection functions for insights
 
 ```{r compare snr detection functions, warning=FALSE}
-SNR <- seq(-20,20,0.5);
-snrs <- data.frame(SNR)
+snrs <- data.frame(SNR=seq(-20,20,0.5))
 
 cols = colorRampPalette(c('#EDB120','#D95319','#0072BD','#7E2F8E','#77AC30',
                         '#4DBEEE','#A2142F'))
@@ -849,9 +761,9 @@ legend( "bottomright",
         legend =c("Detection function TRUE",
                   "Detection function GLM",
                   "Detection function VGLM",
-                  "Perception bias - detector1 (VGLM)",
-                  "Perception bias - detector2 (VGLM)",
-                  "One minus probability of all zeros (VGLM)"
+                  "Perception bias: detector1 (VGLM)",
+                  "Perception bias: detector2 (VGLM)",
+                  "1-p(all zeros) (VGLM)"
                   ),
         col=c('black', cols(7)[4], cols(7)[1], cols(7)[5], cols(7)[6], cols(7)[2]), 
         lty=rep('solid',6),

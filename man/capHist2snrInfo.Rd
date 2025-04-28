@@ -2,7 +2,7 @@
 % Please edit documentation in R/callDensitySupport.R
 \name{capHist2snrInfo}
 \alias{capHist2snrInfo}
-\title{Convert a capture history table of multiple detections into an SNR.Info file}
+\title{Convert a capture history FILE of multiple detections into an SNR.Info file}
 \usage{
 capHist2snrInfo(capHistFile, season = "year")
 }
@@ -12,5 +12,5 @@ capHist2snrInfo(capHistFile, season = "year")
 \item{season}{A timeCode corresponding to months, seasons, or year}
 }
 \description{
-Convert a capture history table of multiple detections into an SNR.Info file
+Convert a capture history FILE of multiple detections into an SNR.Info file
 }
