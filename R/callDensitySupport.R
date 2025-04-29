@@ -725,6 +725,8 @@ densityPlot <- function(d){
           plot.tag.position = c(0.225, 0.975))
 }
 
+#' Calculate study area for call density estimate.
+#'
 #' Estimate study area for call density given a radius from the hydrophone. If
 #' only a radius is provided, then the area=pi*radius^2 is returned. Optionally,
 #' if a matrix of truncation distances are provided, then the study area is
@@ -750,4 +752,31 @@ studyArea <- function(w, truncationDistance=w){
     }
   }
 }
+
+
+#' Confidence interval from density and it's CV
+#'
+#' Quick function to convert an abundance with a coefficient of variation (CV)
+#' into a 95% confidence interval.
+#'
+#' @param a abundance (or density)
+#' @param cv coefficient of variation, in decimal format, i.e., a CV of 10%
+#'   would be 0.1.
+#'
+#' @returns list with lower and upper 95% confidence intervals
+#' @export
+ciFromCV <- function(a, cv){
+  var.a<- (a*cv)^2
+
+  var.log.a<- log( 1+ (var.a/(a^2)))
+
+  C<- exp( 1.96 * sqrt(var.log.a))
+
+  lower.95CI<- a/C
+  upper.95CI<- a*C
+
+  ans<- list( lower.CI95 = lower.95CI, upper.CI95 = upper.95CI )
+  return(ans)
+}
+
 

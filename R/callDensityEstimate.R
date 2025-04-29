@@ -69,7 +69,7 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
 
   T <- deploymentDuration(p$detectorParams$fullYearEffortFile, season)
 
-  c <- falseDiscoveryRate(p,season)
+  c <- falseDiscoveryRate(p,season, snrTruncationThreshold)
   CV.c <- falseDiscoveryCV(p,season)
 
   #  alternative measure of FDR where analyst inspected every nth detection
@@ -294,13 +294,16 @@ deploymentDuration <- function(fullYearEffortFile, season){
 #'   detector1 is ground truth for detections within the specified season
 #' @export
 #'
-falseDiscoveryRate <- function(p,season){
+falseDiscoveryRate <- function(p,season, snrTruncationThreshold=-Inf){
 
-  effort <- readxl::read_excel(p$annotationParams$effortFile);
+  effort <- readxl::read_excel(p$annotationParams$effortFile,
+                               .name_repair = "unique_quiet");
   effort$season <- time2season(effort$StartTime)
   effort$month <- time2monthCode(effort$StartTime)
   ch <- read.csv(file = p$capHistFile)
   ch <- capHistTimeSeason(ch)
+
+  ch <- subset(ch, ch$snr >= snrTruncationThreshold)
 
   subsetByTimeCode(effort,effort$StartTime,season)
   subsetByTimeCode(ch,ch$t,season)
@@ -310,6 +313,7 @@ falseDiscoveryRate <- function(p,season){
   c <- FP/(FP+TP)
   c
 }
+
 
 #' CV of false discovery rate using Cochran approximation
 #'
@@ -351,6 +355,8 @@ falseDiscoveryCV <- function(p,season){
 #' @param falsePositiveXlsx Excel spreadsheet with timestamp of false positives.
 #' This spreadsheet requires two columns: one called UTC and the other called
 #' 'True Positive Rate.' These should be in a worksheet called 'conference'.
+#' The file used by this function must already have had SNR truncation applied
+#' (i.e. this function has no means of appling an snrTruncationThreshold)
 #'
 #' @param season Month or season over which to subset the data. Months can be
 #' 01-12, and seasons can be 'summer','autumn','winter','spring', or 'year'.

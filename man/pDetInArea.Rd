@@ -2,14 +2,7 @@
 % Please edit documentation in R/probabilityOfDetectionInArea.R
 \name{pDetInArea}
 \alias{pDetInArea}
-\title{Simulation to predict average probability of detection
-The simulation has several steps:
-(1) SNR regression and TL data now passed in via function call
-(a)Thin original TL data so have a 100m range step, not 20m
-   The resolution given in the propagation model output may be too fine a
-   resolution, and will increase the code run time.
-(2) GAM for the SNR regression passed in via function call -
-   initial model does not need to be in the loop}
+\title{Monte-Carlo simulation to predict average probability of detection in area}
 \usage{
 pDetInArea(
   res.1,
@@ -55,13 +48,21 @@ the number of transects}
 detection will be forcibly set to zero.}
 }
 \description{
+The simulation has several steps:
+(1) SNR regression and TL data now passed in via function call
+(a)Thin original TL data so have a 100m range step, not 20m
+   The resolution given in the propagation model output may be too fine a
+   resolution, and will increase the code run time.
+(2) GAM for the SNR regression passed in via function call -
+   initial model does not need to be in the loop
+}
+\details{
 (3) The outer loop (to be run 1000 times): (a) Generate a possible mean and
    standard deviations for source level using a parametric bootstrap approach (b)
    Generate a possible mean and standard deviations for noise level using a
    parametric bootstrap approach (c) Generate a set of coefficients for the
    detector characterisation curve
-}
-\details{
+
 (4) For each combination of outer loop parameters: For each column of TL
    lookup table : (a) draw ~10000 source level values from a distribution
    generated in outer loop and apply to all of the virtual calls along the

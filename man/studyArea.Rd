@@ -2,12 +2,7 @@
 % Please edit documentation in R/callDensitySupport.R
 \name{studyArea}
 \alias{studyArea}
-\title{Estimate study area for call density given a radius from the hydrophone. If
-only a radius is provided, then the area=pi*radius^2 is returned. Optionally,
-if a matrix of truncation distances are provided, then the study area is
-calculated as the sum of the areas of each radial transect (assuming N
-transects will have the same 360/N degrees of angular coverage around the
-circle).}
+\title{Calculate study area for call density estimate.}
 \usage{
 studyArea(w, truncationDistance = w)
 }

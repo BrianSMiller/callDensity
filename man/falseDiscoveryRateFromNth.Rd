@@ -9,7 +9,9 @@ falseDiscoveryRateFromNth(falsePositiveXlsx, season = "year")
 \arguments{
 \item{falsePositiveXlsx}{Excel spreadsheet with timestamp of false positives.
 This spreadsheet requires two columns: one called UTC and the other called
-'True Positive Rate.' These should be in a worksheet called 'conference'.}
+'True Positive Rate.' These should be in a worksheet called 'conference'.
+The file used by this function must already have had SNR truncation applied
+(i.e. this function has no means of appling an snrTruncationThreshold)}
 
 \item{season}{Month or season over which to subset the data. Months can be
 01-12, and seasons can be 'summer','autumn','winter','spring', or 'year'.}

@@ -1,6 +1,5 @@
-# library(MASS, quietly = T, warn.conflicts = F)     # for the mvrnorm
-
-#'  Simulation to predict average probability of detection
+#' Monte-Carlo simulation to predict average probability of detection in area
+#'
 #' The simulation has several steps:
 #' (1) SNR regression and TL data now passed in via function call
 #' (a)Thin original TL data so have a 100m range step, not 20m

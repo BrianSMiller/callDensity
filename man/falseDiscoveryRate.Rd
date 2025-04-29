@@ -4,7 +4,7 @@
 \alias{falseDiscoveryRate}
 \title{#  ### Estimate $c$ (False discovery rate)}
 \usage{
-falseDiscoveryRate(p, season)
+falseDiscoveryRate(p, season, snrTruncationThreshold = -Inf)
 }
 \arguments{
 \item{p}{data.frame containing top-level parameters for a call density
