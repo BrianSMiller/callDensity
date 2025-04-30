@@ -751,6 +751,7 @@ studyArea <- function(w, truncationDistance=w){
       A = sum(pi*truncationDistance^2/length(truncationDistance))
     }
   }
+  return(A)
 }
 
 

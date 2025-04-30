@@ -332,8 +332,6 @@ pDetInArea <-
     # Once pdet full with 5 columns, save allpdet in resultsallpdets
     resultsallpdets[,((no.profiles*i)-(no.profiles-1)):(no.profiles*i)]<-allpdet
 
-    # print(i) # To keep track of the simulation
-
   }
 
 

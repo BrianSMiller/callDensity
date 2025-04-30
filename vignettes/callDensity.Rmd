@@ -55,25 +55,18 @@ R = 1e6; # radius of 1000 km
 
 
 # Call density, D_c is n/A 
-A = pi*(R/1e3)^2 # Circular study area in km^2
+A = studyArea(R/1e3) # Circular study area in km^2
 TrueCallDensity = n/A # calls/km^2
 
 k <- 1      # number of sensors
-Time <- 1   # years
 
 print(paste(TrueCallDensity,"calls per km^2 per unit time"))
 
-r = R*sqrt(runif(n));
-t = 2*pi*runif(n);
-sim <- data.frame(x = r*cos(t), y = r*sin(t), groundTruth=1);
-
-# Date and time of detections span 1 full year (calendar year of)
-
 minDate <- as.POSIXct("2025-01-01")
 maxDate <- as.POSIXct("2025-12-31")
+Time <- as.numeric(difftime(maxDate,minDate,unit="days"))/365
 
-duration_s <- as.numeric(difftime(maxDate,minDate,unit="sec"))
-sim$datetime <- minDate + sort(runif(n, 0, duration_s))
+sim <- simCallLocation(n=n, R=R, minDate=minDate, maxDate=maxDate)
 
 # 'Spatial' map showing true location of all calls
 ggplot(data=sim, aes(x=x/1e3,y=y/1e3))+
@@ -96,8 +89,6 @@ Uniform density and increasing area with larger distances should yield a triangu
 
 ```{r call.distance.distribution.check,  warning=FALSE, message=FALSE}
 
-sim$d <- sqrt(sim$x^2+sim$y^2)
-
 ggplot(data=sim, aes(x=d/1e3))+
   geom_histogram(binwidth = 5)+
   xlab("Distance (km)")
@@ -117,7 +108,6 @@ The values we chose match reasonably well with those that have been estimated fo
 ```{r sonar.eq.SL}
 
 SL <- data.frame(mean=190, sd=4, sampleSize=350)
-sim$SL <- rnorm(n, mean=SL$mean, sd=SL$sd)
 
 ```
 
@@ -130,7 +120,6 @@ Our NL distribution resembles the same real-world measurements used by @castro20
 ```{r sonar.eq.NL}
 
 NL = data.frame(mean=84, sd = 4, sampleSize = n)
-sim$NL <- rnorm(n, mean=NL$mean, sd=NL$sd)
 
 ```
 
@@ -146,41 +135,9 @@ This TL model is a commonly used analytical expression for transmission loss. De
 
 ```{r sonar.eq.TL}
 
-range_m = seq(from=5, to=1e6, by=100)
+tlFunc <- function(r)20*log10(r)
 
-# Spherical spreading for a single transect
-tlTransectSpherical <- 20*log10(range_m)
-
-tlTransect <- tlTransectSpherical
-sim$TL <- 20*log10(sim$d)
-
-# Create additional transects here to better match with our real-world approach
-TL <- data.frame(
-  range_m,
-  tl000 = tlTransect,
-  # tl090 = tlTransect,
-  tl180 = tlTransect #,
-  # tl270 = tlTransect
-)
-```
-
-```{r plot TL, include=FALSE, eval=FALSE}
-
-# NOT RUN & NOT INCLUDED IN RMARKDOWN 
-
-# Plot the transmission loss model. Such a plot isn't usually needed for very
-# simple models, such as spherical spreading. But if using more complex models
-# it can be useful to visualise them to check their validity/plausibility.
-ggplot(data=TL, aes(x=range_m/1e3, y=tl000))+
-  geom_point(alpha=0.1,size=0.1)+
-  scale_x_log10(limits=c(0.1,1000),
-                breaks=10^(-1:7),
-                minor_breaks = rep(1:9,6)*(10^rep(-1:7,each=9)))+
-  xlab("Distance (km)")+
-  ylab("TL (dB)")+
-  annotation_logticks(sides='') +
-  label_log+
-  theme_bw()
+sim <- simCallAcoustics(sim, SL, NL, TL = tlFunc)
 
 ```
 
@@ -192,8 +149,6 @@ SNR = SL-TL-NL
 
 ```{r call.snr.check,  warning=FALSE, message=FALSE}
 
-sim$snr <- with(sim,SL-TL-NL)
-
 # Visualise SNR distribution
 ggplot(data=sim, aes(x=snr))+
   geom_histogram()+
@@ -201,8 +156,8 @@ ggplot(data=sim, aes(x=snr))+
 
 # SNR as a function of distance
 ggplot(data=sim, aes(x=d/1e3, y=snr))+
-  geom_point(alpha=0.1,size=0.1)+
-  geom_density_2d()+
+  # geom_point(alpha=0.1,size=0.1)+
+  geom_bin_2d()+
   xlab("Distance (km)")+
   ylab("SNR (dB)")+
   scale_x_log10(limits=c(0.01,1000),
@@ -235,41 +190,15 @@ det1params = data.frame(
   location=3,    # AKA intercept?
   scale=2,       # AKA slope?
   func='plogis', # logistic function
-  c=0.1          # False discovery rate
+  c=0.1,         # False discovery rate (1-precision)
+  fpMean = 0,    # mean SNR of false positive distribution (dB)
+  fpSD = 4       # Standard deviation of false positive distribution (dB)
 )
 
-# Probability of detection for each simulated call
-sim$p_det = plogis(sim$snr,
-                   location=det1params$location,
-                   scale=det1params$scale)
-
-# Apply Bernoulli trial to SNRs to see which were detected
-sim$detected_observer1 <- as.logical(rbinom(n,size=1,prob=sim$p_det))
-
-# View spatial, distance, and SNR distributions of detections vs non-detections
-
-# Spatial distribution
-ggplot(data=sim, aes(x=x/1e3, y=y/1e3, colour=detected_observer1))+
-  geom_point(alpha=0.1,size=0.1)+
-  coord_equal()+
-  xlab("X location (km)")+
-  ylab("Y location (km)")
-
-# SNR Distribution
-ggplot(data=sim, aes(x=snr, group=detected_observer1, fill=detected_observer1) )+
-  geom_histogram()
-
-ggplot(data=sim, aes(x=d/1e3, y=snr, colour=detected_observer1))+
-  geom_point(alpha=0.1, size=1)+
-  xlab("Distance (km)")+
-  ylab("SNR (dB)")+
-  scale_x_log10(limits=c(0.1,1000),
-                labels=label_log(),
-                breaks=10^(-1:7),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
-  annotation_logticks(sides='') +
-  theme_bw()
-
+# Simulate the detection/non-detection of calls and add columns to the
+# simulation to indicate which were detected. Also simulated false positives and
+# add these rows to the simulation as well.
+sim <- simulateDetector(detParams=det1params, sim)
 
 ```
 
@@ -279,59 +208,23 @@ In addition to the probability of detection, there is also a probability of fals
 
 ```{r simulate.false.positives, warning=FALSE, message=FALSE}
 
-# Calculate number of false positives given the number of true positive
-# detections for the detector and the specified false discovery rate, c, for
-# that detector.
-n_tp_det1 <- sum(sim$detected_observer1) 
-n_fp_det1 <- n_tp_det1/(1-det1params$c)-n_tp_det1
-
-# Store false positives in data.frame with same format as sim
-fp <- data.frame(matrix(ncol=length(sim),nrow=n_fp_det1))
-colnames(fp) <- colnames(sim)
-
-# groundTruth=0 means that these are false positives (handy to keep in mind for
-# when we include these in sim)
-fp$groundTruth <- 0
-fp$detected_observer1 <- 1
-
-# Generate the right number of false positives uniformly over same time period
-# as true positives.
-fp$datetime <- minDate + sort(runif(n_fp_det1, 0, duration_s))  
-
-# False positives don't have a location, SL, or TL, but do have NL and SNR
-# Use same distribution of NL as true positives
-fp$NL <- rnorm(n_fp_det1, mean=90, sd=4)
-
-# SNR distribution of false positives broadly matches that of Casey2019 human
-# analysts
-fp$snr <- rnorm(n_fp_det1, mean=1, sd=2) 
-
-simWithFP <- rbind(sim,fp) # Make sure not to confuse simWithFP and sim. 
-
 # Nc total number of detected calls, including both true and false positive
-Nc <- sum(simWithFP$detected_observer1)
+Nc <- sum(sim$detect_table)
 
 # We've generated the right number of false positive detections now and merged
 # these into our simulation. 
 # But the false positives are missing locations, distances, SL, and p_dets. Not
 # sure that this actually matters though.
 
-simWithFP$group <- factor(ifelse(simWithFP$groundTruth,
-                              ifelse(simWithFP$detected_observer1, 
-                                     "TruePositive","FalseNegative"),
-                              "FalsePositive"),
-                          levels=c("FalsePositive","TruePositive","FalseNegative")
-                          )
-
 # SNR Distribution
-ggplot(data=simWithFP, aes(x=snr, group=group, fill=group) )+
+ggplot(data=sim, aes(x=snr, group=group, fill=group) )+
   geom_histogram(position = position_stack())
 
-ggplot(data=simWithFP, aes(x=snr, group=group, fill=group) )+
+ggplot(data=sim, aes(x=snr, group=group, fill=group) )+
   geom_histogram(position = position_identity())+
   facet_wrap(group~., ncol=1,scales="free_y")
 
-simWithFP <- simWithFP[order(simWithFP$datetime),]
+sim <- sim[order(sim$datetime),]
 
 ```
 
@@ -343,23 +236,22 @@ Format results so that they can be used by the callDensity package for testing.
 
 n_subsample <- 1e4
 
-subsample <- simWithFP[sample(nrow(simWithFP), n_subsample),]
+subsample <- sim[sample(nrow(sim), n_subsample),]
 
 n_fp_subsample <- sum(subsample$groundTruth==FALSE)
 
 # False discovery rate is number.false.positives/number.predicted.positive
-c_subsample <- n_fp_subsample/sum(subsample$detected_observer1)
+c_subsample <- n_fp_subsample/sum(subsample$detect_table)
 
 ```
 
 ```{r format.output.for.callDensity.package}
 
-
 SNRinfo <- with(subsample,
                 data.frame(
-                  Detected = detected_observer1,
+                  Detected = detect_table,
                   CallRL   = SL-TL,
-                  NoiseRL  = NL,
+                  NoiseRL  = noiseRMSdB,
                   SNR      = snr,
                   t        = datetime,
                   season   = callDensity::time2season(datetime)
@@ -371,6 +263,9 @@ NLsamp <- SNRinfo %>% dplyr::summarise(mean=mean(NoiseRL,na.rm = TRUE),
                              sd=sd(NoiseRL,na.rm = TRUE),
                              sampleSize=dplyr::n()-sum(is.na(NoiseRL)))
 truncationDistances <- R 
+
+# Estimate TL for four radial transects to use for estimating p_det
+TL <- simTLradials_20logR(maxRange=R, rangeStep=100, numTransects=4)
 
 ```
 
@@ -438,7 +333,7 @@ Pa.gam <- callDensity::pDetInArea(snrDetFun.gam, SL=SL, TLlookup = TL, NL=NLsamp
            simResultsFile = 'simResult_test_gam_year.txt',
            paFile= 'Pa_test_gam_year.txt',
            output.resolution.m=100,
-           outerloop = 100,
+           outerloop = 10,
            truncationDistance=R, # in m
            snrTruncationThreshold =-Inf)
 pa.gam <- Pa.gam$overall
@@ -480,9 +375,9 @@ snrDetFun.scam <- callDensity::fitSNRdetectionFunc(SNRinfo,
                                               numKnots = 5)
 
 Pa.scam <- callDensity::pDetInArea(snrDetFun.scam, SL=SL, TLlookup = TL, NL=NLsamp,
-           transectFile = 'pDet_test_scam_year_transects.csv',
-           simResultsFile = 'simResult_test_scam_year.txt',
-           paFile= 'Pa_test_scam_year.txt',
+           transectFile = '',
+           simResultsFile = '',
+           paFile= '',
            output.resolution.m=100,
            outerloop = 100,
            truncationDistance=R, # in m
@@ -524,7 +419,7 @@ results = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment
                         # Detector params
                         model=det1params$func, R2=NA,  
                         AIC =NA, c = det1params$c, 
-                        Pa = mean(sim$p_det), 
+                        Pa = mean(sim$p_det,na.rm = T), 
                       row.names='Truth')
 
 results<-rbind( results, results.glm, results.gam, results.scam)
