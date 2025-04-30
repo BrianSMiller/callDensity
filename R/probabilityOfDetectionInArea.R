@@ -59,7 +59,7 @@
 #' @export
 pDetInArea <-
   function(res.1, SL, TLlookup,  NL, # Sonar equation inputs
-           transectFile, simResultsFile, paFile, # file output names
+           transectFile='', simResultsFile='', paFile='', # file output names
            output.resolution.m = 100, outerloop = 1000,
            truncationDistance=(Inf), snrTruncationThreshold=-Inf) {
     ### A5.2 Code used for the Monte Carlo Simulation
@@ -338,7 +338,10 @@ pDetInArea <-
   #*****************************************************************************
   # SIMULATION ENDED - NOW PRODUCE THE RESULTS #################################
   #Save originally selected parameters for the simulation
-  utils::write.table(results1000sim,file=simResultsFile,row.names=F,col.names=F)
+  if (simResultsFile!=''){
+    utils::write.table(results1000sim,file=simResultsFile,
+                     row.names=F,col.names=F)
+  }
   #*****************************************************************************
 
   # STEPS 5 - for all p(det), calculate a distance-weighted average ############
@@ -392,7 +395,8 @@ pDetInArea <-
   # now that transects might be different lengths, we need to weight by length
   # when averaging across them.
   # overallpdet<-mean(transectavgweightpdets, na.rm=T)
-  overallpdet<-weighted.mean(transectavgweightpdets, w=truncationDistance^2, na.rm=T)
+  overallpdet<-weighted.mean(transectavgweightpdets, w=truncationDistance^2,
+                             na.rm=T)
 
   ## STEP 6(c) Create a results matrix to hold p(det) values and ##############
   # st.error/st.dev values
@@ -400,12 +404,14 @@ pDetInArea <-
   pdetsandvar<-matrix(NA,no.profiles+1,2)
   pdetsandvar[1:no.profiles,1]<-transectavgweightpdets
   pdetsandvar[no.profiles+1,1]<-overallpdet
-  #********************************************************************************
+  #*****************************************************************************
   # STEP 7 - Variance calculations
-  # STEP 7(a) Need to calculate the standard error of the transect-specific p(det) values
+  # STEP 7(a) Need to calculate the standard error of the transect-specific
+  #    p(det) values
   st.errorPt<-sd(transectavgweightpdets,na.rm = T)/sqrt(no.profiles)
 
-  # STEP 7(b) Need to calculate the standard deviation of the transect-specific p(det) values
+  # STEP 7(b) Need to calculate the standard deviation of the transect-specific
+  #   p(det) values
   st.devPt<-c()
   for (i in 1:no.profiles){
     st.devPt[i]<-sd(alltransectspdetsweight1000[i,],na.rm = T)
@@ -413,8 +419,10 @@ pDetInArea <-
   # STEP 7(c) save the results in the results matrix and print out
   pdetsandvar[1:no.profiles,2]<-st.devPt
   pdetsandvar[no.profiles+1,2]<-st.errorPt
-  utils::write.table(pdetsandvar,file=paFile, row.names=F,
-                     col.names = c("Mean","SD"))
+  if (paFile!=''){
+    utils::write.table(pdetsandvar,file=paFile, row.names=F,
+                       col.names = c("Mean","SD"))
+  }
 
   #****************************************************************************
   #Calculate an average across p(det) for each range step for all transects####
@@ -436,7 +444,10 @@ pDetInArea <-
   allDetFunctions<- data.table::as.data.table(allDetFunctions)
   names(allDetFunctions)<-dimnames(allTLlookup_h)[[2]]
 
-  data.table::fwrite(allDetFunctions, file=transectFile)
+  if (transectFile!=''){
+    data.table::fwrite(allDetFunctions, file=transectFile)
+  }
+
 
   ## Average across transects to produce an overall det function ###############
   averagecombineddetfunc<-colMeans(combineddetfunc, na.rm=T)

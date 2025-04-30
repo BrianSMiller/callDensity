@@ -47,12 +47,8 @@ Start with *n* calls within radius *R* of the hydrophone. This should produce a 
 # 1) Generate a distribution of n calls within radius R of the hydrophone with a
 # known call density Uniform random in circle
 
-# For ABW ABZ calls, 1 whale call every 10 s would be a maximum of 3.1536M calls
-# In a continuous year of recording:  365*24*60*60/10 = 3.1536e6 
-
 n = 1e5; # 100k calls; 
 R = 1e6; # radius of 1000 km 
-
 
 # Call density, D_c is n/A 
 A = studyArea(R/1e3) # Circular study area in km^2
@@ -282,9 +278,6 @@ snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
 snrDetFun.glm$r.sq <- with(summary(snrDetFun.glm), 1 - deviance/null.deviance)
 
 Pa.glm <- callDensity::pDetInArea(snrDetFun.glm, SL=SL, TLlookup = TL, NL=NLsamp,
-           transectFile = 'pDet_test_glm_year_transects.csv',
-           simResultsFile = 'simResult_test_glm_year.txt',
-           paFile= 'Pa_test_glm_year.txt',
            output.resolution.m=100,
            outerloop = 100,
            truncationDistance=R, # in m
@@ -329,9 +322,6 @@ snrDetFun.gam <- callDensity::fitSNRdetectionFunc(SNRinfo,
                                               numKnots = 3)
 
 Pa.gam <- callDensity::pDetInArea(snrDetFun.gam, SL=SL, TLlookup = TL, NL=NLsamp,
-           transectFile = 'pDet_test_gam_year_transects.csv',
-           simResultsFile = 'simResult_test_gam_year.txt',
-           paFile= 'Pa_test_gam_year.txt',
            output.resolution.m=100,
            outerloop = 10,
            truncationDistance=R, # in m
@@ -375,9 +365,6 @@ snrDetFun.scam <- callDensity::fitSNRdetectionFunc(SNRinfo,
                                               numKnots = 5)
 
 Pa.scam <- callDensity::pDetInArea(snrDetFun.scam, SL=SL, TLlookup = TL, NL=NLsamp,
-           transectFile = '',
-           simResultsFile = '',
-           paFile= '',
            output.resolution.m=100,
            outerloop = 100,
            truncationDistance=R, # in m

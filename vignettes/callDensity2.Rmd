@@ -58,35 +58,23 @@ Start with *n* calls within radius *R* of the hydrophone. This should produce a 
 # 1) Generate a distribution of n calls within radius R of the hydrophone with a
 # known call density Uniform random in circle
 
-# For ABW ABZ calls, 1 whale call every 10 s would be a maximum of 3.1536M calls
-# In a continuous year of recording:  365*24*60*60/10 = 3.1536e6 
-
 n = 1e6; # number of simulated calls (regardless of whether detected or not); 
 R = 1e6; # radius of 1000 km 
 
 
 # Call density, D_c is n/A 
-A = pi*(R/1e3)^2 # Circular study area in km^2
+A = studyArea(R/1e3) # Circular study area in km^2
 TrueCallDensity = n/A # calls/km^2
 
 k <- 1      # number of sensors
-Time <- 1   # years
-
-r = R*sqrt(runif(n));
-t = 2*pi*runif(n);
-sim <- data.frame(x = r*cos(t), y = r*sin(t), groundTruth=1);
-
-# Date and time of detections span 1 full year (calendar year of)
-
-minDate <- as.POSIXct("2025-01-01",tz='UTC')
-maxDate <- as.POSIXct("2025-12-31",tz='UTC')
-
-duration_s <- as.numeric(difftime(maxDate,minDate,unit="sec"))
-sim$datetime <- minDate + sort(runif(n, 0, duration_s))
-
-sim$d <- sqrt(sim$x^2+sim$y^2)
 
 print(paste(TrueCallDensity,"calls per km^2 per unit time"))
+
+minDate <- as.POSIXct("2025-01-01")
+maxDate <- as.POSIXct("2025-12-31")
+Time <- as.numeric(difftime(maxDate,minDate,unit="days"))/365
+
+sim <- simCallLocation(n=n, R=R, minDate=minDate, maxDate=maxDate)
 
 ```
 
@@ -123,29 +111,15 @@ SNR = SL-TL-NL
 ```{r sonar.eq}
 
 SL <- data.frame(mean=190, sd=4, sampleSize=350) # True SL distribution for sim
-sim$SL <- rnorm(n, mean=SL$mean, sd=SL$sd)       # Realised SL for each call
 
 NL = data.frame(mean=84, sd = 4, sampleSize = n)  # True NL distribution for sim
-sim$noiseRMSdB <- rnorm(n, mean=NL$mean, sd=NL$sd)# Noise for each call
 
-range_m = seq(from=5, to=1e6, by=100)
+tlFunc <- function(r)20*log10(r)
 
-# Spherical spreading for a single transect
-tlTransectSpherical <- 20*log10(range_m)
+sim <- simCallAcoustics(sim, SL, NL, TL = tlFunc)
 
-tlTransect <- tlTransectSpherical
-sim$TL <- 20*log10(sim$d)
-
-# Create additional transects here to better match with our real-world approach
-TL <- data.frame(
-  range_m,
-  tl000 = tlTransect,
-  tl090 = tlTransect,
-  tl180 = tlTransect,
-  tl270 = tlTransect
-)
-sim$signalRMSdB <- with(sim,SL-TL)
-sim$snr <- with(sim,SL-TL-noiseRMSdB)
+# Estimate TL transects here to better match with our real-world approach
+TL <- simTLradials_20logR(maxRange=R, rangeStep=100, numTransects=4)
 
 ```
 
@@ -201,65 +175,6 @@ det2params = data.frame(
 Now we create a function that will take the detector parameters above and simulate the detection process. We then call this function with each set of parameters to create a simulation for each detector.
 
 ```{r simulate.detectors, warning=FALSE, message=FALSE}
-simulateDetector <- function(detParams,sim){
-  
-  # Probability of detection for each simulated call
-  sim$p_det = plogis(sim$snr,
-                     location=detParams$location,
-                     scale=detParams$scale)
-  
-  # Apply Bernoulli trial to SNRs to see which were detected
-  sim$detect_table <- as.logical(rbinom(dim(sim)[1],size=1,prob=sim$p_det))
-  
-  # Calculate number of false positives given the number of true positive
-  # detections for the detector and the specified false discovery rate, c, for
-  # that detector.
-  n_tp_det1 <- sum(sim$detect_table) 
-  n_fp_det1 <- n_tp_det1/(1-detParams$c)-n_tp_det1
-  
-  # Store false positives in data.frame with same format as sim
-  fp <- data.frame(matrix(ncol=length(sim),nrow=n_fp_det1))
-  colnames(fp) <- colnames(sim)
-  
-  # groundTruth=0 means that these are false positives (handy to keep in mind for
-  # when we include these in sim)
-  fp$groundTruth <- FALSE
-  fp$detect_table <- TRUE
-  
-  # Generate the right number of false positives uniformly over same time period
-  # as true positives.
-  fp$datetime <- minDate + sort(runif(n_fp_det1, 0, duration_s))  
-  
-  # False positives don't have a location, SL, or TL, but do have NL and SNR
-  # Use same distribution of NL as true positives
-  fp$noiseRMSdB <- rnorm(n_fp_det1, mean=NL$mean, sd=NL$sd)
-  
-  # SNR distribution of false positives broadly matches that of Casey2019 human
-  # analysts
-  fp$snr <- rnorm(n_fp_det1, mean=detParams$fpMean, sd=detParams$fpSD) 
-  
-  fp$signalRMSdB <- fp$noiseRMSdB + fp$snr
-  
-  # Combine false positives into the simulation
-  sim <- rbind(sim,fp) 
-  
-  # We've generated the right number of false positive detections now and merged
-  # these into our simulation. 
-  
-  # The false positives are missing locations, distances, SL, and p_dets. But
-  # not sure that this actually matters in any meaningful way.
-
-  # Add factor column to track true positive, false positivs & missed detections
-  sim$group <- factor(ifelse(sim$groundTruth,
-                             ifelse(sim$detect_table, 
-                                    "TruePositive","FalseNegative"),
-                             "FalsePositive"),
-                      levels=c("FalsePositive","TruePositive","FalseNegative")
-  )
-  
-  return(sim)
-  
-}
 
 # Simulate two detectors each with the different parameters
 simDet1<- simulateDetector(det1params,sim)
@@ -423,43 +338,6 @@ Convert this capture history table into an SNRinfo table, and treat detector1 as
 
 ```{r format.output.for.callDensity.package}
 
-# Function to convert the capture history table into the 'SNRinfo' format used
-# by the callDensity package
-capHistTosnrInfo <- function(capHistTab){
-
-  # Assume detect_table1 is ground truth, so only keep rows where
-  # detect_table1==1 (includes both true and false positives though)
-  capHistTab <- capHistTab[capHistTab$detect_table1==1, ]
-
-  # Detected refers to the automated detector, here detect_table2
-  Detected<-capHistTab$detect_table2
-    
-  # Add time rows for compatibility with callDensity format
-  t <- capHistTab$datetime
-  season <- time2season(t)
-  month <- time2monthCode(t)
-  
-  # CallRL and NoiseRL here in dB
-  CallRL<-as.numeric(rowMeans(
-    subset(capHistTab,select=c('signalRMSdB1','signalRMSdB2')) ,na.rm=T) )#dB
-  NoiseRL<-as.numeric(rowMeans(
-    subset(capHistTab,select=c('noiseRMSdB1','noiseRMSdB2')) ,na.rm=T) )#dB
-
-  # SNR<-as.numeric(capHistTab$signalRMSdB-capHistTab$noiseRMSdB) # SNR measured as in DH
-  SNR<-CallRL-NoiseRL # to check
-  SNRinfo<-data.frame(Detected,CallRL,NoiseRL,SNR,t,month,season)
-
-  # Check for SNR=Inf: put in a warning to user here, since infinite SNR is
-  # likely indicative of a problem with the inputs
-  lines<-c(which(SNRinfo$SNR=="Inf", arr.ind = TRUE))
-  if ( length(lines) >0) { # Run this line if inf occurs
-    warning( sprintf('%g of the SNR were infinite:\n',length(lines)) )
-    SNRinfo <- SNRinfo[-lines,]
-  }
-
-  return(SNRinfo)
-}
-
 # SNRinfo is used to calculate snrDetFun for detector2 assuming detector1 is the
 # ground truth. This is an observer ground (OG) so includes false positives from
 # detector1, but does not include detections from detector2 not detected on
@@ -526,18 +404,6 @@ results.glm <- data.frame(Dc=Dc.glm, SampleSize=n_subsample, A = A,# Environment
                       row.names = 'NL from detections')
 
 
-ggplot(data=Pa.glm$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
-  geom_point(alpha=0.1, size=0.1)+
-  xlab("Range (km)")+
-  ylab("Probability of detection\n(Mean across all transects)")+
-  scale_x_log10(limits=c(0.1,1000),
-                labels=label_log(),
-                breaks=10^(-1:7),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
-  annotation_logticks(sides='') +
-  theme_bw()
-
-
 ```
 
 
@@ -591,9 +457,6 @@ snrDetFun.glm$r.sq <- with(summary(snrDetFun.glm), 1 - deviance/null.deviance)
 NLind <- callDensity::nlFromSnrInfo(SNRinfo, snrDetFun.glm)
 
 Pa.NLi <- callDensity::pDetInArea(snrDetFun.glm, SL=SL, TLlookup = TL, NL=NLind,
-           transectFile = 'pDet_test_NLind_year_transects.csv',
-           simResultsFile = 'simResult_test_NLind_year.txt',
-           paFile= 'Pa_test_NLind_year.txt',
            output.resolution.m=100,
            outerloop = 100,
            truncationDistance=R, # in m
@@ -610,19 +473,6 @@ results.NLind <- data.frame(Dc=Dc.NLi, SampleSize=n_subsample, A = A,# Environme
                         model='glm', R2=snrDetFun.glm$r.sq,
                         AIC =AIC(snrDetFun.glm), c=c_subsample, Pa=pa.NLi,  
                       row.names = 'NL independent')
-
-
-ggplot(data=Pa.glm$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
-  geom_point(alpha=0.1, size=0.1)+
-  xlab("Range (km)")+
-  ylab("Probability of detection\n(Mean across all transects)")+
-  scale_x_log10(limits=c(0.1,1000),
-                labels=label_log(),
-                breaks=10^(-1:7),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
-  annotation_logticks(sides='') +
-  theme_bw()
-
 
 ```
 
@@ -684,9 +534,6 @@ NLadj <- nlFromSnrInfo(SNRinfo, snrDetFun.vglm)
 
 
 Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
-           transectFile = 'pDet_test_vglm_year_transects.csv',
-           simResultsFile = 'simResult_test_vglm_year.txt',
-           paFile= 'Pa_test_vglm_year.txt',
            output.resolution.m=100,
            outerloop = 100,
            truncationDistance=R, # in m
@@ -703,17 +550,6 @@ results.vglm <- data.frame(Dc=Dc.vglm, SampleSize=n_adj, A = A,# Environment
                         model='vglm', R2=NA,
                         AIC =AIC(snrDetFun.vglm), c=adj_c, Pa=pa.vglm,  
                       row.names = 'Adjudicated Capture-recapture\nNL independent')
-
-ggplot(data=Pa.vglm$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
-  geom_point(alpha=0.1, size=0.1)+
-  xlab("Range (km)")+
-  ylab("Probability of detection\n(Mean across all transects)")+
-  scale_x_log10(limits=c(0.1,1000),
-                labels=label_log(),
-                breaks=10^(-1:7),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
-  annotation_logticks(sides='') +
-  theme_bw()
 
 ```
 

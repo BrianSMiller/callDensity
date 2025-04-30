@@ -60,24 +60,18 @@ n = 1e6; # number of simulated calls (regardless of whether detected or not);
 R = 1e6; # radius of 1000 km (but in m)
 
 # Call density, D_c is n/A 
-A_circ = pi*(R/1e3)^2 # Circular study area in km^2
-CircleCallDensity = n/A_circ # calls/km^2
+A_circ = studyArea(R/1e3) # Circular study area in km^2
+TrueCallDensity = n/A # calls/km^2
 
 k <- 1      # number of sensors
-Time <- 1   # years
 
-r = R*sqrt(runif(n));
-t = 2*pi*runif(n);
-sim <- data.frame(x = r*cos(t), y = r*sin(t), groundTruth=1);
+print(paste(TrueCallDensity,"calls per km^2 per unit time"))
 
-# Date and time of detections span 1 full year (calendar year of)
-minDate <- as.POSIXct("2025-01-01",tz='UTC')
-maxDate <- as.POSIXct("2025-12-31",tz='UTC')
+minDate <- as.POSIXct("2025-01-01")
+maxDate <- as.POSIXct("2025-12-31")
+Time <- as.numeric(difftime(maxDate,minDate,unit="days"))/365
 
-duration_s <- as.numeric(difftime(maxDate,minDate,unit="sec"))
-sim$datetime <- minDate + sort(runif(n, 0, duration_s))
-
-sim$d <- sqrt(sim$x^2+sim$y^2)
+sim <- simCallLocation(n=n, R=R, minDate=minDate, maxDate=maxDate)
 
 coast= -144e3; # Simulate coastline at y = -100;
 sim <- subset(sim, sim$y>=coast);
@@ -117,33 +111,16 @@ In previous simulations we had four radial transects. Here we create four additi
 ```{r sonar.eq}
 
 SL <- data.frame(mean=190, sd=4, sampleSize=350) # True SL distribution for sim
-sim$SL <- rnorm(n, mean=SL$mean, sd=SL$sd)       # Realised SL for each call
 
 NL = data.frame(mean=84, sd = 4, sampleSize = n)  # True NL distribution for sim
-sim$noiseRMSdB <- rnorm(n, mean=NL$mean, sd=NL$sd)# Noise for each call
 
-range_m = seq(from=5, to=1e6, by=100)
+tlFunc <- function(r)20*log10(r)
 
-# Spherical spreading for a single transect
-tlTransectSpherical <- 20*log10(range_m)
+sim <- simCallAcoustics(sim, SL, NL, TL = tlFunc)
 
-tlTransect <- tlTransectSpherical
-sim$TL <- 20*log10(sim$d)
+# Estimate TL transects here to better match with our real-world approach
+TL <- simTLradials_20logR(maxRange=R, rangeStep=100, numTransects=8)
 
-# Create additional transects here to better match with our real-world approach
-TL <- data.frame(
-  range_m,
-  tl000 = tlTransect,
-  tl045 = tlTransect,
-  tl090 = tlTransect,
-  tl135 = tlTransect,
-  tl180 = tlTransect,
-  tl225 = tlTransect,
-  tl270 = tlTransect,
-  tl315 = tlTransect
-)
-sim$signalRMSdB <- with(sim,SL-TL)
-sim$snr <- with(sim,SL-TL-noiseRMSdB)
 ```
 
 ### Estimate Truncation distances
@@ -155,6 +132,7 @@ Regardless of whether the TL models are a good match for the physical environmen
 ```{r truncation distances}
 # Work out the range for each radial over which to truncate. 
 radials = seq(from=0,to=315, by=45)
+range_m = seq(from=5,to=R,by=100)
 
 # Find first r where the r*sind(radials) <= coastline
 truncDist <- matrix(R,nrow=1,ncol = length(radials))
@@ -204,65 +182,6 @@ det2params = data.frame(
 ```
 
 ```{r simulate.detectors, warning=FALSE, message=FALSE}
-simulateDetector <- function(detParams,sim){
-  
-  # Probability of detection for each simulated call
-  sim$p_det = plogis(sim$snr,
-                     location=detParams$location,
-                     scale=detParams$scale)
-  
-  # Apply Bernoulli trial to SNRs to see which were detected
-  sim$detect_table <- as.logical(rbinom(dim(sim)[1],size=1,prob=sim$p_det))
-  
-  # Calculate number of false positives given the number of true positive
-  # detections for the detector and the specified false discovery rate, c, for
-  # that detector.
-  n_tp_det1 <- sum(sim$detect_table) 
-  n_fp_det1 <- n_tp_det1/(1-detParams$c)-n_tp_det1
-  
-  # Store false positives in data.frame with same format as sim
-  fp <- data.frame(matrix(ncol=length(sim),nrow=n_fp_det1))
-  colnames(fp) <- colnames(sim)
-  
-  # groundTruth=0 means that these are false positives (handy to keep in mind for
-  # when we include these in sim)
-  fp$groundTruth <- FALSE
-  fp$detect_table <- TRUE
-  
-  # Generate the right number of false positives uniformly over same time period
-  # as true positives.
-  fp$datetime <- minDate + sort(runif(n_fp_det1, 0, duration_s))  
-  
-  # False positives don't have a location, SL, or TL, but do have NL and SNR
-  # Use same distribution of NL as true positives
-  fp$noiseRMSdB <- rnorm(n_fp_det1, mean=NL$mean, sd=NL$sd)
-  
-  # SNR distribution of false positives broadly matches that of Casey2019 human
-  # analysts
-  fp$snr <- rnorm(n_fp_det1, mean=detParams$fpMean, sd=detParams$fpSD) 
-  
-  fp$signalRMSdB <- fp$noiseRMSdB + fp$snr
-  
-  # Combine false positives into the simulation
-  sim <- rbind(sim,fp) 
-  
-  # We've generated the right number of false positive detections now and merged
-  # these into our simulation. 
-  
-  # The false positives are missing locations, distances, SL, and p_dets. But
-  # not sure that this actually matters in any meaningful way.
-
-  # Add factor column to track true positive, false positivs & missed detections
-  sim$group <- factor(ifelse(sim$groundTruth,
-                             ifelse(sim$detect_table, 
-                                    "TruePositive","FalseNegative"),
-                             "FalsePositive"),
-                      levels=c("FalsePositive","TruePositive","FalseNegative")
-  )
-  
-  return(sim)
-  
-}
 
 # Simulate two detectors each with the different parameters
 simDet1<- simulateDetector(det1params,sim)
@@ -423,9 +342,6 @@ NLadj <- nlFromSnrInfo(capHistTosnrInfo(capHistTab), snrDetFun.vglm)
 
 
 Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
-           transectFile = 'pDet_test_vglm_year_transects.csv',
-           simResultsFile = 'simResult_test_vglm_year.txt',
-           paFile= 'Pa_test_vglm_year.txt',
            output.resolution.m=100,
            outerloop = 10,
            truncationDistance=truncDist, # in m
