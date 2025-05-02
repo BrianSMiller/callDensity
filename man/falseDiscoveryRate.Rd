@@ -12,6 +12,8 @@ estimate}
 
 \item{season}{a character indicating the season or month for which to
 estimate call density}
+
+\item{snrTruncationThreshold}{- Exclude rows with SNR below this threshold (in dB)}
 }
 \value{
 c, the false discovery rate (1-precision) for detector2 assuming

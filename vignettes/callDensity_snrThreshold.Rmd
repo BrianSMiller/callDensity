@@ -1,12 +1,12 @@
 ---
-title: "callDensity: Two detector simulation"
+title: "callDensity_snrThreshold"
 output: 
   html_document: default
   pdf_document: default
   rmarkdown::html_vignette:
     vignette: >
       %\VignetteEncoding{UTF-8}
-      %\VignetteIndexEntry{callDensity: Two detector simulation}
+      %\VignetteIndexEntry{callDensity_snrThreshold}
       %\VignetteEngine{knitr::rmarkdown}
 bibliography: references.bib
 ---
@@ -53,38 +53,19 @@ In this example, we investigate the effects of excluding detections with an SNR 
 
 ```{r call.spatial.distribution, warning=FALSE, message=FALSE}
 
-# 1) Generate a distribution of n calls within radius R of the hydrophone with a
-# known call density Uniform random in circle
-
-# For ABW ABZ calls, 1 whale call every 10 s would be a maximum of 3.1536M calls
-# In a continuous year of recording:  365*24*60*60/10 = 3.1536e6 
-
 n = 1e6; # number of simulated calls (regardless of whether detected or not); 
-R = 1e6; # radius of 1000 km 
-
+R = 1e6; # radius of 1000 km (but in m)
+k <- 1   # number of sensors
+minDate <- as.POSIXct("2025-01-01")
+maxDate <- as.POSIXct("2025-12-31")
+Time <- as.numeric(difftime(maxDate,minDate,unit="days"))/365 # in years
 
 # Call density, D_c is n/A 
-A = pi*(R/1e3)^2 # Circular study area in km^2
-TrueCallDensity = n/A # calls/km^2
+A = studyArea(R/1e3) # Circular study area in km^2
+TrueCallDensity = n/(A*Time) # calls/km^2/time
 
-k <- 1      # number of sensors
-Time <- 1   # years
-
-r = R*sqrt(runif(n));
-t = 2*pi*runif(n);
-sim <- data.frame(x = r*cos(t), y = r*sin(t), groundTruth=1);
-
-# Date and time of detections span 1 full year (calendar year of)
-
-minDate <- as.POSIXct("2025-01-01",tz='UTC')
-maxDate <- as.POSIXct("2025-12-31",tz='UTC')
-
-duration_s <- as.numeric(difftime(maxDate,minDate,unit="sec"))
-sim$datetime <- minDate + sort(runif(n, 0, duration_s))
-
-sim$d <- sqrt(sim$x^2+sim$y^2)
-
-print(paste(TrueCallDensity,"calls per km^2 per unit time"))
+# 1) Generate n uniformly distributed calls within radius R and time period Time
+sim <- simCallLocation(n=n, R=R, minDate=minDate, maxDate=maxDate)
 
 ```
 Sonar equation parameters for this scenario:
@@ -100,39 +81,18 @@ SNR = SL-TL-NL
 ```{r sonar.eq}
 
 SL <- data.frame(mean=190, sd=4, sampleSize=350) # True SL distribution for sim
-sim$SL <- rnorm(n, mean=SL$mean, sd=SL$sd)       # Realised SL for each call
-
 NL = data.frame(mean=84, sd = 4, sampleSize = n)  # True NL distribution for sim
-sim$noiseRMSdB <- rnorm(n, mean=NL$mean, sd=NL$sd)# Noise for each call
+tlFunc <- function(r)20*log10(r)
 
-range_m = seq(from=5, to=1e6, by=100)
+# Simulate the true acoustic properties of each call and false positive 
+sim <- simCallAcoustics(sim, SL, NL, TL = tlFunc)
 
-# Spherical spreading for a single transect
-tlTransectSpherical <- 20*log10(range_m)
-
-tlTransect <- tlTransectSpherical
-sim$TL <- 20*log10(sim$d)
-
-# Create additional transects here to better match with our real-world approach
-TL <- data.frame(
-  range_m,
-  tl000 = tlTransect,
-  tl090 = tlTransect,
-  tl180 = tlTransect,
-  tl270 = tlTransect
-)
-sim$signalRMSdB <- with(sim,SL-TL)
-sim$snr <- with(sim,SL-TL-noiseRMSdB)
+# Per-transect estimate of TL (used by callDensity package to estimate pDet)
+TL <- simTLradials_20logR(maxRange=R, rangeStep=100, numTransects=8)
 
 ```
 
 ### Simulate detectors:
-
-| Detector | Description | Location/SNR 'threshold' | Scale/slope | False positive rate |
-|---------------|---------------|---------------|---------------|---------------|
-| Detector 1 | Reliable and good detector, meant to emulate a human analyst. | Lower | Same | Lower |
-| Detector 2 | Automated detector, meant to emulate a signal processing algorithm. | Higher | Same | Higher |
-
 
 ```{r parameterise.detectors, warning=FALSE, message=FALSE}
 
@@ -144,7 +104,7 @@ det1params = data.frame(
   func='plogis', # logistic function
   c=0.1,         # False discovery rate
   fpMean=0,      # Mean of distribution of false positives (in dB SNR)
-  fpSD = 1      # Standard deviation false positive distribution (in dB SNR)
+  fpSD = 2      # Standard deviation false positive distribution (in dB SNR)
 )
 
 # Detector 2 has a higher threshold (location), scale, and false positive rate
@@ -155,72 +115,13 @@ det2params = data.frame(
   func='plogis', # logistic function
   c=0.3,         # False discovery rate
   fpMean=0,      # Mean of distribution of false positives (in dB SNR)
-  fpSD = 1      # Standard deviation false positive distribution (in dB SNR)
+  fpSD = 2      # Standard deviation false positive distribution (in dB SNR)
 )
 ```
 
 Now we create a function that will take the detector parameters above and simulate the detection process. We then call this function with each set of parameters to create a simulation for each detector.
 
 ```{r simulate.detectors, warning=FALSE, message=FALSE}
-simulateDetector <- function(detParams,sim){
-  
-  # Probability of detection for each simulated call
-  sim$p_det = plogis(sim$snr,
-                     location=detParams$location,
-                     scale=detParams$scale)
-  
-  # Apply Bernoulli trial to SNRs to see which were detected
-  sim$detect_table <- as.logical(rbinom(dim(sim)[1],size=1,prob=sim$p_det))
-  
-  # Calculate number of false positives given the number of true positive
-  # detections for the detector and the specified false discovery rate, c, for
-  # that detector.
-  n_tp_det1 <- sum(sim$detect_table) 
-  n_fp_det1 <- n_tp_det1/(1-detParams$c)-n_tp_det1
-  
-  # Store false positives in data.frame with same format as sim
-  fp <- data.frame(matrix(ncol=length(sim),nrow=n_fp_det1))
-  colnames(fp) <- colnames(sim)
-  
-  # groundTruth=0 means that these are false positives (handy to keep in mind for
-  # when we include these in sim)
-  fp$groundTruth <- FALSE
-  fp$detect_table <- TRUE
-  
-  # Generate the right number of false positives uniformly over same time period
-  # as true positives.
-  fp$datetime <- minDate + sort(runif(n_fp_det1, 0, duration_s))  
-  
-  # False positives don't have a location, SL, or TL, but do have NL and SNR
-  # Use same distribution of NL as true positives
-  fp$noiseRMSdB <- rnorm(n_fp_det1, mean=NL$mean, sd=NL$sd)
-  
-  # SNR distribution of false positives broadly matches that of Casey2019 human
-  # analysts
-  fp$snr <- rnorm(n_fp_det1, mean=detParams$fpMean, sd=detParams$fpSD) 
-  
-  fp$signalRMSdB <- fp$noiseRMSdB + fp$snr
-  
-  # Combine false positives into the simulation
-  sim <- rbind(sim,fp) 
-  
-  # We've generated the right number of false positive detections now and merged
-  # these into our simulation. 
-  
-  # The false positives are missing locations, distances, SL, and p_dets. But
-  # not sure that this actually matters in any meaningful way.
-
-  # Add factor column to track true positive, false positivs & missed detections
-  sim$group <- factor(ifelse(sim$groundTruth,
-                             ifelse(sim$detect_table, 
-                                    "TruePositive","FalseNegative"),
-                             "FalsePositive"),
-                      levels=c("FalsePositive","TruePositive","FalseNegative")
-  )
-  
-  return(sim)
-  
-}
 
 # Simulate two detectors each with the different parameters
 simDet1<- simulateDetector(det1params,sim)
@@ -233,10 +134,18 @@ simDet2<- simulateDetector(det2params,sim)
 Apply SNR truncation to the detectors by removing all detections that were less than the threshold.
 
 ```{r}
-snrTruncationThreshold <- 0; # dB
-nAboveThreshold <- sum(sim$snr>snrTruncationThreshold)
-simDet1 <- subset(simDet1, simDet1$snr >= snrTruncationThreshold)
-simDet2 <- subset(simDet2, simDet2$snr >= snrTruncationThreshold)
+snrTruncationThreshold <- 3; # dB
+
+# True number of calls above threshold
+nAboveThreshold <- sum(sim$snr>snrTruncationThreshold) 
+
+# Variables from sims that were truncated in SNR get a 't' as a suffix
+simDet1t <- subset(simDet1, simDet1$snr >= snrTruncationThreshold)
+simDet2t <- subset(simDet2, simDet2$snr >= snrTruncationThreshold)
+
+# Number of detections above threshold for each detector
+Nc1 <- sum(simDet1t$detect_table)
+Nc2 <- sum(simDet2t$detect_table)
 
 ```
 
@@ -244,50 +153,18 @@ View the spatial detection density (which is not the same as spatial call densit
 
 ```{r detector.plots, warning=FALSE, message=FALSE}
 
-plotSpatialDetections <- function(sim){
-  
-  # Spatial distribution (excludes false positives)
-  ggplot(data=sim, aes(x=x/1e3, y=y/1e3, weight=detect_table) )+
-    geom_bin_2d(alpha=1,binwidth=c(10,10))+
-    coord_equal()+
-    xlab("X location (km)")+
-    ylab("Y location (km)")
-}
+p1  <- plotSpatialDetections(simDet1)
+p2  <- plotSpatialDetections(simDet2)
+p1t <- plotSpatialDetections(simDet1t)+ylab("Truncated\nY (kM)")
+p2t <- plotSpatialDetections(simDet2t)+ylab("Truncated\nY (kM)")
 
-plotSpatialDetections(simDet1)
-plotSpatialDetections(simDet2)
-
-
-plotDetectionDistribution <- function(sim){
-  # SNR Distribution (includes false positives)
-  ggplot(data=sim, aes(x=snr, group=detect_table, fill=detect_table) )+
-    geom_histogram()
-  
-  ggplot(data=sim, aes(x=d/1e3, y=snr, colour=detect_table))+
-    geom_point(alpha=0.1, size=1)+
-    xlab("Distance (km)")+
-    ylab("SNR (dB)")+
-    scale_x_log10(limits=c(0.1,1000),
-                  labels=label_log(),
-                  breaks=10^(-1:7),
-                  minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
-    annotation_logticks(sides='') +
-    theme_bw()
-  
-  
-  # SNR Distribution
-  # ggplot(data=sim, aes(x=snr, group=group) )+
-  #   geom_histogram(position = position_stack())
-  
-  ggplot(data=sim, aes(x=snr, group=group) )+
-    geom_histogram(position = position_identity())+
-    facet_wrap(group~., ncol=1,scales="free_y")
-
-}
+gridExtra::grid.arrange(p1,p2,p1t,p2t,nrow=2)
 
 dist1 <- plotDetectionDistribution(simDet1)
 dist2 <- plotDetectionDistribution(simDet2)
-gridExtra::grid.arrange(dist1,dist2,nrow=1)
+dist1t<- plotDetectionDistribution(simDet1t)+ylab("Truncated count")
+dist2t<- plotDetectionDistribution(simDet2t)+ylab("Truncated count")
+gridExtra::grid.arrange(dist1,dist2,dist1t,dist2t,nrow=2)
 
 ```
 
@@ -297,33 +174,21 @@ gridExtra::grid.arrange(dist1,dist2,nrow=1)
 
 ```{r subsample.for.detector.characterisation}
 
-subStart <- seq(from=minDate,to=maxDate,by='41 hour')
-subEnd <- subStart+3600
+subsampleDet1 <- subsampleSimInTime(simDet1,interval = "23 hour")
+subsampleDet2 <- subsampleSimInTime(simDet2,interval = "23 hour")
 
-# There's probably a more elegant way to do this, but loop over each subsample
-# period and find all calls in that subset.
-simDet1$subset <- 0
-simDet2$subset <- 0
-for (i in 1:length(subStart)){
-  simDet1$subset <- simDet1$subset | 
-    (simDet1$datetime >= subStart[i] & simDet1$datetime <= subEnd[i])
-  simDet2$subset <- simDet2$subset | 
-    (simDet2$datetime >= subStart[i] & simDet2$datetime <= subEnd[i])
-}
+subsampleDet1t <- subsampleSimInTime(simDet1t,interval = "23 hour")
+subsampleDet2t <- subsampleSimInTime(simDet2t,interval = "23 hour")
 
+print(paste("True positives in original  subsample of detector 1: ", 
+            with(subsampleDet1,sum(groundTruth & detect_table)) ) )
+print(paste("True positives in truncated subsample of detector 1: ", 
+            with(subsampleDet1t,sum(groundTruth & detect_table)) ) )
 
-subsampleDet1 <- subset(simDet1, simDet1$subset)
-# Total positives, true-positives, and false positives in detector2 subsample
-n_p_subsampleDet1 <- sum(subsampleDet1$detect_table) 
-n_tp_subsampleDet1 <- with(subsampleDet1,sum(groundTruth & detect_table))
-n_fp_subsampleDet1 <- sum(subsampleDet1$groundTruth==FALSE)
-
-subsampleDet2 <- subset(simDet2, simDet2$subset)
-# Total positives, true-positives, and false positives in detector2 subsample
-n_p_subsampleDet2 <- sum(subsampleDet2$detect_table) 
-n_tp_subsampleDet2 <- with(subsampleDet2,sum(groundTruth & detect_table))
-n_fp_subsampleDet2 <- sum(subsampleDet2$groundTruth==FALSE) 
-
+print(paste("True positives in original  subsample of detector 2: ", 
+            with(subsampleDet2,sum(groundTruth & detect_table)) ) )
+print(paste("True positives in truncated subsample of detector 2: ", 
+            with(subsampleDet2t,sum(groundTruth & detect_table)) ) )
 
 ```
 
@@ -337,45 +202,20 @@ Presently, false positives have randomly generated date-times, so have a negligi
 
 ```{r match detections from detector1 and detector2}
 
-# Create a capture history table from the two tables of detections
-captureHistoryTable <- function(subsampleDet1, subsampleDet2){
-  capHistTab <- merge(x=subsampleDet1, y=subsampleDet2, all=TRUE,
-                      by = c('datetime'), suffixes = c('1','2'))
-  
-  # Missed detections will be NA by default. Make them 0 instead.
-  capHistTab$detect_table1[is.na(capHistTab$detect_table1)]<-0
-  capHistTab$detect_table2[is.na(capHistTab$detect_table2)]<-0
-  
-  # groundtruth and group columns will have NA by default, so need to copy them
-  # from other detector. TODO:Look into powerjoin, dplyr::coalesce and
-  # coalesce_join (https://alistaire.rbind.io/blog/coalescing-joins/) for more
-  # elegant solutions
-  capHistTab$groundTruth1[is.na(capHistTab$groundTruth1)]<-
-    capHistTab$groundTruth2[is.na(capHistTab$groundTruth1)]
-  capHistTab$groundTruth2[is.na(capHistTab$groundTruth2)]<-
-    capHistTab$groundTruth1[is.na(capHistTab$groundTruth2)]
-  
-  capHistTab$group1[is.na(capHistTab$group1)]<-
-    capHistTab$group2[is.na(capHistTab$group1)]
-  capHistTab$group2[is.na(capHistTab$group2)]<-
-    capHistTab$group1[is.na(capHistTab$group2)]
-  
-  return (capHistTab)
-}
-
-capHistTab<- captureHistoryTable(subsampleDet1,subsampleDet2)
-
-# All simulated calls in the subset (detected or not)
-dim(capHistTab)
+# Create a capture history table from the two tables of detections (All
+# simulated calls in the subset whether detected or not)
+capHistTab<- simsTocaptureHistoryTable(subsampleDet1,subsampleDet2)
+capHistTabt<- simsTocaptureHistoryTable(subsampleDet1t,subsampleDet2t)
 
 # Total number of true positive detections for detector1 OR detector2
-nDetectedSubset <- with(capHistTab,sum(detect_table1 & groundTruth1 |   
+nTrueDetectedSubset <- with(capHistTab,sum(detect_table1 & groundTruth1 |   
                                         detect_table2 & groundTruth2) )
-nDetectedSubset
+nTrueDetectedSubsett <- with(capHistTabt,sum(detect_table1 & groundTruth1 |   
+                                        detect_table2 & groundTruth2) )
 
 # Total number of positive detections for detector1 OR detector2
 nPositiveSubset <- with(capHistTab,sum(detect_table1 | detect_table2))
-nPositiveSubset
+nPositiveSubsett <- with(capHistTabt,sum(detect_table1 | detect_table2))
 
 ```
 
@@ -383,184 +223,197 @@ Convert this capture history table into an SNRinfo table, and treat detector1 as
 
 ```{r format.output.for.callDensity.package}
 
-# Function to convert the capture history table into the 'SNRinfo' format used
-# by the callDensity package
-capHistTosnrInfo <- function(capHistTab){
-
-  # Assume detect_table1 is ground truth, so only keep rows where
-  # detect_table1==1 (includes both true and false positives though)
-  capHistTab <- capHistTab[capHistTab$detect_table1==1, ]
-
-  # Detected refers to the automated detector, here detect_table2
-  Detected<-capHistTab$detect_table2
-    
-  # Add time rows for compatibility with callDensity format
-  t <- capHistTab$datetime
-  season <- time2season(t)
-  month <- time2monthCode(t)
-  
-  # CallRL and NoiseRL here in dB
-  CallRL<-as.numeric(rowMeans(
-    subset(capHistTab,select=c('signalRMSdB1','signalRMSdB2')) ,na.rm=T) )#dB
-  NoiseRL<-as.numeric(rowMeans(
-    subset(capHistTab,select=c('noiseRMSdB1','noiseRMSdB2')) ,na.rm=T) )#dB
-
-  # SNR<-as.numeric(capHistTab$signalRMSdB-capHistTab$noiseRMSdB) # SNR measured as in DH
-  SNR<-CallRL-NoiseRL # to check
-  SNRinfo<-data.frame(Detected,CallRL,NoiseRL,SNR,t,month,season)
-
-  # Check for SNR=Inf: put in a warning to user here, since infinite SNR is
-  # likely indicative of a problem with the inputs
-  lines<-c(which(SNRinfo$SNR=="Inf", arr.ind = TRUE))
-  if ( length(lines) >0) { # Run this line if inf occurs
-    warning( sprintf('%g of the SNR were infinite:\n',length(lines)) )
-    SNRinfo <- SNRinfo[-lines,]
-  }
-
-  return(SNRinfo)
-}
-
-# SNRinfo is used to calculate snrDetFun for detector2 assuming detector1 is the
-# ground truth. This is an observer ground (OG) so includes false positives from
-# detector1, but does not include detections from detector2 not detected on
-# detector1
+# Convert capture history into SNRinfo format (removing detections )
 SNRinfo <- capHistTosnrInfo(capHistTab)
+SNRinfot<- capHistTosnrInfo(capHistTabt)
 
-# Positive on detector 2, but not on 1
+# Detector 2 true & false positives
+n_p_subsampleDet2 <- sum(capHistTab$detect_table2)
+n_p_subsampleDet2t <- sum(capHistTabt$detect_table2) 
+
+# Detectir 2 false positives (Positive on detector 2, but not on 1)
 n_fp_subsample <- sum(capHistTab$detect_table2 & !capHistTab$detect_table1)
+n_fp_subsamplet <- sum(capHistTabt$detect_table2 & !capHistTabt$detect_table1)
 
 # False discovery rate is number.false.positives/number.predicted.positive
 c_subsample <- n_fp_subsample/n_p_subsampleDet2
+c_subsamplet<- n_fp_subsamplet/n_p_subsampleDet2t
+
 n_subsample <- dim(SNRinfo)[1]  # Number positive detections in SUBset
+n_subsamplet <- dim(SNRinfot)[1]  # Number positive detections in SUBset
 
 truncationDistances <- R 
 
 # Number positive detections in FULL set
-Nc <- sum(simDet2$detect_table)       
-
-# Noise level from subsampled Observer ground-truth
-NLsamp <-SNRinfo %>% dplyr::summarise(mean=mean(NoiseRL,na.rm = TRUE),
-                             sd=sd(NoiseRL,na.rm = TRUE),
-                             sampleSize=dplyr::n()-sum(is.na(NoiseRL)))
-
-NLtable <- rbind(NL,NLsamp)
-rownames(NLtable)<- c('Actual','Estimated from subsample')
-kable(NLtable,caption = 'Noise level distributions')%>% 
-  kableExtra::kable_classic(full_width=FALSE)
+Nc <- sum(simDet2$detect_table)
+Nct <- sum(simDet2t$detect_table)       
 
 ```
 
-## Calculate call densities using callDensity package
+## Calculate call densities
+### SNR Truncation ONLY for SNR Detection Function
 
-The detector was a logistic function, so fitting a GLM should provide good results.
+First we calculate call density using the original subset (without SNR truncation). These results are given the suffix .glm. 
 
-We also fit a capture-recapture model to these adjudicated data using the VGAM package with the function 'vglm' [@yee2015].
-
-A GAM or SCAM should also be able to provide a good fit to a logistic function, but to keep this concise we leave fitting those as an exercise for the reader (see callDensity vignette).
+We compare the call density and probability of detection in the area of original subset to those derived using SNR truncatiot but only truncating in SNR to derive the SNR-detection function, and NOT applying SNR truncation to the Monte-Carlo model nor to derivation of false positive rate, c.  
 
 ```{r GLM p.det with independently estimated NL, warning=FALSE, message=FALSE}
 
-snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
-                                              modelType = "glm")
-snrDetFun.glm$r.sq <- with(summary(snrDetFun.glm), 1 - deviance/null.deviance)
+snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,  modelType = "glm")
+snrDetFun.glmt<- callDensity::fitSNRdetectionFunc(SNRinfot, modelType = "glm")
 
-# Estimate of NL distribution
-NLind<- nlFromSnrInfo(SNRinfo, snrDetFun.glm)
+snrDetFun.glm$r.sq <- with(summary(snrDetFun.glm),  1 - deviance/null.deviance)
+snrDetFun.glmt$r.sq<- with(summary(snrDetFun.glmt), 1 - deviance/null.deviance)
 
+# Estimate of NL distribution. NOTE: Noise levels estimated from mean NL of
+# non-truncated detections plus intercept of SNR detection function (truncated
+# or not).
+NLind <- nlFromSnrInfo(SNRinfo,  snrDetFun.glm)
+NLindt<- nlFromSnrInfo(SNRinfo, snrDetFun.glmt)
 
-Pa.NLi <- callDensity::pDetInArea(snrDetFun.glm, SL=SL, TLlookup = TL, NL=NLind,
-           transectFile = 'pDet_test_NLind_year_transects.csv',
-           simResultsFile = 'simResult_test_NLind_year.txt',
-           paFile= 'Pa_test_NLind_year.txt',
-           output.resolution.m=100,
-           outerloop = 100,
-           truncationDistance=R, # in m
-           snrTruncationThreshold =snrTruncationThreshold)
-pa.NLi <- Pa.NLi$overall
+Pa.glm <- callDensity::pDetInArea(snrDetFun.glm, SL=SL, TLlookup = TL, NL=NLind,
+           output.resolution.m=100, outerloop = 100, truncationDistance=R, # m
+           snrTruncationThreshold =-Inf)
+pa.glm <- Pa.glm$overall
+
+Pa.glmt <- callDensity::pDetInArea(snrDetFun.glmt, SL=SL, TLlookup = TL, NL=NLindt,
+           output.resolution.m=100, outerloop = 100, truncationDistance=R, # m
+           snrTruncationThreshold =-Inf)
+pa.glmt <- Pa.glmt$overall
 
 
 # Density estimation equation
-Dc.NLi <- (Nc * (1 - c_subsample) )/( k * A * pa.NLi * Time )
+Dc.glm <- (Nc * (1 - c_subsample) )/( k * A * pa.glm * Time )
+Dc.glmt <- (Nc * (1 - c_subsample) )/( k * A * pa.glmt * Time )
 
-results.NLind <- data.frame(Dc=Dc.NLi, SampleSize=n_subsample, A = A,# Environment
+
+results.glm <- data.frame(Dc=Dc.glm, SampleSize=n_subsample, A = A,
+                      NLmean = NLind$mean, NLsd = NLind$sd, 
+                      model='glm', c=c_subsample, Pa=pa.glm,  
+                      row.names = 'All SNR')
+results.glmt <- data.frame(Dc=Dc.glmt, SampleSize=n_subsamplet, A = A,# Environment
                       NLmean = NLind$mean, NLsd = NLind$sd,      # Noise
-                        # Detector params
-                        model='glm', R2=snrDetFun.glm$r.sq,
-                        AIC =AIC(snrDetFun.glm), c=c_subsample, Pa=pa.NLi,  
-                      row.names = 'NL independent')
-
-
-ggplot(data=Pa.NLi$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
-  geom_point(alpha=0.1, size=0.1)+
-  xlab("Range (km)")+
-  ylab("Probability of detection\n(Mean across all transects)")+
-  scale_x_log10(limits=c(0.1,1000),
-                labels=label_log(),
-                breaks=10^(-1:7),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
-  annotation_logticks(sides='') +
-  theme_bw()
-
+                      model='glm', c=c_subsample, Pa=pa.glmt,  
+                      row.names = paste('Truncated',snrTruncationThreshold,'dB'))
 
 ```
 
+
+Compare with the true results
+
 ```{r Call.Density.Results, echo=TRUE, warning=FALSE}
 
-results = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
+resultsTrue = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
                       NLmean = NL$mean, NLsd = NL$sd,            # Noise
                         # Detector params
-                        model=det2params$func, R2=NA,  
-                        AIC =NA, c = det2params$c, 
+                        model=det2params$func, c = det2params$c, 
                         Pa = mean(simDet2$p_det,na.rm=TRUE), 
                       row.names='Truth')
 
-results<-rbind( results, results.NLind)
+# True density and PA of calls above threshold
+Dct <- nAboveThreshold/(A*Time) 
+Pat <- mean(simDet2$p_det[simDet2$snr > snrTruncationThreshold ],na.rm=T)
 
-kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 3, 3, 4), 
+results<-rbind( resultsTrue, results.glm, results.glmt)
+
+kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 4), 
                 col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
-                             'Model','R^2','AIC','c','P_a')) %>% 
+                             'Model','c','P_a')) %>% 
   kableExtra::kable_classic(full_width=FALSE)
 
 
 ```
 
-We fit a capture-recapture model to these adjudicated data using the VGAM package with the function 'vglm' [@yee2015].
+In this example, the estimate of call density with SNR truncation is further from the true value than the estimate without. 
+
+## SNR Truncation everywhere (snrDetFun, pDetInArea, c, Nc)
+
+Alternatively, we can apply SNR truncation for every parameter that goes into the call density equation. 
+
+This means applying SNR truncation when tabulating the number of calls, Nc; when estimating the density of calls within the area, pa; as well as applying SNR truncation when estimating the false discovery rate, c. 
+
+Applying SNR truncation in this way will create a result that is not comparable to the above results. This is because we are now estimating the density only of calls above our SNR threshold, whereas previously we were estimating the density of all calls.  
+
+```{r}
+
+# True value of false discovery rate for truncated sim
+c_truncated_actual = sum(simDet2t$groundTruth==FALSE)/sum(simDet2t$detect_table)
+
+# True density of calls that are above threshold
+resultsTruncated = data.frame(Dc = Dct, SampleSize=nAboveThreshold,
+                      A = A, NLmean = NL$mean, NLsd = NL$sd,            # Noise
+                      model=det2params$func, 
+                      c = c_truncated_actual, Pa = mean(simDet2t$p_det,na.rm=TRUE), 
+                      row.names=paste('Truth (>',snrTruncationThreshold,'dB)') ) 
+
+# Probability of detection in teh area of calls that are above threshold (NOT all calls)
+Pa.allt <- callDensity::pDetInArea(snrDetFun.glmt, SL=SL, TLlookup = TL, NL=NLindt,
+           output.resolution.m=100, outerloop = 100, truncationDistance=R, # m
+           snrTruncationThreshold =snrTruncationThreshold)
+pa.allt <- Pa.allt$overall
+Dc.allt <- (Nct * (1 - c_subsamplet) )/( k * A * pa.allt * Time )
+
+results.allt <- data.frame(Dc=Dc.allt, SampleSize=n_subsamplet, A = A,# Environment
+                      NLmean = NLindt$mean, NLsd = NLindt$sd,      # Noise
+                      model='glm', c=c_subsamplet, Pa=pa.allt,  
+                      row.names = paste('Truncated',snrTruncationThreshold,'dB'))
+
+resultst<-rbind( resultsTruncated, results.allt)
+
+kableExtra::kbl(resultst, digits = c(4,3,0,1, 2, NA,  3, 4), 
+                col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
+                             'Model','c','P_a')) %>% 
+  kableExtra::kable_classic(full_width=FALSE)
+
+```
+
+Applying truncation throughout all the terms of the call density equation seems to produce a correct estimate of call density. 
+
+However, interpretation of these densities is less satisfying because they are potentially only meaningfully comparable to densities of calls measured using the same thresholds. 
+
+It is not obvious whether these densities of calls above an SNR threshold are still comparable across sites that have different SL, NL, or TL profiles. While I suspect they are comparable, but  will depend on the accuracy of per-site estimates of SL, NL, and TL. Non-truncated call densities also depend on the accuracy of acoustic parameters, but estimates that utilize SNR truncation may be more sensitive to mismatch between parameter and reality due to smaller sample sizes. The exploration of this topic is beyond the scope of this vignette (left as an exercise for an interested party or as an item to add to the TODO list). 
+
+Additionally, it might be possible to alter the Monte-Carlo simulation to keep track of the proportion of calls that were excluded due to SNR truncation. Then, the density of above-threshold calls could be scaled by this proportion to convert the answer back into a non-truncated call density. Implementation of this idea is again beyond the scope of this vignette. 
+
+## VGLM and truncation
+
+Placeholder to demonstrate that adjudicated capture recapture produces same results when truncating in SNR. 
 
 ```{r VGLM p.det, warning=FALSE, message=FALSE}
 library(VGAM)
-### Adjudicated capture recapture model
-adjudicated <- subset(capHistTab,capHistTab$groundTruth1 &
+### Adjudicated capture recapture (capture history table with false positives
+### removed by judge)
+adjudicated <- subset(capHistTab,
+                (capHistTab$groundTruth1 | capHistTab$groundTruth2) &
                 (capHistTab$detect_table1 | capHistTab$detect_table2))
-
-summary(adjudicated$group1)
-summary(adjudicated$group2)
+adjudicatedt <- subset(capHistTabt,
+                (capHistTabt$groundTruth1 | capHistTabt$groundTruth2) &
+                (capHistTabt$detect_table1 | capHistTabt$detect_table2))
 
 # Number of adjudicated positive detections
-n_adj <- dim(adjudicated)[1]
-n_adj
+n_adj <- dim(adjudicatedt)[1]
 
-# Combine SNR of both detectors (shouldn't be necessary unless we've somehow
-# made them different)
-adjudicated$SNR <-   rowMeans(
-  subset(adjudicated,select=c('snr1','snr2')) ,na.rm=T) #dB
+adjudicatedt$SNR <-   rowMeans(
+  subset(adjudicatedt,select=c('snr1','snr2')) ,na.rm=T) #dB
 
-# Subset used for calculating false discovery rate of detector 2. Actually, we
-# use the fact that the false discovery rate is equal to (1-precision). 
-tp <- subset(capHistTab, as.logical(capHistTab$detect_table2), 
-              select = c('groundTruth2') )
-precision <- sum(tp)/dim(tp)[1]
-adj_c <- 1-precision
+#False discovery rate of truncated
+tp <- sum(with(capHistTabt,(detect_table2 & groundTruth2) ))
+fp <- sum(with(capHistTabt,(detect_table1 & !groundTruth2) ))
+# precision <- sum(tp)/length(tp)
+adj_c <- fp/(fp+tp)
 
 observerNames = c("detect_table1", "detect_table2")
-snrDetFun.vglm <- fitSNRvglm(adjudicated, observerNames, whichObserver = "detect_table2")
+snrDetFun.vglm <- fitSNRvglm(adjudicatedt, observerNames,
+                             whichObserver = "detect_table2")
+
 
 # Estimate of NL distribution
-NLadj<- nlFromSnrInfo(SNRinfo, snrDetFun.glm)
+noiseTab <- capHistTab[capHistTab$detect_table2 | capHistTab$detect_table1,]
+noiseTab$NoiseRL <- rowMeans(
+  subset(noiseTab,select=c('noiseRMSdB1','noiseRMSdB2')) ,na.rm=T) #dB
+NLadj<- nlFromSnrInfo(noiseTab, snrDetFun.vglm)
 
 Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
-           transectFile = 'pDet_test_vglm_year_transects.csv',
-           simResultsFile = 'simResult_test_vglm_year.txt',
-           paFile= 'Pa_test_vglm_year.txt',
            output.resolution.m=100,
            outerloop = 10,
            truncationDistance=R, # in m
@@ -569,43 +422,29 @@ pa.vglm <- Pa.vglm$overall
 
 
 # Density estimation equation
-Dc.vglm <- (Nc * (1 - adj_c) )/( k * A * pa.vglm * Time )
+Dc.vglm <- (Nct * (1 - adj_c) )/( k * A * pa.vglm * Time )
 
 results.vglm <- data.frame(Dc=Dc.vglm, SampleSize=n_adj, A = A,# Environment
                       NLmean = NLadj$mean, NLsd = NLadj$sd,# Noise
-                      # Detector params
-                        model='vglm', R2=NA,
-                        AIC =AIC(snrDetFun.vglm), c=adj_c, Pa=pa.vglm,  
-                      row.names = 'Adjudicated Capture-recapture\nNL independent')
-
-ggplot(data=Pa.vglm$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
-  geom_point(alpha=0.1, size=0.1)+
-  xlab("Range (km)")+
-  ylab("Probability of detection\n(Mean across all transects)")+
-  scale_x_log10(limits=c(0.1,1000),
-                labels=label_log(),
-                breaks=10^(-1:7),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
-  annotation_logticks(sides='') +
-  theme_bw()
+                      model='vglm',  c=adj_c, Pa=pa.vglm,  
+                      row.names = 'ACR')
 
 ```
 
+
 ```{r}
 
-results<-rbind( results, results.vglm)
+resultst<-rbind( resultsTruncated, results.allt, results.vglm)
 
-kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 3, 3, 4), 
+kableExtra::kbl(resultst, digits = c(4,3,0,1, 2, NA,  3, 4), 
                 col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
-                             'Model','R^2','AIC','c','P_a')) %>% 
+                             'Model','c','P_a')) %>% 
   kableExtra::kable_classic(full_width=FALSE)
 
 
 ```
+The adjudicated capture-recapture model seems to produce a correct estimate of density of above-threshold calls. But something might not be quite right since the values for c seem a bit off. Further investigation of the code is warranted. 
 
-The estimate of Dc derived from the vglm model is very close to the true value for this simulation.
-
-Adjudicated capture-recapture along with independently estimated NL yields more accurate estimates of c and P_a.
 
 ## Inspect detection functions for insights
 
@@ -616,6 +455,7 @@ snrs <- data.frame(SNR)
 cols = colorRampPalette(c('#EDB120','#D95319','#0072BD','#7E2F8E','#77AC30',
                         '#4DBEEE','#A2142F'))
 preds.glm= predict(snrDetFun.glm, type='response',newdata=snrs)
+preds.glmt= predict(snrDetFun.glmt, type='response',newdata=snrs)
 preds.vglm=predict(snrDetFun.vglm,type='response',newdata=snrs)
 preds.vglm0=predict(snrDetFun.vglm,type='response',newdata=snrs,
                     type.fitted='onempall0')# One minus probability of all zeros
@@ -627,20 +467,21 @@ plot(snrs$SNR, xlim= c(-5,10),  ylim= c(0,1),
      xlab="SNR", ylab = "P(Detection)", type='n')
 grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
 lines(snrs$SNR,preds.glm,col=cols(7)[4],lwd=2)
-lines(snrs$SNR,preds.vglm[,1],col=cols(7)[5],lwd=2) # Percep bias detector1
-lines(snrs$SNR,preds.vglm[,2],col=cols(7)[6],lwd=2) # Percep bias detector2
-lines(snrs$SNR,preds.vglm0,col=cols(7)[2],lwd=2) # 1-
+lines(snrs$SNR,preds.glmt,col=cols(7)[5],lwd=2)
 lines(snrs$SNR,pr,col=cols(7)[1],lwd=2)    # vglm 1-p(all zero)
 points(simDet2$snr,simDet2$p_det,pch='.')     # Actual probability of detection
 legend( "bottomright", 
-        legend =c("Detection function TRUE",
-                  "Detection function GLM",
-                  "Detection function VGLM",
-                  "Perception bias: detector1 (VGLM)",
-                  "Perception bias: detector2 (VGLM)",
-                  "1-p(all zeros) (VGLM)"
+        legend =c("TRUE",
+                  "GLM-No SNR Truncation",
+                  "GLM-SNR Truncated",
+                  "VGLM-SNR Truncated"
+                  # "Perception bias: detector1 (VGLM)",
+                  # "Perception bias: detector2 (VGLM)",
+                  # "1-p(all zeros) (VGLM)"
                   ),
-        col=c('black', cols(7)[4], cols(7)[1], cols(7)[5], cols(7)[6], cols(7)[2]), 
+        col=c('black', cols(7)[4], cols(7)[5], 
+              cols(7)[1] #, cols(7)[6],  cols(7)[2]), 
+        ),
         lty=rep('solid',6),
         lwd=rep(2,6)
 )

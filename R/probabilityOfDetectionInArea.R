@@ -306,7 +306,7 @@ pDetInArea <-
       }
 
       # set pdet<-0 when SNR is below the truncation threshold
-      predmatrix[which(newd< snrTruncationThreshold)]<-0
+      predmatrix[which(newd < snrTruncationThreshold)]<-NA
 
       # set pdet<-NA when the distance along radial[,j] >= truncDistance[,j]
       predmatrix <- predmatrix + allTrunc[,j]

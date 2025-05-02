@@ -13,7 +13,7 @@ Description: Software for estimating the density of animal vocalisations (calls)
     information required by this package comes from the sonar equation, 
     specifically, distributions of source levels (SL), transmission losses (TL),
     and noise levels (NL). 
-License: What license is it under?
+License: GPL (>= 3)
 Imports:
     stats,
     utils,
@@ -32,7 +32,6 @@ Imports:
     magrittr,
     rlang (>= 0.4.11),
     latex2exp,
-    boot,
     VGAM
 Encoding: UTF-8
 LazyData: true

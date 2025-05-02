@@ -1,13 +1,13 @@
 ---
 title: "callDensity_coast"
 output: 
-  html_document: default
-  pdf_document: default
   rmarkdown::html_vignette:
     vignette: >
       %\VignetteEncoding{UTF-8}
       %\VignetteIndexEntry{callDensity_coast}
       %\VignetteEngine{knitr::rmarkdown}
+  html_document: default
+  pdf_document: default
 bibliography: references.bib
 ---
 
@@ -55,39 +55,32 @@ In this example, we provide truncation distances to the Monte-Carlo simulation t
 
 ```{r call.spatial.distribution, warning=FALSE, message=FALSE}
 
-# 1) Generate a distribution of n calls within radius R of the hydrophone 
 n = 1e6; # number of simulated calls (regardless of whether detected or not); 
 R = 1e6; # radius of 1000 km (but in m)
-
-# Call density, D_c is n/A 
-A_circ = studyArea(R/1e3) # Circular study area in km^2
-TrueCallDensity = n/A # calls/km^2
-
-k <- 1      # number of sensors
-
-print(paste(TrueCallDensity,"calls per km^2 per unit time"))
-
+k <- 1   # number of sensors
 minDate <- as.POSIXct("2025-01-01")
 maxDate <- as.POSIXct("2025-12-31")
-Time <- as.numeric(difftime(maxDate,minDate,unit="days"))/365
+Time <- as.numeric(difftime(maxDate,minDate,unit="days"))/365 # in years
 
+# 1) Generate n uniformly distributed calls within radius R and time period Time
 sim <- simCallLocation(n=n, R=R, minDate=minDate, maxDate=maxDate)
 
-coast= -144e3; # Simulate coastline at y = -100;
+A_circ = studyArea(R/1e3)  # Circular study area in km^2
+coast= -144e3;             # Simulate coastline at y = -144 km;
 sim <- subset(sim, sim$y>=coast);
 n = dim(sim)[1]
 
 # Area of a circle segment given radius r and segment height, h
 # A	=	 r^2 * 	 acos( (r-h)/r ) - (r-h)*sqrt(2*r*h-h^2)
-h = R-abs(coast)
+h = R-abs(coast) # Height of segment
+
+# Area of excluded segment
 A_exclude = (R^2 * acos( (R-h)/R) - (R-h)*sqrt(2*R*h-h^2) )/ 1e3^2 # in km^2
-A = A_circ - A_exclude # in km^2
+A = A_circ - A_exclude # Subtract the excluded area from the circle (in km^2)
 
-TrueCallDensity = n/A
+TrueCallDensity = n/(A*Time)
 
-print(paste(TrueCallDensity,"calls per km^2 per unit time"))
-
-# 'Spatial' map showing true location of all calls
+# Map showing true location of all calls
 ggplot(data=sim, aes(x=x/1e3,y=y/1e3))+
   # geom_point(colour = "black",alpha = 0.1, size=0.1)+
   geom_bin_2d(alpha=1,binwidth=c(10,10))+
@@ -111,15 +104,15 @@ In previous simulations we had four radial transects. Here we create four additi
 ```{r sonar.eq}
 
 SL <- data.frame(mean=190, sd=4, sampleSize=350) # True SL distribution for sim
-
 NL = data.frame(mean=84, sd = 4, sampleSize = n)  # True NL distribution for sim
-
 tlFunc <- function(r)20*log10(r)
 
+# Simulate the true acoustic properties of each call and false positive 
 sim <- simCallAcoustics(sim, SL, NL, TL = tlFunc)
 
-# Estimate TL transects here to better match with our real-world approach
-TL <- simTLradials_20logR(maxRange=R, rangeStep=100, numTransects=8)
+# Per-transect estimate of TL (used by callDensity package to estimate pDet)
+numTransects=8
+TL <- simTLradials_20logR(maxRange=R, rangeStep=100, numTransects=numTransects)
 
 ```
 
@@ -131,13 +124,14 @@ Regardless of whether the TL models are a good match for the physical environmen
 
 ```{r truncation distances}
 # Work out the range for each radial over which to truncate. 
-radials = seq(from=0,to=315, by=45)
+radials = seq(from=0,to=315, by=360/numTransects)
 range_m = seq(from=5,to=R,by=100)
 
 # Find first r where the r*sind(radials) <= coastline
 truncDist <- matrix(R,nrow=1,ncol = length(radials))
 
-# Loop over each radial
+# Loop over each radial. find the range at which it encounters the coast, and
+# truncate (i.e. Distances beyond this range will be excluded from the analysis)
 for (i in 1:length(radials)){ 
   rangeIx <- which(sin(radials[i]*pi/180)*range_m <= coast)[1]
   truncDist[i] <- ifelse(is.na(rangeIx),R,range_m[rangeIx])
@@ -185,11 +179,7 @@ det2params = data.frame(
 
 # Simulate two detectors each with the different parameters
 simDet1<- simulateDetector(det1params,sim)
-simDet1$p_det1 <- simDet1$p_det
-simDet1$detect_table1 <- simDet1$detect_table
 simDet2<- simulateDetector(det2params,sim)
-simDet2$p_det2 <- simDet2$p_det
-simDet2$detect_table2 <- simDet2$detect_table
 
 ```
 
@@ -197,18 +187,9 @@ View the spatial detection density (which is not the same as spatial call densit
 
 ```{r detector.plots, warning=FALSE, message=FALSE}
 
-plotSpatialDetections <- function(sim){
-  
-  # Spatial distribution (excludes false positives)
-  ggplot(data=sim, aes(x=x/1e3, y=y/1e3, weight=detect_table) )+
-    geom_bin_2d(alpha=1,binwidth=c(10,10))+
-    coord_equal()+
-    xlab("X location (km)")+
-    ylab("Y location (km)")
-}
-
-plotSpatialDetections(simDet1)
-plotSpatialDetections(simDet2)
+p1<-plotSpatialDetections(simDet1)
+p2<-plotSpatialDetections(simDet2)
+gridExtra::grid.arrange(p1,p2,nrow=1)
 
 ```
 
@@ -218,33 +199,8 @@ plotSpatialDetections(simDet2)
 
 ```{r subsample.for.detector.characterisation}
 
-subStart <- seq(from=minDate,to=maxDate,by='41 hour')
-subEnd <- subStart+3600
-
-# There's probably a more elegant way to do this, but loop over each subsample
-# period and find all calls in that subset.
-simDet1$subset <- 0
-simDet2$subset <- 0
-for (i in 1:length(subStart)){
-  simDet1$subset <- simDet1$subset | 
-    (simDet1$datetime >= subStart[i] & simDet1$datetime <= subEnd[i])
-  simDet2$subset <- simDet2$subset | 
-    (simDet2$datetime >= subStart[i] & simDet2$datetime <= subEnd[i])
-}
-
-
-subsampleDet1 <- subset(simDet1, simDet1$subset)
-# Total positives, true-positives, and false positives in detector2 subsample
-n_p_subsampleDet1 <- sum(subsampleDet1$detect_table) 
-n_tp_subsampleDet1 <- with(subsampleDet1,sum(groundTruth & detect_table))
-n_fp_subsampleDet1 <- sum(subsampleDet1$groundTruth==FALSE)
-
-subsampleDet2 <- subset(simDet2, simDet2$subset)
-# Total positives, true-positives, and false positives in detector2 subsample
-n_p_subsampleDet2 <- sum(subsampleDet2$detect_table) 
-n_tp_subsampleDet2 <- with(subsampleDet2,sum(groundTruth & detect_table))
-n_fp_subsampleDet2 <- sum(subsampleDet2$groundTruth==FALSE) 
-
+subsampleDet1 <- subsampleSimInTime(simDet1)
+subsampleDet2 <- subsampleSimInTime(simDet2)
 
 ```
 
@@ -258,45 +214,14 @@ Presently, false positives have randomly generated date-times, so have a negligi
 
 ```{r match detections from detector1 and detector2}
 
-# Create a capture history table from the two tables of detections
-captureHistoryTable <- function(subsampleDet1, subsampleDet2){
-  capHistTab <- merge(x=subsampleDet1, y=subsampleDet2, all=TRUE,
-                      by = c('datetime'), suffixes = c('1','2'))
-  
-  # Missed detections will be NA by default. Make them 0 instead.
-  capHistTab$detect_table1[is.na(capHistTab$detect_table1)]<-0
-  capHistTab$detect_table2[is.na(capHistTab$detect_table2)]<-0
-  
-  # groundtruth and group columns will have NA by default, so need to copy them
-  # from other detector. TODO:Look into powerjoin, dplyr::coalesce and
-  # coalesce_join (https://alistaire.rbind.io/blog/coalescing-joins/) for more
-  # elegant solutions
-  capHistTab$groundTruth1[is.na(capHistTab$groundTruth1)]<-
-    capHistTab$groundTruth2[is.na(capHistTab$groundTruth1)]
-  capHistTab$groundTruth2[is.na(capHistTab$groundTruth2)]<-
-    capHistTab$groundTruth1[is.na(capHistTab$groundTruth2)]
-  
-  capHistTab$group1[is.na(capHistTab$group1)]<-
-    capHistTab$group2[is.na(capHistTab$group1)]
-  capHistTab$group2[is.na(capHistTab$group2)]<-
-    capHistTab$group1[is.na(capHistTab$group2)]
-  
-  return (capHistTab)
-}
-
-capHistTab<- captureHistoryTable(subsampleDet1,subsampleDet2)
-
-# All simulated calls in the subset (detected or not)
-dim(capHistTab)
+capHistTab<- simsTocaptureHistoryTable(subsampleDet1,subsampleDet2)
 
 # Total number of true positive detections for detector1 OR detector2
 nDetectedSubset <- with(capHistTab,sum(detect_table1 & groundTruth1 |   
                                         detect_table2 & groundTruth2) )
-nDetectedSubset
 
 # Total number of positive detections for detector1 OR detector2
 nPositiveSubset <- with(capHistTab,sum(detect_table1 | detect_table2))
-nPositiveSubset
 
 # Number positive detections in FULL set
 Nc <- sum(simDet2$detect_table)       
@@ -314,12 +239,8 @@ We fit a capture-recapture model to these adjudicated data using the VGAM packag
 adjudicated <- subset(capHistTab,capHistTab$groundTruth1 &
                 (capHistTab$detect_table1 | capHistTab$detect_table2))
 
-summary(adjudicated$group1)
-summary(adjudicated$group2)
-
 # Number of adjudicated positive detections
 n_adj <- dim(adjudicated)[1]
-n_adj
 
 # Combine SNR of both detectors (shouldn't be necessary unless we've somehow
 # made them different)
@@ -343,11 +264,10 @@ NLadj <- nlFromSnrInfo(capHistTosnrInfo(capHistTab), snrDetFun.vglm)
 
 Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
            output.resolution.m=100,
-           outerloop = 10,
+           outerloop = 40,
            truncationDistance=truncDist, # in m
            snrTruncationThreshold = -Inf)
 pa.vglm <- Pa.vglm$overall
-
 
 # Density estimation equation
 Dc.vglm <- (Nc * (1 - adj_c) )/( k * Atrunc * pa.vglm * Time )
@@ -355,9 +275,8 @@ Dc.vglm <- (Nc * (1 - adj_c) )/( k * Atrunc * pa.vglm * Time )
 results.vglm <- data.frame(Dc=Dc.vglm, SampleSize=n_adj, A = Atrunc,# Environment
                       NLmean = NLadj$mean, NLsd = NLadj$sd,# Noise
                       # Detector params
-                        model='vglm', R2=NA,
-                        AIC =AIC(snrDetFun.vglm), c=adj_c, Pa=pa.vglm,  
-                      row.names = 'Adjudicated Capture-recapture\nNL independent')
+                        model='vglm', c=adj_c, Pa=pa.vglm,  
+                      row.names = paste('ACR',numTransects, "radial transects"))
 
 ```
 
@@ -365,17 +284,15 @@ results.vglm <- data.frame(Dc=Dc.vglm, SampleSize=n_adj, A = Atrunc,# Environmen
 
 results = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
                       NLmean = NL$mean, NLsd = NL$sd,            # Noise
-                        # Detector params
-                        model=det2params$func, R2=NA,  
-                        AIC =NA, c = det2params$c, 
-                        Pa = mean(simDet2$p_det,na.rm=TRUE), 
+                      model=det2params$func, c = det2params$c, # Detector params
+                      Pa = mean(simDet2$p_det,na.rm=TRUE), 
                       row.names='Truth')
 
 results<-rbind( results, results.vglm)
 
-kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 3, 3, 4), 
+kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 4), 
                 col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
-                             'Model','R^2','AIC','c','P_a')) %>% 
+                             'Model','c','P_a')) %>% 
   kableExtra::kable_classic(full_width=FALSE)
 
 

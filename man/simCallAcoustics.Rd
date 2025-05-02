@@ -27,7 +27,9 @@ each simulated call.}
 distribution (normal in dB) of noise levels from which noise levels will be
 generated for each simulated call}
 
-\item{TL}{}
+\item{TL}{- a function that takes a single argument, vector r, and returns
+transmission losses for the ranges in that vector. The default function is
+spherical spreading: Default = function(r){20*log(r)}}
 }
 \value{
 Simulation data.frame including columns that contain simulated

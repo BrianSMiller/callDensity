@@ -9,7 +9,7 @@ capHistTosnrInfo}
 capHistTosnrInfo(capHistTab)
 }
 \arguments{
-\item{capHistTab}{}
+\item{capHistTab}{- Capture history table of detections}
 }
 \value{
 - SNRInfo data.frame containing SNR, detections, RL, NL

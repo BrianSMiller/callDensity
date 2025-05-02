@@ -42,26 +42,19 @@ where: $D_c$ is call density, $N_c$ is number of calls, $c$ is false discovery r
 Start with *n* calls within radius *R* of the hydrophone. This should produce a known call density with a uniform random distribution in a circle around the hydrophone.
 
 ```{r call.spatial.distribution, warning=FALSE, message=FALSE}
-# Pseudo-code to check callDensity 
 
-# 1) Generate a distribution of n calls within radius R of the hydrophone with a
-# known call density Uniform random in circle
-
-n = 1e5; # 100k calls; 
-R = 1e6; # radius of 1000 km 
+n = 1e6; # number of simulated calls (regardless of whether detected or not); 
+R = 1e6; # radius in m (i.e. 1e6=1000km)
+k <- 1   # number of sensors (always 1 for single hydrophone moorings)
+minDate <- as.POSIXct("2025-01-01")
+maxDate <- as.POSIXct("2026-01-01")
+Time <- as.numeric(difftime(maxDate,minDate,unit="days"))/365 # in years
 
 # Call density, D_c is n/A 
 A = studyArea(R/1e3) # Circular study area in km^2
-TrueCallDensity = n/A # calls/km^2
+TrueCallDensity = n/(A*Time) # calls/km^2/time
 
-k <- 1      # number of sensors
-
-print(paste(TrueCallDensity,"calls per km^2 per unit time"))
-
-minDate <- as.POSIXct("2025-01-01")
-maxDate <- as.POSIXct("2025-12-31")
-Time <- as.numeric(difftime(maxDate,minDate,unit="days"))/365
-
+# 1) Generate n uniformly distributed calls within radius R and time period Time
 sim <- simCallLocation(n=n, R=R, minDate=minDate, maxDate=maxDate)
 
 # 'Spatial' map showing true location of all calls
@@ -72,14 +65,13 @@ ggplot(data=sim, aes(x=x/1e3,y=y/1e3))+
   ylab("Y location (km)")
 
 
-
 ```
 
 ## 2) Calculate distances of calls.
 
 Assume recorder is located at centre of study area.
 
-Distances are the magnitude of the x & y location.
+Distances are the magnitude of the x & y location (and stored in column named 'd').
 
 Uniform density and increasing area with larger distances should yield a triangular distance distribution.
 
@@ -139,9 +131,13 @@ sim <- simCallAcoustics(sim, SL, NL, TL = tlFunc)
 
 ## 6) Calculate SNR for each call
 
-Passive sonar equation (in dB): \begin{equation}
+The function simCallAcoustics calculates SNR (in dB) for simulated calls via the passive sonar equation:
+
+\begin{equation}
 SNR = SL-TL-NL
 \end{equation}
+
+SNR for each call is stored in the simulation data.frame in a column named 'snr'.
 
 ```{r call.snr.check,  warning=FALSE, message=FALSE}
 
@@ -161,23 +157,23 @@ ggplot(data=sim, aes(x=d/1e3, y=snr))+
                 breaks=10^(-1:7),
                 minor_breaks = rep(1:9,6)*(10^rep(-1:7,each=9)))+
   annotation_logticks(sides='') +
+  scale_fill_gradient(name = "count", trans = "log",
+                      breaks = c(1,10,1e2,1e3,1e4), labels=c(1,10,1e2,1e3,1e4))+
   theme_bw()
-
-
 
 ```
 
-## 7) Simulate detection process
+## 7) Simulate detection process (including false positives)
 
 To simulate the detection process we need to make some assumptions about the behaviour of the detector.
 
 Generally, it is assumed the detector has a high probability of detection at high SNR, and a low(er) probability of detection at low SNR. In quantitative sonar performance modelling sometimes a step-function or logistic curve is used when an analytical expression is required. If ground truth data on the detectors performance are available, these models can be fit to the detection data.
 
-#### a) Detector 1
-
 Assume probability of detection, p_det, for detector 1 follows a logistic curve with SNR as the only independent variable.
 
 We can assign a location/intercept for this curve (i.e. location along x-axis where p_det=0.5). We can also assign a scale/slope of the curve to represent the steepness of the transition between low proability and high probability.
+
+In addition to the probability of detection, there is also a probability of false alarm (false positive predictions) that we would like to simulate as well. There can be multiple mechanisms that can produce false positives. For example, they could be triggered by intense high-SNR sound in the same band as the signal, but from a different source. For some signal types, false positives can also arise from small deviations in ambient noise (producing false positive detections that contain very low SNR). Again, if ground truth data are available then the relationship between false positive detections and false-positive power to noise ratio (SNR of false positives) can be modeled in a similar manner to that of probability of detection.
 
 ```{r simulate.detector, warning=FALSE, message=FALSE}
 
@@ -198,11 +194,8 @@ sim <- simulateDetector(detParams=det1params, sim)
 
 ```
 
-## 8) Simulate false positives
 
-In addition to the probability of detection, there is also a probability of false alarm (false positive predictions) that we would like to simulate as well. There can be multiple mechanisms that can produce false positives. For example, they could be triggered by intense high-SNR sound in the same band as the signal, but from a different source. For some signal types, false positives can also arise from small deviations in ambient noise (producing false positive detections that contain very low SNR). Again, if ground truth data are available then the relationship between false positive detections and false-positive power to noise ratio (SNR of false positives) can be modeled in a similar manner to that of probability of detection.
-
-```{r simulate.false.positives, warning=FALSE, message=FALSE}
+```{r view.detection.snr.histograms, warning=FALSE, message=FALSE}
 
 # Nc total number of detected calls, including both true and false positive
 Nc <- sum(sim$detect_table)
@@ -224,7 +217,7 @@ sim <- sim[order(sim$datetime),]
 
 ```
 
-## 9) Subsample data for detector characterisation
+## 8) Subsample data for detector characterisation
 
 Format results so that they can be used by the callDensity package for testing.
 
@@ -265,7 +258,7 @@ TL <- simTLradials_20logR(maxRange=R, rangeStep=100, numTransects=4)
 
 ```
 
-## 10) Calculate call densities using callDensity package
+## 9) Calculate call densities using callDensity package
 
 ### a) GLM fit to SNR detection function
 
@@ -291,8 +284,7 @@ Dc.glm <- (Nc * (1 - c_subsample) )/( k * A * pa.glm * Time )
 results.glm <- data.frame(Dc=Dc.glm, SampleSize=n_subsample, A = A,# Environment
                       NLmean = NLsamp$mean, NLsd = NLsamp$sd,      # Noise
                         # Detector params
-                        model='glm', R2=snrDetFun.glm$r.sq,
-                        AIC =AIC(snrDetFun.glm), c=c_subsample, Pa=pa.glm,  
+                        model='glm', c=c_subsample, Pa=pa.glm,  
                       row.names = 'Estimate1')
 
 
@@ -335,8 +327,7 @@ Dc.gam <- (Nc * (1 - c_subsample) )/( k * A * pa.gam * Time )
 results.gam<-data.frame(Dc=Dc.gam, SampleSize=n_subsample, A = A,# Environment
                       NLmean = NLsamp$mean, NLsd = NLsamp$sd,    # Noise
                         # Detector params
-                        model='gam', R2=summary(snrDetFun.gam)$r.sq,
-                        AIC =AIC(snrDetFun.gam), c=c_subsample, Pa=pa.gam,  
+                        model='gam', c=c_subsample, Pa=pa.gam,  
                       row.names = 'Estimate2')
 
 ggplot(data=Pa.gam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
@@ -378,8 +369,7 @@ Dc.scam <- (Nc * (1 - c_subsample) )/( k * A * pa.scam * Time )
 results.scam <- data.frame(Dc=Dc.scam, SampleSize=n_subsample, A = A,   # Environment
                       NLmean = NLsamp$mean, NLsd = NLsamp$sd,# Noise
                       # Detector params
-                        model='scam', R2=summary(snrDetFun.scam)$r.sq,
-                        AIC =AIC(snrDetFun.scam), c=c_subsample, Pa=pa.scam,  
+                        model='scam', c=c_subsample, Pa=pa.scam,  
                       row.names = 'Estimate3')
 
 ggplot(data=Pa.scam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
@@ -401,21 +391,20 @@ Table showing how the the results of each call density estimate compare to the t
 
 ```{r Call.Density.Results, echo=TRUE}
 
-results = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
+resultsTrue = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
                       NLmean = NL$mean, NLsd = NL$sd,            # Noise
                         # Detector params
-                        model=det1params$func, R2=NA,  
-                        AIC =NA, c = det1params$c, 
+                        model=det1params$func, c = det1params$c, 
                         Pa = mean(sim$p_det,na.rm = T), 
                       row.names='Truth')
 
-results<-rbind( results, results.glm, results.gam, results.scam)
+results<-rbind( resultsTrue, results.glm, results.gam, results.scam)
 
 
 
-kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 3, 3, 4), 
+kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 4), 
                 col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
-                             'Model','R^2','AIC','c','P_a')) %>% 
+                             'Model','c','P_a')) %>% 
   kableExtra::kable_classic(full_width=FALSE)
 
 ```

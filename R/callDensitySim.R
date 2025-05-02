@@ -13,15 +13,12 @@
 #'   For reference 1 whale call every 10 s would be a maximum of 3.1536M calls
 #'   In a continuous year of recording (i.e. 365*24*60*60/10 = 3.1536e6)
 #' @param R - Radius of study area.
-#' @param k - Number of sensors (presently always 1)
 #' @param minDate - Starting date and time for the simulated data (POSIXct)
 #' @param maxDate - Ending/latest date and time for the simulated data (POSIXct)
 #'
 #' @returns sim - data.frame containing a row for each simulated call and columns for the location and time of each call.
 #' @export
 #'
-#' @examples
-#' sim <- simCallLocation(n=1e6, R=1e6, minDate = Sys.time(), maxDate=Sys.time()-(365*24*60*60))
 simCallLocation <- function(n=1e6, R=1e6, minDate=Sys.time(), maxDate=startDate+86400){
 
   # Call density, D_c is n/A
@@ -34,7 +31,7 @@ simCallLocation <- function(n=1e6, R=1e6, minDate=Sys.time(), maxDate=startDate+
   th = 2*pi*runif(n);
   sim <- data.frame(x = r*cos(th), y = r*sin(th), groundTruth=1);
 
-  duration_s <- as.numeric(difftime(maxDate,minDate,unit="sec"))
+  duration_s <- as.numeric(difftime(maxDate,minDate,units="sec"))
   sim$datetime <- minDate + sort(runif(n, 0, duration_s))
 
   sim$d <- sqrt(sim$x^2+sim$y^2)
@@ -54,18 +51,18 @@ simCallLocation <- function(n=1e6, R=1e6, minDate=Sys.time(), maxDate=startDate+
 #'   'mean' and 'sd' that describe the mean and standard deviation of the
 #'   distribution (normal in dB) of noise levels from which noise levels will be
 #'   generated for each simulated call
-#' @param TL
+#' @param TL - a function that takes a single argument, vector r, and returns
+#'   transmission losses for the ranges in that vector. The default function is
+#'   spherical spreading: Default = function(r){20*log(r)}
 #'
 #' @returns Simulation data.frame including columns that contain simulated
 #'   source levels (SL) noise levels (noiseRMSdB), and transmission losses (TL).
 #' @export
-#'
-#' @examples
 simCallAcoustics <- function(sim,
                              SL=data.frame(mean=190, sd=4, sampleSize=350),
                              NL= data.frame(mean=84, sd = 4, sampleSize = n),
                              TL=function(r){20*log(r)}
-                             ){
+){
   n = dim(sim)[1]
   sim$SL <- rnorm(n, mean=SL$mean, sd=SL$sd)       # Realised SL for each call
 
@@ -97,7 +94,6 @@ simCallAcoustics <- function(sim,
 #' @returns TL -
 #' @export
 #'
-#' @examples
 simTLradials_20logR <- function (maxRange, rangeStep, numTransects){
   range_m = seq(from=5, to=maxRange, by=rangeStep)
 
@@ -143,7 +139,6 @@ simTLradials_20logR <- function (maxRange, rangeStep, numTransects){
 #'        positive, false positive, or false negative.
 #' @export
 #'
-#' @examples
 simulateDetector <- function(detParams,sim){
 
   # Probability of detection for each simulated call
@@ -171,7 +166,7 @@ simulateDetector <- function(detParams,sim){
 
 
   duration_s<-as.numeric(difftime(max(sim$datetime),min(sim$datetime),
-                                  unit="sec"))
+                                  units="sec"))
 
   # Generate the right number of false positives uniformly over same time period
   # as true positives.
@@ -205,7 +200,103 @@ simulateDetector <- function(detParams,sim){
   )
 
   return(sim)
+}
 
+#' Subsample from a simulation at evenly spaced time intervals.
+#'
+#' @param sim - simulation data.frame containing column a time column named
+#'   'datetime'
+#' @param minDate - posixCT indicating the start of the first subsample
+#' @param maxDate - posixCT indicating the start of the last subsample
+#' @param interval - difftime interval between subsamples (e.g. '41 hour')
+#' @param duration - numeric indicating the duration (in s) of each subsample
+#'
+#' @returns subsampledSim - a simulation dataframe containing only rows from the
+#'   input that fall within the subsample
+#' @export
+#'
+subsampleSimInTime <- function(sim,
+                               minDate=min(sim$datetime),
+                               maxDate=max(sim$datetime),
+                               interval='41 hour',
+                               duration=3600){
+  sim$subset <- 0
+  subStart <- seq(from=minDate,to=maxDate,by=interval)
+  subEnd <- subStart+duration
+
+  for (i in 1:length(subStart)){
+    sim$subset <- sim$subset |
+      (sim$datetime >= subStart[i] & sim$datetime <= subEnd[i])
+  }
+  sim<- subset(sim,sim$subset, select=-c(subset))
+  return(sim)
+}
+
+#' Create a capture history table from the two simulated detection tables
+#'
+#' @param subsampleDet1 - Simulated detection table 1
+#' @param subsampleDet2 - Simulated detection table 2
+#'
+#' @returns capture history table containing a row for each detection that was
+#'   detected by either detector.
+#' @export
+#'
+simsTocaptureHistoryTable <- function(subsampleDet1, subsampleDet2){
+  capHistTab <- merge(x=subsampleDet1, y=subsampleDet2, all=TRUE,
+                      by = c('datetime'), suffixes = c('1','2'))
+
+  # Missed detections will be NA by default. Make them 0 instead.
+  capHistTab$detect_table1[is.na(capHistTab$detect_table1)]<-0
+  capHistTab$detect_table2[is.na(capHistTab$detect_table2)]<-0
+
+  # groundtruth and group columns will have NA by default, so need to copy them
+  # from other detector. TODO:Look into powerjoin, dplyr::coalesce and
+  # coalesce_join (https://alistaire.rbind.io/blog/coalescing-joins/) for more
+  # elegant solutions
+  capHistTab$groundTruth1[is.na(capHistTab$groundTruth1)]<-
+    capHistTab$groundTruth2[is.na(capHistTab$groundTruth1)]
+  capHistTab$groundTruth2[is.na(capHistTab$groundTruth2)]<-
+    capHistTab$groundTruth1[is.na(capHistTab$groundTruth2)]
+
+  capHistTab$group1[is.na(capHistTab$group1)]<-
+    capHistTab$group2[is.na(capHistTab$group1)]
+  capHistTab$group2[is.na(capHistTab$group2)]<-
+    capHistTab$group1[is.na(capHistTab$group2)]
+
+  return (capHistTab)
+}
+
+#' SNR histogram of true & false positives, and false negatives for callDensity simulation
+#'
+#' @param sim - callDensity simulation data.frame
+#'
+#' @returns - ggplot object of type geom_histogram
+#' @export
+#'
+plotDetectionDistribution <- function(sim){
+  # SNR Distribution (includes false positives)
+  ggplot(data=sim, aes(x=snr, group=group, fill=group) )+
+    geom_histogram()+
+    theme(legend.position = "inside",
+          legend.position.inside = c(0.8,0.9)
+    )
+}
+
+#' Plot the spatial detection density for a callDensity simulation
+#'
+#' @param sim - callDensity simulation
+#'
+#' @returns ggplot object of type geom_bin_2d
+#' @export
+#'
+plotSpatialDetections <- function(sim){
+
+  # Spatial distribution (excludes false positives)
+  ggplot(data=sim, aes(x=x/1e3, y=y/1e3, weight=detect_table) )+
+    geom_bin_2d(alpha=1,binwidth=c(10,10))+
+    coord_equal()+
+    xlab("X location (km)")+
+    ylab("Y location (km)")
 }
 
 

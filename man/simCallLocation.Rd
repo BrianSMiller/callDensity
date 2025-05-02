@@ -19,9 +19,12 @@ simCallLocation(
 
 \item{R}{- Radius of study area.}
 
-\item{k}{- Number of sensors (presently always 1)}
+\item{minDate}{- Starting date and time for the simulated data (POSIXct)}
 
-\item{endDatetime}{}
+\item{maxDate}{- Ending/latest date and time for the simulated data (POSIXct)}
+}
+\value{
+sim - data.frame containing a row for each simulated call and columns for the location and time of each call.
 }
 \description{
 Generate a uniform distribution of locations in time and space. The space
@@ -32,7 +35,4 @@ time (posix.ct).
 simCallLocation creates n calls within radius R of the receiver (hydrophone).
 This is useful for testing callDensity package with a known call density
 (uniform random in circular study area).
-}
-\examples{
-sim <- simCallLocation(n=1e6, R=1e6, minDate = Sys.time(), maxDate=Sys.time()-(365*24*60*60))
 }

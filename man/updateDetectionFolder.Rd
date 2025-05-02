@@ -7,10 +7,10 @@
 updateDetectionFolder(p, newFolder)
 }
 \arguments{
+\item{p}{Call density detector parameter data.frame}
+
 \item{newFolder}{relative or absolute path to where the detection files are
 located}
-
-\item{d}{Call density detector parameter data.frame}
 }
 \value{
 new detection parameters with filenames that have updated folders

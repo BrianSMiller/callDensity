@@ -289,6 +289,7 @@ deploymentDuration <- function(fullYearEffortFile, season){
 #'   estimate
 #' @param season a character indicating the season or month for which to
 #'   estimate call density
+#' @param snrTruncationThreshold - Exclude rows with SNR below this threshold (in dB)
 #'
 #' @returns c, the false discovery rate (1-precision) for detector2 assuming
 #'   detector1 is ground truth for detections within the specified season
