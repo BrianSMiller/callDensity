@@ -15,7 +15,7 @@ bibliography: references.bib
 knitr::opts_chunk$set(
   collapse = TRUE,
   fig.width = 6,
-  fig.height = 3.75, 
+  fig.height = 2, 
   comment = "#>"
 )
 ```
@@ -58,19 +58,21 @@ Start with *n* calls within radius *R* of the hydrophone. This should produce a 
 # 1) Generate a distribution of n calls within radius R of the hydrophone with a
 # known call density Uniform random in circle
 
-n = 1e6; # number of simulated calls (regardless of whether detected or not); 
-R = 1e6; # radius in m (i.e. 1e6=1000km)
+n = 5e5; # number of simulated calls (regardless of whether detected or not); 
+R = 5e5; # radius in m (i.e. 1e6=1000km)
 k <- 1   # number of sensors (always 1 for single hydrophone moorings)
 minDate <- as.POSIXct("2025-01-01")
 maxDate <- as.POSIXct("2026-01-01")
-Time <- as.numeric(difftime(maxDate,minDate,unit="days"))/365 # in years
+Time <- as.numeric(difftime(maxDate,minDate,unit="days"))/365*24 # in years
 
 # Call density, D_c is n/A 
 A = studyArea(R/1e3) # Circular study area in km^2
 TrueCallDensity = n/(A*Time) # calls/km^2/time
 
+set.seed(2)
 # 1) Generate n uniformly distributed calls within radius R and time period Time
 sim <- simCallLocation(n=n, R=R, minDate=minDate, maxDate=maxDate)
+print(TrueCallDensity)
 ```
 
 ## Assign sonar equation parameters to each call (SL,NL,TL)
@@ -145,7 +147,7 @@ Summary of detectors:
 
 ::: mytable
 | Detector | Description | Location/SNR 'threshold' | Scale/slope | False positive rate |
-|-------------|----------------------|-------------|-------------|-------------|
+|--------------|-----------------|--------------|--------------|--------------|
 | Detector 1 | Reliable and good detector, meant to emulate a human analyst. | Lower | Same | Lower |
 | Detector 2 | Automated detector, meant to emulate a signal processing algorithm. | Higher | Same | Higher |
 :::
@@ -156,22 +158,22 @@ Summary of detectors:
 # Good detector with low threshold (location) and low false positive rate.
 det1params = data.frame( 
   location=1,    # AKA intercept?
-  scale=1,       # AKA slope?
+  scale=2,       # AKA slope?
   func='plogis', # logistic function
   c=0.1,         # False discovery rate
   fpMean=0,      # Mean of distribution of false positives (in dB SNR)
-  fpSD = 1      # Standard deviation false positive distribution (in dB SNR)
+  fpSD = 2      # Standard deviation false positive distribution (in dB SNR)
 )
 
 # Detector 2 has a higher threshold (location), scale, and false positive rate
 # than detector 1.
 det2params = data.frame( 
-  location=3,    # AKA intercept?
-  scale=1,       # AKA slope?
+  location=2,    # AKA intercept?
+  scale=4,       # AKA slope?
   func='plogis', # logistic function
   c=0.3,         # False discovery rate
   fpMean=0,      # Mean of distribution of false positives (in dB SNR)
-  fpSD = 1      # Standard deviation false positive distribution (in dB SNR)
+  fpSD = 2      # Standard deviation false positive distribution (in dB SNR)
 )
 ```
 
@@ -181,17 +183,13 @@ Now we create a function that will take the detector parameters above and simula
 
 # Simulate two detectors each with the different parameters
 simDet1<- simulateDetector(det1params,sim)
-simDet1$p_det1 <- simDet1$p_det
-simDet1$detect_table1 <- simDet1$detect_table
 simDet2<- simulateDetector(det2params,sim)
-simDet2$p_det2 <- simDet2$p_det
-simDet2$detect_table2 <- simDet2$detect_table
 
 ```
 
 View the spatial detection density (which is not the same as spatial call density since it accounts for neither detection probability nor time).
 
-```{r detector.plots, warning=FALSE, message=FALSE}
+```{r detector.plots, fig.height=2, fig.width=6, message=FALSE, warning=FALSE}
 
 plotSpatialDetections <- function(sim){
   
@@ -203,11 +201,12 @@ plotSpatialDetections <- function(sim){
     ylab("Y location (km)")
 }
 
-plotSpatialDetections(simDet1)
-plotSpatialDetections(simDet2)
+sp1 <- plotSpatialDetections(simDet1)+ggtitle('Detector 1')
+sp2 <- plotSpatialDetections(simDet2)+ggtitle('Detector 2')
+gridExtra::grid.arrange(sp1,sp2,nrow=1)
 
-dist1 <- plotDetectionDistribution(simDet1)
-dist2 <- plotDetectionDistribution(simDet2)
+dist1 <- plotDetectionDistribution(simDet1)+ggtitle('Detector 1')
+dist2 <- plotDetectionDistribution(simDet2)+ggtitle('Detector 2')
 gridExtra::grid.arrange(dist1,dist2,nrow=1)
 
 ```
@@ -320,15 +319,13 @@ Table showing how the the results of each call density estimate compare to the t
 
 ```{r Call.Density.Results, echo=TRUE, warning=FALSE}
 
-results = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
+results.true = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
                      NLmean = NL$mean, NLsd = NL$sd,            # Noise
                      model=det2params$func, c = det2params$c, # Detector params
                      Pa = mean(simDet2$p_det,na.rm=TRUE), 
                      row.names='Truth')
 
-results<-rbind( results, results.glm)
-
-
+results<-rbind( results.true, results.glm)
 
 kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 4), 
                 col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
@@ -380,7 +377,7 @@ results.NLind <- data.frame(Dc=Dc.NLi, SampleSize=n_subsample, A = A,# Environme
 
 ```{r}
 
-results<-rbind( results, results.NLind)
+results<-rbind( results.true, results.glm, results.NLind)
 
 kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 4), 
                 col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
@@ -435,7 +432,7 @@ NLadj <- nlFromSnrInfo(SNRinfo, snrDetFun.vglm)
 
 Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
            output.resolution.m=100,
-           outerloop = 100,
+           outerloop = 10,
            truncationDistance=R, # in m
            snrTruncationThreshold =-Inf)
 pa.vglm <- Pa.vglm$overall
@@ -452,11 +449,25 @@ results.vglm <- data.frame(Dc=Dc.vglm, SampleSize=n_adj, A = A,# Environment
 
 ```{r}
 
-results<-rbind( results, results.vglm)
+results<-rbind( results.true, results.glm, results.NLind, results.vglm)
 
 kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 4), 
                 col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
                              'Model','c','P_a')) %>% 
+  kableExtra::kable_classic(full_width=FALSE)
+
+```
+
+```{r eval=TRUE, include=TRUE}
+
+# short version of results for paper
+res <- subset(results, select =c(SampleSize,NLmean, c, Pa, Dc))
+res$error <- (res$Dc[1]-res$Dc)/res$Dc[1]*100
+rownames(res)<- c('Truth','OG incorrect NL','OG corrected NL','CR')
+
+kableExtra::kbl(res, digits = c(0,1,3,4, 4, 1), 
+                col.names= c('$N_c$', '$\\overline{\\small{NL}}$',
+                             '$\\hat{c}$','$\\hat{p}_a$', '$D_c$','% Error')) %>% 
   kableExtra::kable_classic(full_width=FALSE)
 
 
@@ -477,28 +488,34 @@ preds.glm= predict(snrDetFun.glm, type='response',newdata=snrs)
 preds.vglm=predict(snrDetFun.vglm,type='response',newdata=snrs)
 preds.vglm0=predict(snrDetFun.vglm,type='response',newdata=snrs,
                     type.fitted='onempall0')# One minus probability of all zeros
-pr =apply(cbind(preds.vglm[,2],preds.vglm0),1,prod)
+pr1 =apply(cbind(preds.vglm[,1],preds.vglm0),1,prod)
+pr2 =apply(cbind(preds.vglm[,2],preds.vglm0),1,prod)
+
 
 
 par(cex=0.8,mar=c(3.1,3.1,0.25,0),mgp=c(2.1,1,0))
-plot(snrs$SNR, xlim= c(-5,10),  ylim= c(0,1),
+plot(snrs$SNR, xlim= c(-20,20),  ylim= c(0,1),
      xlab="SNR", ylab = "P(Detection)", type='n')
 grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
 lines(snrs$SNR,preds.glm,col=cols(7)[4],lwd=2)
-lines(snrs$SNR,preds.vglm[,1],col=cols(7)[5],lwd=2) # Percep bias detector1
-lines(snrs$SNR,preds.vglm[,2],col=cols(7)[6],lwd=2) # Percep bias detector2
-lines(snrs$SNR,preds.vglm0,col=cols(7)[2],lwd=2) # 1-
-lines(snrs$SNR,pr,col=cols(7)[1],lwd=2)    # vglm 1-p(all zero)
+# lines(snrs$SNR,preds.vglm0,col=cols(7)[2],lwd=2) # 1-
+lines(snrs$SNR,pr2,col=cols(7)[1],lwd=2)    # vglm 1-p(all zero)
 points(simDet2$snr,simDet2$p_det,pch='.')     # Actual probability of detection
+lines(snrs$SNR,pr1,col=cols(7)[3],lwd=2)    # vglm 1-p(all zero)
+points(capHistTab$snr1,capHistTab$p_det1,pch='.')
+# lines(snrs$SNR,preds.vglm[,1],col=cols(7)[5],lwd=2) # Response vglm detector1
+# lines(snrs$SNR,preds.vglm[,2],col=cols(7)[6],lwd=2) # Response vglm detector2
+
 legend( "bottomright", 
         legend =c("Detection function TRUE",
                   "Detection function GLM",
-                  "Detection function VGLM",
-                  "Perception bias: detector1 (VGLM)",
-                  "Perception bias: detector2 (VGLM)",
-                  "1-p(all zeros) (VGLM)"
+                  "Detection function VGLM2",
+                  "Response VGLM 1",
+                  "Response VGLM 2",
+                  "Detection function vglm1"
                   ),
-        col=c('black', cols(7)[4], cols(7)[1], cols(7)[5], cols(7)[6], cols(7)[2]), 
+        col=c('black', cols(7)[4], cols(7)[1], cols(7)[5], cols(7)[6],cols(7)[3]),
+              #, cols(7)[2]), 
         lty=rep('solid',6),
         lwd=rep(2,6)
 )

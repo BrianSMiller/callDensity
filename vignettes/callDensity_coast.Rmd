@@ -264,7 +264,7 @@ NLadj <- nlFromSnrInfo(capHistTosnrInfo(capHistTab), snrDetFun.vglm)
 
 Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
            output.resolution.m=100,
-           outerloop = 40,
+           outerloop = 100,
            truncationDistance=truncDist, # in m
            snrTruncationThreshold = -Inf)
 pa.vglm <- Pa.vglm$overall

@@ -276,10 +276,16 @@ simsTocaptureHistoryTable <- function(subsampleDet1, subsampleDet2){
 plotDetectionDistribution <- function(sim){
   # SNR Distribution (includes false positives)
   ggplot(data=sim, aes(x=snr, group=group, fill=group) )+
-    geom_histogram()+
-    theme(legend.position = "inside",
-          legend.position.inside = c(0.8,0.9)
-    )
+    geom_histogram(binwidth=1, position="identity",alpha=0.3)+
+    # facet_wrap(group~.,nrow=3, scales='free_y')+
+    labs(fill='')+
+    theme(legend.text = element_text(size=8))+
+    # guides(fill="none")+
+    theme_minimal()+
+    theme(legend.position = "inside", legend.position.inside = c(0.8,0.9),
+          legend.key.size = unit(0.25, 'cm'))
+    # scale_fill_viridis_d(direction = -1, option = "plasma")
+    # scale_color_brewer(palette = "RdYlBu",type="qual",aesthetics = c('fill'))
 }
 
 #' Plot the spatial detection density for a callDensity simulation

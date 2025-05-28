@@ -439,7 +439,7 @@ pDetInArea <-
     combineddetfunc[i,]<-transectavgdetfunc
   }
 
-    allDetFunctions <- allTLlookupsubset
+  allDetFunctions <- allTLlookupsubset
   allDetFunctions[,2:(no.profiles+1)]<-t(combineddetfunc)
   allDetFunctions<- data.table::as.data.table(allDetFunctions)
   names(allDetFunctions)<-dimnames(allTLlookup_h)[[2]]

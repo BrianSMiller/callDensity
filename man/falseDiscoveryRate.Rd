@@ -30,13 +30,8 @@ Here we estimate false-positive rate of the automated detector from the
 manually annotated dataset. The data-file for this is the capture-history
 table that contains reconciled annotated, and automated detections.
 
-First, we count the number of FP that the AI produced from the capture
+First, we count the number of FP that the detector produced from the capture
 history table. These are the sum of the rows where detect_table2==T &
 detect_table1==F. Then we calculate the number of true positives, the sum of
 the rows where detect_table2==T & detect_table1==T.
-
-Alternatively, we could use the double observer mark-recapture to estimate
-the total number of calls in the dataset (see Miller et al 2022 - AI bests
-human observer - RSEC). This would require incorporating the Huggins/RMark
-script that can be found in the supplement to the Miller et al 2022 paper.
 }

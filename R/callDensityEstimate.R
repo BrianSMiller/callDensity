@@ -61,20 +61,27 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
     season <-'year'
   }
 
-  #   ### Nc, T, c, CV_c
-  #
-  # Nc, T, c, CV_c--------------------------------------------------------------
+  # Number of calls
+  # Nc--------------------------------------------------------------------------
   Nc <- countDetections(p$detectorParams$fullYearDetectionCsv,season,
                         snrTruncationThreshold=snrTruncationThreshold)
 
+  # Duration of time monitored
+  #T----------------------------------------------------------------------------
   T <- deploymentDuration(p$detectorParams$fullYearEffortFile, season)
 
+  #  ### Calculate study area
+  # A---------------------------------------------------------------------------
+  A = studyArea(p$w,truncationDistance)
+
+  # c, CV_c---------------------------------------------------------------------
   c <- falseDiscoveryRate(p,season, snrTruncationThreshold)
   CV.c <- falseDiscoveryCV(p,season)
 
   #  alternative measure of FDR where analyst inspected every nth detection
   if (p$useSeparateFPdata){
     c <- falseDiscoveryRateFromNth(p$manualFPfileName,season)
+
     # CV.c and c are packed in a data frame, so unpack
     CV.c <- c$CV.c
     c <- c$c
@@ -82,7 +89,7 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
 
 
   #   ### $p_a$ (Overall probability of detection)
-  #
+  # This is the one that takes a long time
   # Pa--------------------------------------------------------------------------
   SNRinfo <- capHist2snrInfo(p$capHistFile,season)
 
@@ -109,79 +116,43 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
     NL <- nlFromSnrInfo(SNRinfo, snrDetFun)
   }
 
-  pDetInArea(snrDetFun, SL, TL,  NL, # Sonar equation inputs
-             p$transectFile, p$simResultsFile, p$paFile, # file output names
-             output.resolution.m=p$output.resolution.m, outerloop=p$outerloop,
-             truncationDistance=truncationDistance,
-             snrTruncationThreshold= snrTruncationThreshold)
+  pDetResults <- pDetInArea(snrDetFun, SL, TL,  NL, # Sonar equation inputs
+                            output.resolution.m=p$output.resolution.m,
+                            outerloop=p$outerloop,
+                            truncationDistance=truncationDistance,
+                            snrTruncationThreshold= snrTruncationThreshold,
+                            p$transectFile,  # file output names
+                            p$simResultsFile,
+                            p$paFile)
 
   # The above function, pDetInArea writes results to a bunch of files
   # Load the file that we need that has the p_a in them, and ignore the others
-  pa.all.transects <- read.csv(p$paFile, header = TRUE, sep = ' ');
+  # pa.all.transects <- read.csv(p$paFile, header = TRUE, sep = ' ');
+  pa.all.transects <- pDetResults$perTransectMeanSD
   no.transects <- dim(pa.all.transects)[1]-1;
   pa <- pa.all.transects[no.transects+1,1]
   pa
 
-  #  ### $CV_{P_a}$ (see Harris, 2012 for details);
-  #
-  #  Approach is to calculate CV using mean and SD from each radial?
-  #
   #CV_Pa------------------------------------------------------------------------
-  # Coef. of variation - Pa
+  # The line below will read the per-transect pa from file.
+  # pa.all.transects <- read.csv(p$paFile, header = TRUE, sep = ' ');
 
-  names(pa.all.transects)<-c('Mean','SD')
+  # Per-transect mean and SD of pa now returned in the list of pDetResults, so
+  # no need to read or write it to a file
+  pa.all.transects <- pDetResults$perTransectMeanSD
+  CV.pa <- pa_CV(pa.all.transects)
 
-  # Radials are in rows
-  y=pa.all.transects[1:no.transects,]
-
-  ## IMPORTANT: to check if the var, SE and CV calculation is correct ##
-  ## Per year:
-
-  varp.pa<-((sd(y$Mean)/sqrt(no.transects))^2)+((sum(y$SD)/no.transects)^2)
-  sep.pa<-sqrt(varp.pa)
-  CV.pa<-sep.pa/mean(y$Mean)
-  CV.pa
-
-  #  ### $CV_{N_c}$ (see Harris, 2012 for details);
-  # Confirm how to calculate SD and CV (?)
-  # CV_Nc-----------------------------------------------------------------------
-  varn=Nc*(pa)*(1-pa)
-  SDn=sqrt(varn)
-  CV.Nc=SDn/Nc
-
-  #  ### Calculate study area
-  #
-  # At most baisc study area is a circle of pi*w^2 radius. If different
-  # truncation distances are used for each transect, then need to estimate
-  # the area of each transect as sectors of a circle of r=truncation distance
-  # A---------------------------------------------------------------------------
-
-  A = pi*p$w^2
-  if (any(truncationDistance < p$w)     ){
-     if (length(truncationDistance) == 1) {
-       A = pi*truncationDistance^2
-     } else {
-       A = sum(pi*truncationDistance^2/length(truncationDistance))
-     }
-
-
-  }
+  #CV_Nc------------------------------------------------------------------------
+  CV.Nc <- Nc_CV(Nc,pa)
 
   #  ### Finally, estimate Dc (Density of calls) [calls $h^{-1} km^{-2}$]
-  #
   # Dc --------------------------------------------------------------------------
-
   Dc <- (Nc * (1-c) )/( p$k * A * pa * T )
   Dc     # per h per km^2
   Dc*1e3 # per h per 1000 km^2?
 
-  #  ### CV_Total (Delta Method)
-  #
   # CV_Total--------------------------------------------------------------------
-
-  CV.Dc<-sqrt((CV.Nc^2)+(CV.pa^2)+(CV.c^2))
-  CV.Dc
-
+  CV.Dc <- Dc_CV(CV.Nc,CV.pa,CV.c)
 
   #  ## Collate into data frame and write to csv file
   # Format output---------------------------------------------------------------
@@ -275,15 +246,11 @@ deploymentDuration <- function(fullYearEffortFile, season){
 #' manually annotated dataset. The data-file for this is the capture-history
 #' table that contains reconciled annotated, and automated detections.
 #'
-#' First, we count the number of FP that the AI produced from the capture
+#' First, we count the number of FP that the detector produced from the capture
 #' history table. These are the sum of the rows where detect_table2==T &
 #' detect_table1==F. Then we calculate the number of true positives, the sum of
 #' the rows where detect_table2==T & detect_table1==T.
 #'
-#' Alternatively, we could use the double observer mark-recapture to estimate
-#' the total number of calls in the dataset (see Miller et al 2022 - AI bests
-#' human observer - RSEC). This would require incorporating the Huggins/RMark
-#' script that can be found in the supplement to the Miller et al 2022 paper.
 #'
 #' @param p data.frame containing top-level parameters for a call density
 #'   estimate
@@ -297,22 +264,17 @@ deploymentDuration <- function(fullYearEffortFile, season){
 #'
 falseDiscoveryRate <- function(p,season, snrTruncationThreshold=-Inf){
 
-  effort <- readxl::read_excel(p$annotationParams$effortFile,
-                               .name_repair = "unique_quiet");
-  effort$season <- time2season(effort$StartTime)
-  effort$month <- time2monthCode(effort$StartTime)
   ch <- read.csv(file = p$capHistFile)
   ch <- capHistTimeSeason(ch)
 
   ch <- subset(ch, ch$snr >= snrTruncationThreshold)
 
-  subsetByTimeCode(effort,effort$StartTime,season)
-  subsetByTimeCode(ch,ch$t,season)
+  ch <- subsetByTimeCode(ch,ch$t,season)
 
   FP <- sum(ch$detect_table2 & !ch$detect_table1)
   TP <- sum(ch$detect_table2 & ch$detect_table1)
   c <- FP/(FP+TP)
-  c
+  return(c)
 }
 
 
@@ -330,8 +292,6 @@ falseDiscoveryCV <- function(p,season){
   #
   #  First calculate using annotated library
   #
-
-
   fp <- read.csv(p$hourlyFalsePosFile)
   fp <- subsetByTimeCode(fp,lubridate::dmy_hms(fp$dt0), season)
   fp$fdr <- fp$num_fp/fp$num_detections
@@ -427,3 +387,99 @@ falseDiscoveryRateFromNth<- function(falsePositiveXlsx,season='year'){
 
   return(data.frame(c,CV.c))
 }
+
+
+#' Nc_CV: Coefficient of Variation (CV) of the number of detected calls (Nc).
+#'
+#' CV.Nc is calculated from the variance of Nc, which depends on the probability
+#' of detection (pa). Here, Nc represents the number of detected calls, and
+#' independence between detections is assumed.
+#' @param Nc - Number of calls detected in the dataset (see function
+#'   countDetections())
+#' @param pa - Average probability of detection in the study area (see function
+#'   pDetInArea())
+#'
+#' @returns cv.Nc - coefficient of variation of the number of detected calls
+#' @export
+#'
+Nc_CV <- function(Nc,pa){
+  # variance of NC
+  var.Nc <- Nc * pa * (1 - pa)
+
+  # Calculate the standard deviation of Nc
+  sd.Nc <- sqrt(var.Nc)
+
+  # Calculate the coefficient of variation of Nc
+  cv.Nc <- (sd.Nc / Nc)
+
+  # Optionally define a model name if needed
+  # pa.model <- "your_model_name"
+
+  # Print the results
+  cat("Uncertainty for pa:\n")
+  cat("  Variance (var.Nc): ", var.Nc, "\n")
+  cat("  Standard Deviation (sd.Nc): ", sd.Nc, "\n")
+  cat("  Coefficient of Variation (cv.Nc): ", cv.Nc, "%\n\n")
+  return(cv.Nc)
+}
+
+
+
+#'pa_CV: Coefficient of Variation (CV) of the probability of detection (pa).
+#'
+#'CV.pa is calculated using the standard deviation of the means and the sum of
+#'the standard deviations of the transects. This approach assumes independence
+#'between transects and homogeneity of error. The summation of SDs assumes a
+#'conservative model.
+#'
+#'
+#'@param pa.all.transects - matrix containing two columns and same number of
+#'  rows as number of transects. The first column contains the mean pa and the
+#'  second column contains the standard deviation of pa for each transect. The
+#'  final column contains the overall mean and sd.
+#'
+#'@returns CV.pa - CV of the probability of deteciton in the area
+#'@export
+pa_CV <- function(pa.all.transects){
+# The above function, pDetInArea writes results to a bunch of files
+# Load the file that we need that has the p_a in them, and ignore the others
+
+no.transects <- dim(pa.all.transects)[1]-1;
+
+pa.all.transects<- as.data.frame(pa.all.transects)
+
+names(pa.all.transects)<-c('Mean','SD')
+
+# Radials are in rows
+y=pa.all.transects[1:no.transects,]
+
+## IMPORTANT: to check if the var, SE and CV calculation is correct ##
+## Per year:
+
+varp.pa<-((sd(y$Mean)/sqrt(no.transects))^2)+((sum(y$SD)/no.transects)^2)
+sep.pa<-sqrt(varp.pa)
+CV.pa<-sep.pa/mean(y$Mean)
+return(CV.pa)
+}
+
+#' Coefficient of Variation (CV) for call density (Dc)
+#'
+#' The uncertainty (CV) in the estimated call density (Dc) is calculated using
+#' the Delta Method, which combines the CV of the individual parameters (Nc, c
+#' and pa).
+#'
+#' Here, the uncertainties of Nc, c, and pa are assumed to be independent, given
+#' the fundamental premise of the Delta Method in this application.
+#'
+#' @param CV.Nc - CV of number of calls Nc
+#' @param CV.pa - CV of probability of detection in the area, pa
+#' @param CV.c - CV of the false discovery rate, c
+#'
+#' @returns CV.Dc - coefficient of variation of the call density
+#' @export
+#'
+Dc_CV<- function(CV.Nc,CV.pa,CV.c){
+  CV.Dc<-sqrt((CV.Nc^2)+(CV.pa^2)+(CV.c^2))
+  return(CV.Dc)
+}
+

@@ -57,7 +57,7 @@ n = 1e6; # number of simulated calls (regardless of whether detected or not);
 R = 1e6; # radius of 1000 km (but in m)
 k <- 1   # number of sensors
 minDate <- as.POSIXct("2025-01-01")
-maxDate <- as.POSIXct("2025-12-31")
+maxDate <- as.POSIXct("2026-01-01")
 Time <- as.numeric(difftime(maxDate,minDate,unit="days"))/365 # in years
 
 # Call density, D_c is n/A 
@@ -111,7 +111,7 @@ det1params = data.frame(
 # than detector 1.
 det2params = data.frame( 
   location=3,    # AKA intercept?
-  scale=2,       # AKA slope?
+  scale=0.5,       # AKA slope?
   func='plogis', # logistic function
   c=0.3,         # False discovery rate
   fpMean=0,      # Mean of distribution of false positives (in dB SNR)
@@ -134,7 +134,7 @@ simDet2<- simulateDetector(det2params,sim)
 Apply SNR truncation to the detectors by removing all detections that were less than the threshold.
 
 ```{r}
-snrTruncationThreshold <- 3; # dB
+snrTruncationThreshold <- 0; # dB
 
 # True number of calls above threshold
 nAboveThreshold <- sum(sim$snr>snrTruncationThreshold) 
@@ -164,7 +164,7 @@ dist1 <- plotDetectionDistribution(simDet1)
 dist2 <- plotDetectionDistribution(simDet2)
 dist1t<- plotDetectionDistribution(simDet1t)+ylab("Truncated count")
 dist2t<- plotDetectionDistribution(simDet2t)+ylab("Truncated count")
-gridExtra::grid.arrange(dist1,dist2,dist1t,dist2t,nrow=2)
+gridExtra::grid.arrange(dist1,dist2,dist1t,dist2t,nrow=1)
 
 ```
 
@@ -398,14 +398,13 @@ adjudicatedt$SNR <-   rowMeans(
 
 #False discovery rate of truncated
 tp <- sum(with(capHistTabt,(detect_table2 & groundTruth2) ))
-fp <- sum(with(capHistTabt,(detect_table1 & !groundTruth2) ))
+fp <- sum(with(capHistTabt,(detect_table2 & !groundTruth2) ))
 # precision <- sum(tp)/length(tp)
 adj_c <- fp/(fp+tp)
 
 observerNames = c("detect_table1", "detect_table2")
 snrDetFun.vglm <- fitSNRvglm(adjudicatedt, observerNames,
                              whichObserver = "detect_table2")
-
 
 # Estimate of NL distribution
 noiseTab <- capHistTab[capHistTab$detect_table2 | capHistTab$detect_table1,]
@@ -469,7 +468,7 @@ grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
 lines(snrs$SNR,preds.glm,col=cols(7)[4],lwd=2)
 lines(snrs$SNR,preds.glmt,col=cols(7)[5],lwd=2)
 lines(snrs$SNR,pr,col=cols(7)[1],lwd=2)    # vglm 1-p(all zero)
-points(simDet2$snr,simDet2$p_det,pch='.')     # Actual probability of detection
+points(simDet2t$snr,simDet2t$p_det,pch='.')     # Actual probability of detection
 legend( "bottomright", 
         legend =c("TRUE",
                   "GLM-No SNR Truncation",
