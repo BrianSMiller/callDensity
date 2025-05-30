@@ -5,7 +5,7 @@
 \title{#  ### Estimate $c$ (False discovery rate)}
 \usage{
 falseDiscoveryRate(
-  capHistFile,
+  ch,
   season = "year",
   snrTruncationThreshold = NULL,
   gtColName = "detect_table1",
@@ -14,9 +14,6 @@ falseDiscoveryRate(
 )
 }
 \arguments{
-\item{capHistFile}{file name of capture history table (TODO pass as
-data.frame instead of file).}
-
 \item{season}{a character indicating the season or month for which to
 estimate call density}
 
@@ -32,6 +29,9 @@ Default='detect_table2')}
 
 \item{snrColName}{- Name of column that contains SNR estimates (only used if
 thresholding by SNR)}
+
+\item{capHistFile}{file name of capture history table (TODO pass as
+data.frame instead of file).}
 }
 \value{
 fdr, list containing false disovery rate, c, and it's CV. The false

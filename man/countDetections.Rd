@@ -4,7 +4,12 @@
 \alias{countDetections}
 \title{Title}
 \usage{
-countDetections(detectionFile, season, snrTruncationThreshold = -Inf)
+countDetections(
+  detectionFile,
+  season = "year",
+  snrTruncationThreshold = -Inf,
+  snrColName = "snr"
+)
 }
 \arguments{
 \item{detectionFile}{- File containing detections for the full dataset.
@@ -16,10 +21,14 @@ following columns:
 
 \item{season}{- Time period over which to subset detections. Can follow World
 Ocean Atlas numeric time codes (0-16), or be name of season
-('summer','autumn','winter','spring'), month name/abbreviation, or 'year'.}
+('summer','autumn','winter','spring'), month name/abbreviation, or 'year'
+(default).}
 
 \item{snrTruncationThreshold}{<double> detections with SNR less than
-snrTruncation threshold will be excluded from count}
+snrTruncation threshold (in dB) will be excluded from count}
+
+\item{snrColName}{- name of column containing SNR values (only used if SNR
+truncation>-Inf)}
 }
 \value{
 <numeric> number of detections in the detectionFile within specified

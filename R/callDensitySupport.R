@@ -306,9 +306,7 @@ return(NL)
 #' @param season A timeCode corresponding to months, seasons, or year
 #'
 #' @export
-capHist2snrInfo <- function(capHistFile,season='year'){
-  snr<-utils::read.csv(capHistFile,na.strings = c('NaN','NA'))
-  snr <- capHistTimeSeason(snr)
+capHist2snrInfo <- function(snr,season='year'){
 
   # remove false positives
   snr <- snr[snr$detect_table1==1,]
@@ -782,4 +780,17 @@ ciFromCV <- function(a, cv){
   return(ans)
 }
 
+#' Read a capture history csv file (e.g. created in Matlab)
+#'
+#' @param capHistFile - name of the csv or txt file that contains capture
+#'   histories. TODO: Document the required columns/file format better
+#'
+#' @returns capture history table as data.frame
+#' @export
+#'
+readCapHist <- function(capHistFile){
+  ch <- read.csv(file = p$capHistFile,na.strings = c('NaN','NA'))
+  ch <- capHistTimeSeason(ch)
+  return(ch)
+}
 

@@ -4,12 +4,12 @@
 \alias{capHist2snrInfo}
 \title{Convert a capture history FILE of multiple detections into an SNR.Info file}
 \usage{
-capHist2snrInfo(capHistFile, season = "year")
+capHist2snrInfo(snr, season = "year")
 }
 \arguments{
-\item{capHistFile}{A capture history file containing detections and SNR info}
-
 \item{season}{A timeCode corresponding to months, seasons, or year}
+
+\item{capHistFile}{A capture history file containing detections and SNR info}
 }
 \description{
 Convert a capture history FILE of multiple detections into an SNR.Info file

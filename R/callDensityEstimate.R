@@ -37,7 +37,7 @@
 #' @importFrom magrittr %>%
 #' @export
 #'
-cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
+cdeFromParamFile <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
                  snrTruncationThreshold=-Inf, NL=NULL){
   # Check inputs and create outputs
   # Store all parameters for call-density estimation in data frame called 'p'
@@ -68,14 +68,15 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
 
   # Duration of time monitored
   #T----------------------------------------------------------------------------
-  T <- deploymentDuration(p$detectorParams$fullYearEffortFile, season)
+  T <- deploymentDurationFromsoundFolderCsv(p$detectorParams$fullYearEffortFile, season)
 
   #  ### Calculate study area
   # A---------------------------------------------------------------------------
   A = studyArea(p$w,truncationDistance)
 
   # c, CV_c---------------------------------------------------------------------
-  fdr <- falseDiscoveryRate(p$capHistFile, season, snrTruncationThreshold)
+  ch <- readCapHist(p$capHistFile)
+  fdr <- falseDiscoveryRate(ch, season, snrTruncationThreshold)
 
   # CV.c and c are packed in a list, so unpack
   CV.c <- fdr$cv.c
@@ -85,7 +86,8 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   #   ### $p_a$ (Overall probability of detection)
   # This is the most complicated part and takes the longest time
   # Pa--------------------------------------------------------------------------
-  SNRinfo <- capHist2snrInfo(p$capHistFile,season)
+
+  SNRinfo <- capHist2snrInfo(ch,season)
 
   # Read SL distribution parameters from overall parameters.
   SL <- data.frame(mean=p$slParams$slMean,
@@ -182,20 +184,26 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
 #'      snrTruncationThreshold is other than default value of -Inf)
 #' @param season - Time period over which to subset detections. Can follow World
 #'   Ocean Atlas numeric time codes (0-16), or be name of season
-#'   ('summer','autumn','winter','spring'), month name/abbreviation, or 'year'.
+#'   ('summer','autumn','winter','spring'), month name/abbreviation, or 'year'
+#'   (default).
 #' @param snrTruncationThreshold <double> detections with SNR less than
-#'   snrTruncation threshold will be excluded from count
+#'   snrTruncation threshold (in dB) will be excluded from count
+#' @param snrColName - name of column containing SNR values (only used if SNR
+#'   truncation>-Inf)
 #'
 #' @returns <numeric> number of detections in the detectionFile within specified
 #'   season and >= snrTruncationThreshold
 #' @export
 #'
-countDetections <- function(detectionFile,season,snrTruncationThreshold=-Inf) {
+countDetections <- function(detectionFile,
+                            season='year',
+                            snrTruncationThreshold=-Inf,
+                            snrColName = 'snr') {
   # detectionFile must be
   det <- read.delim(detectionFile, sep = '\t', header = TRUE)
 
   if (snrTruncationThreshold != -Inf){ # Only if truncation requested
-    if ( "snr" %in% colnames(det) ){
+    if ( snrColName %in% colnames(det) ){
       det <- subset(det,det$snr>=snrTruncationThreshold)
     }  else {
       stop("Truncation by SNR requires column `snr` in fullYearDetectionCsv.\n\nSNR Truncation not applied\n\n")
@@ -210,7 +218,7 @@ countDetections <- function(detectionFile,season,snrTruncationThreshold=-Inf) {
   det<- subsetByTimeCode(det,det$t,season)
 
   Nc <- dim(det)[1]
-  Nc
+  return(Nc)
 }
 
 #  ### $T$ (time of deployment)
@@ -218,16 +226,41 @@ countDetections <- function(detectionFile,season,snrTruncationThreshold=-Inf) {
 #  Sum the duration of the audio that has been analysed
 #
 ## deploymentDuration-----------------------------------------------------------
-deploymentDuration <- function(fullYearEffortFile, season){
-  # File generated from Matlab wavFolderInfo
-  wavInfo <- read.csv(fullYearEffortFile)
-  wavInfo <- subsetByTimeCode(wavInfo,mat2Rdate(wavInfo$startDate),season)
+#' Calculate deployment duration from recording start times and durations
+#'
+#' @param duration - list of recording durations (in s)
+#' @param startDate - list of start dates for each duration
+#' @param season - Subset the startDate by this season/month/year (default='year')
+#'
+#' @returns - duration of effort (as numeric)
+#' @export
+#'
+deploymentDuration <- function(duration, startDate, season ='year'){
+
+  wavInfo <- data.frame(startDate=startDate, duration=duration)
+  wavInfo <- subsetByTimeCode(wavInfo,wavInfo$startDate,season)
 
   T <- sum(wavInfo$duration)/3600 # in hours
-  T
+  return(T)
 }
 
-
+#' Calculate deployment duration from a Matlab soundFolder csv file.
+#' @param fullYearEffortFile - csv file containing a row for each time period
+#'   that was included in the study and columns named startDate and duration.
+#'   startDate should be a matlab datenum, and duration should be numeric
+#'   and in seconds.
+#'
+#' @param season - default='year'
+#'
+#' @export
+deploymentDurationFromsoundFolderCsv <- function(fullYearEffortFile,
+                                                season ='year'){
+    # File generated from Matlab wavFolderInfo
+    wavInfo <- read.csv(fullYearEffortFile)
+    startDate <- mat2Rdate(wavInfo$startDate)
+    duration <- wavInfo$duration
+    deploymentDuration(duration, startDate, season)
+}
 
 #' #  ### Estimate $c$ (False discovery rate)
 #'
@@ -265,16 +298,13 @@ deploymentDuration <- function(fullYearEffortFile, season){
 #'   detector1 is ground truth for detections within the specified season
 #' @export
 #'
-falseDiscoveryRate <- function(capHistFile,
+falseDiscoveryRate <- function(ch,
                                season='year',
                                snrTruncationThreshold=NULL,
                                gtColName = 'detect_table1',
                                testColName = 'detect_table2',
                                snrColName = 'snr'
                                ){
-
-  ch <- read.csv(file = capHistFile)
-  ch <- capHistTimeSeason(ch)
 
   if (!is.null(snrTruncationThreshold)){
     snr <- ch[,snrColName]
@@ -546,4 +576,213 @@ Dc_CV<- function(CV.Nc,CV.pa,CV.c){
   return(CV.Dc)
 }
 
+
+#' Call Density Estimate
+#' title: "Call Density"
+#' author: "Brian Miller"
+#' date: "2022-10-12"
+#'
+#' This function estimates call density with all parameters included as function
+#' arguments. This is in contrast to the previous operation, i.e. where a
+#' data.frame of parameters was used to indicate which files to load from disk.
+#' Here no parameter file/data.frame is used, so all data and parameters are
+#' must already be objects in memory;
+#'
+#' Density of blue whale D-calls (BmD) in long-term moored recording dataset.
+#' Apply methods of Castro, Harris, et al (in prep) to obtain call density.
+#'
+#' $D_c = \\frac{N_c*(1-c)}{kTP_a{\\pi}w^2}$
+#
+#' where:
+#' $D_c$ is call density
+#' $N_c$ is number of calls
+#' $c$ is false discovery rate
+#' $k$ is number of sensors (here always 1)
+#' $T$ is the duration of data analysed
+#' $P_a$ is the probability of detection in the study area
+#' ${\\pi}w^2$ is the study area (in km\\^2)
+#'
+#' @param Nc - Total count of true positive detections for call density estimate
+#' @param capHistTab - Capture history table used to derive false positive rate.
+#'   Can also be used to derive probability of detection as a function of SNR if
+#'   snrDetFun is not specified.
+#' @param SL - List containing distribution of source level parameters.
+#'   SL must contain named elements named: mean, sd, and sampleSize.
+#' @param TL - Data.frame of transmission losses for Monte Carlo simulation. The
+#'   first column must contain the ranges, the remaining columns contain
+#'   transmission losses (in dB) for each radial transect at that range.
+#' @param A - Scalar indicating the area for the call density estimate
+#'   (default=1)
+#' @param modelType - Either 'glm','gam','scam',or 'vglm' indicating which type
+#'   of model to use for estimating probability of detection as a function of
+#'   SNR (default='scam')
+#' @param numKnots  - number of knots to use wor modelling detection function vs
+#'   SNR (only if model types 'gam' or 'scam') default = 5
+#' @param output.resolution.m Spatial resolution along radial transects for
+#'   estimating probability of detection in area. Default = 100
+#' @param outerloop - Number of bootstrap iterations for Monte Carlo simulation
+#' @param transectFile - Optional name of text file to store probability of
+#'   detection at each output.resolution.m step (potentially yielding a large file)
+#' @param simResultsFile - Optional name of text file to store Monte Carlo
+#'   Simulation parameters and results
+#' @param paFile - Optional name of text file to store mean probability of
+#'   detection per transect and overall area
+#' @param season TimeCode specifying month, season, or year for outputs
+#' @param snrDetFun OPTIONAL linear-model like structure (GLM,GAM,SCAM,etc)
+#'    specifying the SNR-detection function to use. If this is not included,
+#'    then the SNR-detection function will be derived from the capture history
+#'    table.
+#' @param truncationDistance scalar or matrix of truncation distances.
+#'    If a matrix is provided, then the dimensions should be 1xN with N being
+#'    the same as the number of transects
+#' @param snrTruncationThreshold scalar SNR in dB below which the probability of
+#'    detection will be forcibly set to zero.
+#' @param NL list or data.frame containing distribution of noise level
+#'   parameters. Must contain items named: mean, sd, and sampleSize (similar to
+#'   SL).
+#' @param siteCode Optional string containing a code or label associated with
+#'   the site
+#' @param k Number of sensors (default=1)
+#' @param densityResultsFile Optional name of csv file where final call density
+#'   results will be written as a data.frame
+#'
+#' @returns data.frame containing call density inputs, results, and CVs
+#'
+#' @importFrom stats rnorm sd vcov
+#' @importFrom utils read.csv write.table
+#' @importFrom magrittr %>%
+#' @export
+#'
+cde <- function (Nc,
+                 capHistTab,
+                 SL,
+                 TL,
+                 T = 1,
+                 A = 1,
+                 k=1,
+                 season='year',
+                 ### Monte carlo simulation params
+                 snrDetFun=NULL,
+                 NL=NULL,
+                 modelType = 'scam',
+                 numKnots = 5,
+                 output.resolution.m=100,
+                 outerloop = 10,
+                 transectFile='',  # file output names
+                 simResultsFile='',
+                 paFile='',
+                 ###
+                 truncationDistance=Inf,
+                 snrTruncationThreshold=-Inf,
+                 siteCode='',
+                 densityResultsFile=''
+                 ){
+  # Check inputs and create outputs
+  # Store all parameters for call-density estimation in data frame called 'p'
+  #
+  # InputCheck------------------------------------------------------------------
+
+
+
+  # Number of calls
+  # Nc--------------------------------------------------------------------------
+  # Nc <- countDetections(p$detectorParams$fullYearDetectionCsv,season,
+  #                       snrTruncationThreshold=snrTruncationThreshold)
+
+  # Duration of time monitored
+  #T----------------------------------------------------------------------------
+  # T <- deploymentDuration(p$detectorParams$fullYearEffortFile, season)
+
+  #  ### Calculate study area
+  # A---------------------------------------------------------------------------
+  # A = studyArea(p$w,truncationDistance)
+
+  # c, CV_c---------------------------------------------------------------------
+  fdr <- falseDiscoveryRate(capHistTab, season, snrTruncationThreshold)
+
+  # CV.c and c are packed in a list, so unpack
+  CV.c <- fdr$cv.c
+  c <- fdr$c
+
+
+  #   ### $p_a$ (Overall probability of detection)
+  # This is the most complicated part and takes the longest time
+  # Pa--------------------------------------------------------------------------
+  SNRinfo <- capHist2snrInfo(capHistTab,season)
+
+  # Read SL distribution parameters from overall parameters.
+  # SL <- data.frame(mean=p$slParams$slMean,
+  #                  sd=p$slParams$slStd,
+  #                  sampleSize=p$slParams$slSampleSize)
+
+  # TL<-utils::read.csv(p$tlParams$tlFile)
+
+  # Check whether user supplied an snr detection function or estimate from data
+  # NB: This needs to occur AFTER any SNR truncation.
+  if (is.null(snrDetFun)){
+    # Estimate snrDetFun from SNRinfo
+    snrDetFun <- fitSNRdetectionFunc(
+      subset(SNRinfo,SNR>=snrTruncationThreshold),
+      modelType=modelType, numKnots)
+  }
+
+  # If user has not specified NL distribution (data.frame with columns mean, sd,
+  # samplesize), then extract this information it from SNRinfo.
+  # NB: This needs to occur with untruncated SNRInfo (i.e. prior to truncation).
+  if (is.null(NL)){
+    NL <- nlFromSnrInfo(SNRinfo, snrDetFun)
+  }
+
+  pDetResults <- pDetInArea(snrDetFun, SL, TL,  NL, # Sonar equation inputs
+                            output.resolution.m=p$output.resolution.m,
+                            outerloop=p$outerloop,
+                            truncationDistance=truncationDistance,
+                            snrTruncationThreshold= snrTruncationThreshold,
+                            transectFile,  # file output names
+                            simResultsFile,
+                            paFile)
+
+  # The above function, pDetInArea writes results to a bunch of files
+  # Load the file that we need that has the p_a in them, and ignore the others
+  # pa.all.transects <- read.csv(p$paFile, header = TRUE, sep = ' ');
+  pa.all.transects <- pDetResults$perTransectMeanSD
+  no.transects <- dim(pa.all.transects)[1]-1;
+  pa <- pa.all.transects[no.transects+1,1]
+
+  #CV_Pa------------------------------------------------------------------------
+  # The line below will read the per-transect pa from file.
+  # pa.all.transects <- read.csv(p$paFile, header = TRUE, sep = ' ');
+
+  # Per-transect mean and SD of pa now returned in the list of pDetResults, so
+  # no need to read or write it to a file
+  pa.all.transects <- pDetResults$perTransectMeanSD
+  CV.pa <- pa_CV(pa.all.transects)
+
+  #CV_Nc------------------------------------------------------------------------
+  CV.Nc <- Nc_CV(Nc,pa,c)
+
+  #  ### Finally, estimate Dc (Density of calls) [calls $h^{-1} km^{-2}$]
+  # Dc --------------------------------------------------------------------------
+  Dc <- (Nc * (1-c) )/( k * A * pa * T )
+  Dc     # per h per km^2
+  Dc*1e3 # per h per 1000 km^2?
+
+  # CV_Total--------------------------------------------------------------------
+  CV.Dc <- Dc_CV(CV.Nc,CV.pa,CV.c)
+
+  #  ## Collate into data frame and write to csv file
+  # Format output---------------------------------------------------------------
+
+  result <- data.frame(season, siteCode,Nc,c,k,T,A,pa,
+                       SL$mean,SL$sd,NL$mean,NL$sd,modelType,
+                       CV.Nc,CV.c,CV.pa,Dc,CV.Dc)
+  names(result) <- c('season','siteCode','Nc','c','k','T','A','pa',
+                     'SLmean','SLsd','NLmean','NLsd','modelType',
+                     'CV.Nc','CV.c','CV.pa','Dc','CV.Dc')
+
+  if (!is.null (densityResultsFile)){
+    utils::write.csv(result, file = densityResultsFile, row.names=F)
+  }
+  return(result)
+}
 
