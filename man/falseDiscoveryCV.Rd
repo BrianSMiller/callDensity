@@ -2,12 +2,15 @@
 % Please edit documentation in R/callDensityEstimate.R
 \name{falseDiscoveryCV}
 \alias{falseDiscoveryCV}
-\title{CV of false discovery rate using Cochran approximation}
+\title{WARNING: This function is not supported, and probably does not do what
+whatever you were hoping it might do. Perhaps consider function c_CV instead.
+CV of false discovery rate using Cochran approximation}
 \usage{
-falseDiscoveryCV(p, season)
+falseDiscoveryCV(hourlyFalsePosFile, season)
 }
 \arguments{
-\item{p}{data.frame containing all parameters for call density estimate}
+\item{hourlyFalsePosFile}{Name of csv file contianing hourly estimates of
+false positive rate.}
 
 \item{season}{string or number corresponding to the time of year for which
 call densities should be estimated (and data subsetted).}
@@ -16,5 +19,10 @@ call densities should be estimated (and data subsetted).}
 CV of false discovery rate using Cochran approximation
 }
 \description{
+WARNING: This function is not supported, and probably does not do what
+whatever you were hoping it might do. Perhaps consider function c_CV instead.
 CV of false discovery rate using Cochran approximation
+}
+\seealso{
+c_CV
 }

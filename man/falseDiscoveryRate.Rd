@@ -4,19 +4,38 @@
 \alias{falseDiscoveryRate}
 \title{#  ### Estimate $c$ (False discovery rate)}
 \usage{
-falseDiscoveryRate(p, season, snrTruncationThreshold = -Inf)
+falseDiscoveryRate(
+  capHistFile,
+  season = "year",
+  snrTruncationThreshold = NULL,
+  gtColName = "detect_table1",
+  testColName = "detect_table2",
+  snrColName = "snr"
+)
 }
 \arguments{
-\item{p}{data.frame containing top-level parameters for a call density
-estimate}
+\item{capHistFile}{file name of capture history table (TODO pass as
+data.frame instead of file).}
 
 \item{season}{a character indicating the season or month for which to
 estimate call density}
 
-\item{snrTruncationThreshold}{- Exclude rows with SNR below this threshold (in dB)}
+\item{snrTruncationThreshold}{- Exclude rows with SNR below this threshold
+(in dB)}
+
+\item{gtColName}{- Column name that contains the ground truth detections (0
+for false positive and 1 for true positive) Default='detect_table1'.}
+
+\item{testColName}{- Column name of the detections under investigation (i.e.
+that contains the detections from which to calculate false positives).
+Default='detect_table2')}
+
+\item{snrColName}{- Name of column that contains SNR estimates (only used if
+thresholding by SNR)}
 }
 \value{
-c, the false discovery rate (1-precision) for detector2 assuming
+fdr, list containing false disovery rate, c, and it's CV. The false
+  discovery rate c, is equal to (1-precision) for detector2 assuming
   detector1 is ground truth for detections within the specified season
 }
 \description{

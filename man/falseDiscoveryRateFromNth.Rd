@@ -2,7 +2,10 @@
 % Please edit documentation in R/callDensityEstimate.R
 \name{falseDiscoveryRateFromNth}
 \alias{falseDiscoveryRateFromNth}
-\title{False discovery rate from inspection of every Nth detection}
+\title{WARNING: This function is not supported, and probably does not do what
+whatever you were hoping it might do. Use functions falseDiscoverRate and
+c_CV instead.
+False discovery rate from inspection of every Nth detection}
 \usage{
 falseDiscoveryRateFromNth(falsePositiveXlsx, season = "year")
 }
@@ -17,5 +20,11 @@ The file used by this function must already have had SNR truncation applied
 01-12, and seasons can be 'summer','autumn','winter','spring', or 'year'.}
 }
 \description{
+WARNING: This function is not supported, and probably does not do what
+whatever you were hoping it might do. Use functions falseDiscoverRate and
+c_CV instead.
 False discovery rate from inspection of every Nth detection
+}
+\seealso{
+falseDiscoveryRate, c_CV
 }

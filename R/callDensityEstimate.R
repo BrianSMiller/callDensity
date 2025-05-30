@@ -75,21 +75,15 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   A = studyArea(p$w,truncationDistance)
 
   # c, CV_c---------------------------------------------------------------------
-  c <- falseDiscoveryRate(p,season, snrTruncationThreshold)
-  CV.c <- falseDiscoveryCV(p,season)
+  fdr <- falseDiscoveryRate(p$capHistFile, season, snrTruncationThreshold)
 
-  #  alternative measure of FDR where analyst inspected every nth detection
-  if (p$useSeparateFPdata){
-    c <- falseDiscoveryRateFromNth(p$manualFPfileName,season)
-
-    # CV.c and c are packed in a data frame, so unpack
-    CV.c <- c$CV.c
-    c <- c$c
-  }
+  # CV.c and c are packed in a list, so unpack
+  CV.c <- fdr$cv.c
+  c <- fdr$c
 
 
   #   ### $p_a$ (Overall probability of detection)
-  # This is the one that takes a long time
+  # This is the most complicated part and takes the longest time
   # Pa--------------------------------------------------------------------------
   SNRinfo <- capHist2snrInfo(p$capHistFile,season)
 
@@ -103,10 +97,10 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   # Check whether user supplied an snr detection function or estimate from data
   # NB: This needs to occur AFTER any SNR truncation.
   if (is.null(snrDetFun)){
-  # Estimate snrDetFun from SNRinfo
+    # Estimate snrDetFun from SNRinfo
     snrDetFun <- fitSNRdetectionFunc(
       subset(SNRinfo,SNR>=snrTruncationThreshold),
-                                modelType=p$modelType, p$numKnots)
+      modelType=p$modelType, p$numKnots)
   }
 
   # If user has not specified NL distribution (data.frame with columns mean, sd,
@@ -131,7 +125,6 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   pa.all.transects <- pDetResults$perTransectMeanSD
   no.transects <- dim(pa.all.transects)[1]-1;
   pa <- pa.all.transects[no.transects+1,1]
-  pa
 
   #CV_Pa------------------------------------------------------------------------
   # The line below will read the per-transect pa from file.
@@ -143,7 +136,7 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   CV.pa <- pa_CV(pa.all.transects)
 
   #CV_Nc------------------------------------------------------------------------
-  CV.Nc <- Nc_CV(Nc,pa)
+  CV.Nc <- Nc_CV(Nc,pa,c)
 
   #  ### Finally, estimate Dc (Density of calls) [calls $h^{-1} km^{-2}$]
   # Dc --------------------------------------------------------------------------
@@ -158,7 +151,7 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   # Format output---------------------------------------------------------------
 
   result <- data.frame(season, p$siteCode,Nc,c,p$k,T,p$w,pa,
-                         SL$mean,SL$sd,NL$mean,NL$sd,p$modelType,
+                       SL$mean,SL$sd,NL$mean,NL$sd,p$modelType,
                        CV.Nc,CV.c,CV.pa,Dc,CV.Dc)
   names(result) <- c('season','siteCode','Nc','c','k','T','w','pa',
                      'SLmean','SLsd','NLmean','NLsd','modelType',
@@ -167,6 +160,7 @@ cde <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   utils::write.csv(result, file = p$densityResultsFile, row.names=F)
   return(result)
 }
+
 
 ### Supporting functions are all below
 #
@@ -252,47 +246,75 @@ deploymentDuration <- function(fullYearEffortFile, season){
 #' the rows where detect_table2==T & detect_table1==T.
 #'
 #'
-#' @param p data.frame containing top-level parameters for a call density
-#'   estimate
+#' @param capHistFile file name of capture history table (TODO pass as
+#'   data.frame instead of file).
 #' @param season a character indicating the season or month for which to
 #'   estimate call density
-#' @param snrTruncationThreshold - Exclude rows with SNR below this threshold (in dB)
+#' @param snrTruncationThreshold - Exclude rows with SNR below this threshold
+#'   (in dB)
+#' @param gtColName - Column name that contains the ground truth detections (0
+#'   for false positive and 1 for true positive) Default='detect_table1'.
+#' @param testColName - Column name of the detections under investigation (i.e.
+#'   that contains the detections from which to calculate false positives).
+#'   Default='detect_table2')
+#' @param snrColName - Name of column that contains SNR estimates (only used if
+#'   thresholding by SNR)
 #'
-#' @returns c, the false discovery rate (1-precision) for detector2 assuming
+#' @returns fdr, list containing false disovery rate, c, and it's CV. The false
+#'   discovery rate c, is equal to (1-precision) for detector2 assuming
 #'   detector1 is ground truth for detections within the specified season
 #' @export
 #'
-falseDiscoveryRate <- function(p,season, snrTruncationThreshold=-Inf){
+falseDiscoveryRate <- function(capHistFile,
+                               season='year',
+                               snrTruncationThreshold=NULL,
+                               gtColName = 'detect_table1',
+                               testColName = 'detect_table2',
+                               snrColName = 'snr'
+                               ){
 
-  ch <- read.csv(file = p$capHistFile)
+  ch <- read.csv(file = capHistFile)
   ch <- capHistTimeSeason(ch)
 
-  ch <- subset(ch, ch$snr >= snrTruncationThreshold)
+  if (!is.null(snrTruncationThreshold)){
+    snr <- ch[,snrColName]
+    ch <- subset(ch, snr >= snrTruncationThreshold)
+  }
 
   ch <- subsetByTimeCode(ch,ch$t,season)
 
-  FP <- sum(ch$detect_table2 & !ch$detect_table1)
-  TP <- sum(ch$detect_table2 & ch$detect_table1)
+  FP <- sum(ch[,testColName] & !ch[,gtColName])
+  TP <- sum(ch[,testColName] & ch[,gtColName])
   c <- FP/(FP+TP)
-  return(c)
+  n <- FP + TP
+
+  cv.c <- c_CV(n, c)
+
+  fdr = list(c=c, cv.c = cv.c)
+
+  return(fdr)
 }
 
 
+#' WARNING: This function is not supported, and probably does not do what
+#' whatever you were hoping it might do. Perhaps consider function c_CV instead.
 #' CV of false discovery rate using Cochran approximation
 #'
-#' @param p data.frame containing all parameters for call density estimate
+#' @param hourlyFalsePosFile Name of csv file contianing hourly estimates of
+#'   false positive rate.
 #' @param season string or number corresponding to the time of year for which
 #'   call densities should be estimated (and data subsetted).
 #'
 #' @returns CV of false discovery rate using Cochran approximation
+#' @seealso c_CV
 #' @export
 #'
-falseDiscoveryCV <- function(p,season){
+falseDiscoveryCV <- function(hourlyFalsePosFile,season){
   #  ### $CV_c$ (Cochran approx.);
   #
   #  First calculate using annotated library
   #
-  fp <- read.csv(p$hourlyFalsePosFile)
+  fp <- read.csv(hourlyFalsePosFile)
   fp <- subsetByTimeCode(fp,lubridate::dmy_hms(fp$dt0), season)
   fp$fdr <- fp$num_fp/fp$num_detections
   x<-fp$fdr # false discovery rate
@@ -312,6 +334,9 @@ falseDiscoveryCV <- function(p,season){
   CV.c
 }
 
+#' WARNING: This function is not supported, and probably does not do what
+#' whatever you were hoping it might do. Use functions falseDiscoverRate and
+#' c_CV instead.
 #' False discovery rate from inspection of every Nth detection
 #' @param falsePositiveXlsx Excel spreadsheet with timestamp of false positives.
 #' This spreadsheet requires two columns: one called UTC and the other called
@@ -321,7 +346,7 @@ falseDiscoveryCV <- function(p,season){
 #'
 #' @param season Month or season over which to subset the data. Months can be
 #' 01-12, and seasons can be 'summer','autumn','winter','spring', or 'year'.
-#'
+#' @seealso falseDiscoveryRate, c_CV
 #' @export
 #'
 falseDiscoveryRateFromNth<- function(falsePositiveXlsx,season='year'){
@@ -394,33 +419,73 @@ falseDiscoveryRateFromNth<- function(falsePositiveXlsx,season='year'){
 #' CV.Nc is calculated from the variance of Nc, which depends on the probability
 #' of detection (pa). Here, Nc represents the number of detected calls, and
 #' independence between detections is assumed.
+#'
+#' Rationale for this calculation Variance of a binomial process, pa, is: 1)
+#' sigma^2= n * pa * (1-pa)
+#'
+#' We require n, the number of trials conducted, but we have Nc, the number of
+#' positive detections. So we correct for false positives, then scale true
+#' positives by pa to get total number of trials
+#'
+#' 2) n =  (Nc*(1-c)/pa; # n: the number of trials conducted We substitute the
+#' right hand side back into 1) to get: 3) sigma^2 = (Nc*(1-c)/pa*pa*(1-pa);
+#' dividing by and multiplying by pa is the same as multiplying by one, leaving
+#' 4) sigma^2 = Nc * (1-c) * (1-pa)
+#'
 #' @param Nc - Number of calls detected in the dataset (see function
 #'   countDetections())
 #' @param pa - Average probability of detection in the study area (see function
 #'   pDetInArea())
+#' @param c - false discovery rate (proportion of false positive detections
+#'   divided by the total number predicted positive)
 #'
 #' @returns cv.Nc - coefficient of variation of the number of detected calls
 #' @export
 #'
-Nc_CV <- function(Nc,pa){
-  # variance of NC
-  var.Nc <- Nc * pa * (1 - pa)
+Nc_CV <- function(Nc,pa,c){
+  var.Nc = Nc * (1-c) * (1-pa) # variance of NC
 
   # Calculate the standard deviation of Nc
-  sd.Nc <- sqrt(var.Nc)
+  sd.Nc = sqrt(var.Nc)
 
-  # Calculate the coefficient of variation of Nc
-  cv.Nc <- (sd.Nc / Nc)
+  # Calculate the coefficient of variation of Nc where (Nc*(1-c)) is mean of the
+  # binomial process
+  cv.Nc <- sd.Nc / (Nc*(1-c))
 
-  # Optionally define a model name if needed
-  # pa.model <- "your_model_name"
-
-  # Print the results
-  cat("Uncertainty for pa:\n")
-  cat("  Variance (var.Nc): ", var.Nc, "\n")
-  cat("  Standard Deviation (sd.Nc): ", sd.Nc, "\n")
-  cat("  Coefficient of Variation (cv.Nc): ", cv.Nc, "%\n\n")
   return(cv.Nc)
+}
+
+
+#' c_CV: Coefficient of Variation (CV) of false discovery rate (c).
+#'
+#' CV.c is calculated from the variance of c, which depends on the probability
+#' of false alarm (c), a binomial process.
+#'
+#' Rationale for this calculation Variance of a binomial process, pa, is: 1)
+#' sigma^2= n * c * (1-c)
+#'
+#' We require n, the number of trials conducted (i.e. how many detections were
+#' inspected when estimating c) and the estimate of c
+#'
+#'
+#' @param n - Number of trials used to estimate c
+#' @param c - false discovery rate (proportion of false positive detections
+#'   divided by the total number predicted positive)
+#'
+#' @returns cv.c - coefficient of variation of the false discovery rate
+#' @export
+#'
+c_CV <- function(n,c){
+  var.c = n * c * (1-c) # variance of c
+
+  # Calculate the standard deviation of Nc
+  sd.c = sqrt(var.c)
+
+  # Calculate the coefficient of variation of c. Here n*c is mean of the
+  # binomial process (number of trials multiplied by number of false positives)
+  cv.c <- sd.c / (n*c)
+
+  return(cv.c)
 }
 
 
@@ -454,8 +519,6 @@ names(pa.all.transects)<-c('Mean','SD')
 y=pa.all.transects[1:no.transects,]
 
 ## IMPORTANT: to check if the var, SE and CV calculation is correct ##
-## Per year:
-
 varp.pa<-((sd(y$Mean)/sqrt(no.transects))^2)+((sum(y$SD)/no.transects)^2)
 sep.pa<-sqrt(varp.pa)
 CV.pa<-sep.pa/mean(y$Mean)
@@ -482,4 +545,5 @@ Dc_CV<- function(CV.Nc,CV.pa,CV.c){
   CV.Dc<-sqrt((CV.Nc^2)+(CV.pa^2)+(CV.c^2))
   return(CV.Dc)
 }
+
 
