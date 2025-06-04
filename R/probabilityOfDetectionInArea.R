@@ -59,7 +59,7 @@
 #' @export
 pDetInArea <-
   function(res.1, SL, TLlookup,  NL, # Sonar equation inputs
-           transectFile='', simResultsFile='', paFile='', # file output names
+           transectFile=NULL, simResultsFile=NULL, paFile=NULL,# output names
            output.resolution.m = 100, outerloop = 1000,
            truncationDistance=(Inf), snrTruncationThreshold=-Inf) {
     ### A5.2 Code used for the Monte Carlo Simulation
@@ -338,7 +338,7 @@ pDetInArea <-
   #*****************************************************************************
   # SIMULATION ENDED - NOW PRODUCE THE RESULTS #################################
   #Save originally selected parameters for the simulation
-  if (simResultsFile!=''){
+  if (!is.null(simResultsFile)){
     utils::write.table(results1000sim,file=simResultsFile,
                      row.names=F,col.names=F)
   }
@@ -419,7 +419,7 @@ pDetInArea <-
   # STEP 7(c) save the results in the results matrix and print out
   pdetsandvar[1:no.profiles,2]<-st.devPt
   pdetsandvar[no.profiles+1,2]<-st.errorPt
-  if (paFile!=''){
+  if (!is.null(paFile)){
     utils::write.table(pdetsandvar,file=paFile, row.names=F,
                        col.names = c("Mean","SD"))
   }
@@ -444,7 +444,7 @@ pDetInArea <-
   allDetFunctions<- data.table::as.data.table(allDetFunctions)
   names(allDetFunctions)<-dimnames(allTLlookup_h)[[2]]
 
-  if (transectFile!=''){
+  if (!is.null(transectFile)){
     data.table::fwrite(allDetFunctions, file=transectFile)
   }
 

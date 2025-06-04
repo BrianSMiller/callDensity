@@ -789,7 +789,7 @@ ciFromCV <- function(a, cv){
 #' @export
 #'
 readCapHist <- function(capHistFile){
-  ch <- read.csv(file = p$capHistFile,na.strings = c('NaN','NA'))
+  ch <- read.csv(file = capHistFile,na.strings = c('NaN','NA'))
   ch <- capHistTimeSeason(ch)
   return(ch)
 }

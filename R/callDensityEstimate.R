@@ -303,7 +303,7 @@ falseDiscoveryRate <- function(ch,
                                snrTruncationThreshold=NULL,
                                gtColName = 'detect_table1',
                                testColName = 'detect_table2',
-                               snrColName = 'snr'
+                               snrColName = 'SNR'
                                ){
 
   if (!is.null(snrTruncationThreshold)){
@@ -668,34 +668,19 @@ cde <- function (Nc,
                  numKnots = 5,
                  output.resolution.m=100,
                  outerloop = 10,
-                 transectFile='',  # file output names
-                 simResultsFile='',
-                 paFile='',
+                 transectFile=NULL,  # file output names
+                 simResultsFile=NULL,
+                 paFile=NULL,
                  ###
                  truncationDistance=Inf,
                  snrTruncationThreshold=-Inf,
                  siteCode='',
-                 densityResultsFile=''
+                 densityResultsFile=NULL
                  ){
   # Check inputs and create outputs
   # Store all parameters for call-density estimation in data frame called 'p'
   #
   # InputCheck------------------------------------------------------------------
-
-
-
-  # Number of calls
-  # Nc--------------------------------------------------------------------------
-  # Nc <- countDetections(p$detectorParams$fullYearDetectionCsv,season,
-  #                       snrTruncationThreshold=snrTruncationThreshold)
-
-  # Duration of time monitored
-  #T----------------------------------------------------------------------------
-  # T <- deploymentDuration(p$detectorParams$fullYearEffortFile, season)
-
-  #  ### Calculate study area
-  # A---------------------------------------------------------------------------
-  # A = studyArea(p$w,truncationDistance)
 
   # c, CV_c---------------------------------------------------------------------
   fdr <- falseDiscoveryRate(capHistTab, season, snrTruncationThreshold)
@@ -704,18 +689,10 @@ cde <- function (Nc,
   CV.c <- fdr$cv.c
   c <- fdr$c
 
-
   #   ### $p_a$ (Overall probability of detection)
   # This is the most complicated part and takes the longest time
   # Pa--------------------------------------------------------------------------
   SNRinfo <- capHist2snrInfo(capHistTab,season)
-
-  # Read SL distribution parameters from overall parameters.
-  # SL <- data.frame(mean=p$slParams$slMean,
-  #                  sd=p$slParams$slStd,
-  #                  sampleSize=p$slParams$slSampleSize)
-
-  # TL<-utils::read.csv(p$tlParams$tlFile)
 
   # Check whether user supplied an snr detection function or estimate from data
   # NB: This needs to occur AFTER any SNR truncation.
@@ -734,8 +711,8 @@ cde <- function (Nc,
   }
 
   pDetResults <- pDetInArea(snrDetFun, SL, TL,  NL, # Sonar equation inputs
-                            output.resolution.m=p$output.resolution.m,
-                            outerloop=p$outerloop,
+                            output.resolution.m=output.resolution.m,
+                            outerloop=outerloop,
                             truncationDistance=truncationDistance,
                             snrTruncationThreshold= snrTruncationThreshold,
                             transectFile,  # file output names
@@ -751,7 +728,6 @@ cde <- function (Nc,
 
   #CV_Pa------------------------------------------------------------------------
   # The line below will read the per-transect pa from file.
-  # pa.all.transects <- read.csv(p$paFile, header = TRUE, sep = ' ');
 
   # Per-transect mean and SD of pa now returned in the list of pDetResults, so
   # no need to read or write it to a file
@@ -764,10 +740,8 @@ cde <- function (Nc,
   #  ### Finally, estimate Dc (Density of calls) [calls $h^{-1} km^{-2}$]
   # Dc --------------------------------------------------------------------------
   Dc <- (Nc * (1-c) )/( k * A * pa * T )
-  Dc     # per h per km^2
-  Dc*1e3 # per h per 1000 km^2?
 
-  # CV_Total--------------------------------------------------------------------
+    # CV_Total--------------------------------------------------------------------
   CV.Dc <- Dc_CV(CV.Nc,CV.pa,CV.c)
 
   #  ## Collate into data frame and write to csv file
@@ -780,7 +754,7 @@ cde <- function (Nc,
                      'SLmean','SLsd','NLmean','NLsd','modelType',
                      'CV.Nc','CV.c','CV.pa','Dc','CV.Dc')
 
-  if (!is.null (densityResultsFile)){
+  if (!is.null(densityResultsFile)){
     utils::write.csv(result, file = densityResultsFile, row.names=F)
   }
   return(result)
