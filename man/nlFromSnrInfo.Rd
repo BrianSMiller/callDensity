@@ -8,16 +8,20 @@ measurements included in the snrInfo file, plus the SNR detection function.}
 nlFromSnrInfo(snrInfo, snrDetFun)
 }
 \arguments{
-\item{snrInfo}{- Table of SNR information containing column named NoiseRL
-with noise level measurements in dB}
+\item{snrInfo}{\itemize{
+\item Table of SNR information containing column named NoiseRL
+with noise level measurements in dB
+}}
 
-\item{snrDetFun}{- SNR detection function (e.g. from fitSNRdetectionFunc or
-fitSNRvglm)}
+\item{snrDetFun}{\itemize{
+\item SNR detection function (e.g. from fitSNRdetectionFunc or
+fitSNRvglm)
+}}
 }
 \value{
 Data.frame with 1 row and 3 columns containing parameterised
-  distribution of noise levels. Column names are mean, sd, and sampleSize.
-  Distribution assumed to be normal.
+distribution of noise levels. Column names are mean, sd, and sampleSize.
+Distribution assumed to be normal.
 }
 \description{
 Estimate noise level distribution for MC simulation from the noise

@@ -1,8 +1,8 @@
 Package: callDensity
 Type: Package
-Title: (Analysis of Baleen-whale) Call Density Estimates from Geophones and Hydrophones (ABCDEfGH)
-Version: 0.1.0
-Author: Danielle Harris, Franciele R Castro, and Brian S Miller
+Title: Analysis for bioacoustic call density estimation (ABCDE)
+Version: 0.2.0
+Author: Brian S Miller, Danielle Harris, Franciele R Castro, and Nat Kelly
 Maintainer: Brian S Miller <Brian.Miller@aad.gov.aut>
 Description: Software for estimating the density of animal vocalisations (calls)
     This package includes functions for estimating call density of animal 
@@ -41,3 +41,4 @@ Suggests:
     rmarkdown,
     roxygen2
 VignetteBuilder: knitr
+Roxygen: list(markdown = TRUE)

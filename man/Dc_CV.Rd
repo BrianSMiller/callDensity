@@ -7,11 +7,17 @@
 Dc_CV(CV.Nc, CV.pa, CV.c)
 }
 \arguments{
-\item{CV.Nc}{- CV of number of calls Nc}
+\item{CV.Nc}{\itemize{
+\item CV of number of calls Nc
+}}
 
-\item{CV.pa}{- CV of probability of detection in the area, pa}
+\item{CV.pa}{\itemize{
+\item CV of probability of detection in the area, pa
+}}
 
-\item{CV.c}{- CV of the false discovery rate, c}
+\item{CV.c}{\itemize{
+\item CV of the false discovery rate, c
+}}
 }
 \value{
 CV.Dc - coefficient of variation of the call density

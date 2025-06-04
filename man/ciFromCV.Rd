@@ -9,13 +9,13 @@ ciFromCV(a, cv)
 \arguments{
 \item{a}{abundance (or density)}
 
-\item{cv}{coefficient of variation, in decimal format, i.e., a CV of 10%
+\item{cv}{coefficient of variation, in decimal format, i.e., a CV of 10\%
 would be 0.1.}
 }
 \value{
-list with lower and upper 95% confidence intervals
+list with lower and upper 95\% confidence intervals
 }
 \description{
 Quick function to convert an abundance with a coefficient of variation (CV)
-into a 95% confidence interval.
+into a 95\% confidence interval.
 }

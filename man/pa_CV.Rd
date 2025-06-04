@@ -7,10 +7,12 @@
 pa_CV(pa.all.transects)
 }
 \arguments{
-\item{pa.all.transects}{- matrix containing two columns and same number of
+\item{pa.all.transects}{\itemize{
+\item matrix containing two columns and same number of
 rows as number of transects. The first column contains the mean pa and the
 second column contains the standard deviation of pa for each transect. The
-final column contains the overall mean and sd.}
+final column contains the overall mean and sd.
+}}
 }
 \value{
 CV.pa - CV of the probability of deteciton in the area

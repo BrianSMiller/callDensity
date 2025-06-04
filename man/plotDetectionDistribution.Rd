@@ -7,10 +7,14 @@
 plotDetectionDistribution(sim)
 }
 \arguments{
-\item{sim}{- callDensity simulation data.frame}
+\item{sim}{\itemize{
+\item callDensity simulation data.frame
+}}
 }
 \value{
-- ggplot object of type geom_histogram
+\itemize{
+\item ggplot object of type geom_histogram
+}
 }
 \description{
 SNR histogram of true & false positives, and false negatives for callDensity simulation

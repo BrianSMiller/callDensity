@@ -7,10 +7,14 @@
 c_CV(n, c)
 }
 \arguments{
-\item{n}{- Number of trials used to estimate c}
+\item{n}{\itemize{
+\item Number of trials used to estimate c
+}}
 
-\item{c}{- false discovery rate (proportion of false positive detections
-divided by the total number predicted positive)}
+\item{c}{\itemize{
+\item false discovery rate (proportion of false positive detections
+divided by the total number predicted positive)
+}}
 }
 \value{
 cv.c - coefficient of variation of the false discovery rate

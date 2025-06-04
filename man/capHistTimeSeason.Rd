@@ -11,7 +11,7 @@ capHistTimeSeason(x)
 }
 \value{
 Capture history table with column t, season, and month containing
-    POSIXct, and timeCode factors for season and month.
+POSIXct, and timeCode factors for season and month.
 }
 \description{
 Add R datetime, season, and month codes to a capture history table

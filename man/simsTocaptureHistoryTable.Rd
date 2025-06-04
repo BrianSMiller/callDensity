@@ -7,13 +7,17 @@
 simsTocaptureHistoryTable(subsampleDet1, subsampleDet2)
 }
 \arguments{
-\item{subsampleDet1}{- Simulated detection table 1}
+\item{subsampleDet1}{\itemize{
+\item Simulated detection table 1
+}}
 
-\item{subsampleDet2}{- Simulated detection table 2}
+\item{subsampleDet2}{\itemize{
+\item Simulated detection table 2
+}}
 }
 \value{
 capture history table containing a row for each detection that was
-  detected by either detector.
+detected by either detector.
 }
 \description{
 Create a capture history table from the two simulated detection tables

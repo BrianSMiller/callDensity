@@ -7,8 +7,10 @@
 readCapHist(capHistFile)
 }
 \arguments{
-\item{capHistFile}{- name of the csv or txt file that contains capture
-histories. TODO: Document the required columns/file format better}
+\item{capHistFile}{\itemize{
+\item name of the csv or txt file that contains capture
+histories. TODO: Document the required columns/file format better
+}}
 }
 \value{
 capture history table as data.frame

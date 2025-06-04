@@ -12,16 +12,24 @@ simCallLocation(
 )
 }
 \arguments{
-\item{n}{- Number of calls that will be created.
+\item{n}{\itemize{
+\item Number of calls that will be created.
 
-  For reference 1 whale call every 10 s would be a maximum of 3.1536M calls
-  In a continuous year of recording (i.e. 365*24*60*60/10 = 3.1536e6)}
+For reference 1 whale call every 10 s would be a maximum of 3.1536M calls
+In a continuous year of recording (i.e. 365\emph{24}60*60/10 = 3.1536e6)
+}}
 
-\item{R}{- Radius of study area.}
+\item{R}{\itemize{
+\item Radius of study area.
+}}
 
-\item{minDate}{- Starting date and time for the simulated data (POSIXct)}
+\item{minDate}{\itemize{
+\item Starting date and time for the simulated data (POSIXct)
+}}
 
-\item{maxDate}{- Ending/latest date and time for the simulated data (POSIXct)}
+\item{maxDate}{\itemize{
+\item Ending/latest date and time for the simulated data (POSIXct)
+}}
 }
 \value{
 sim - data.frame containing a row for each simulated call and columns for the location and time of each call.

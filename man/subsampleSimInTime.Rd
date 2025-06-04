@@ -13,20 +13,30 @@ subsampleSimInTime(
 )
 }
 \arguments{
-\item{sim}{- simulation data.frame containing column a time column named
-'datetime'}
+\item{sim}{\itemize{
+\item simulation data.frame containing column a time column named
+'datetime'
+}}
 
-\item{minDate}{- posixCT indicating the start of the first subsample}
+\item{minDate}{\itemize{
+\item posixCT indicating the start of the first subsample
+}}
 
-\item{maxDate}{- posixCT indicating the start of the last subsample}
+\item{maxDate}{\itemize{
+\item posixCT indicating the start of the last subsample
+}}
 
-\item{interval}{- difftime interval between subsamples (e.g. '41 hour')}
+\item{interval}{\itemize{
+\item difftime interval between subsamples (e.g. '41 hour')
+}}
 
-\item{duration}{- numeric indicating the duration (in s) of each subsample}
+\item{duration}{\itemize{
+\item numeric indicating the duration (in s) of each subsample
+}}
 }
 \value{
 subsampledSim - a simulation dataframe containing only rows from the
-  input that fall within the subsample
+input that fall within the subsample
 }
 \description{
 Subsample from a simulation at evenly spaced time intervals.

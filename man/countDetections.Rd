@@ -12,27 +12,33 @@ countDetections(
 )
 }
 \arguments{
-\item{detectionFile}{- File containing detections for the full dataset.
+\item{detectionFile}{\itemize{
+\item File containing detections for the full dataset.
 File format must be tab separated with header, and must contain the
 following columns:
- t0: <double> Matlab datenum
- snr: <double> Signal to noise ratio of that detection (required only if
-   snrTruncationThreshold is other than default value of -Inf)}
+t0: \if{html}{\out{<double>}} Matlab datenum
+snr: \if{html}{\out{<double>}} Signal to noise ratio of that detection (required only if
+snrTruncationThreshold is other than default value of -Inf)
+}}
 
-\item{season}{- Time period over which to subset detections. Can follow World
+\item{season}{\itemize{
+\item Time period over which to subset detections. Can follow World
 Ocean Atlas numeric time codes (0-16), or be name of season
 ('summer','autumn','winter','spring'), month name/abbreviation, or 'year'
-(default).}
+(default).
+}}
 
-\item{snrTruncationThreshold}{<double> detections with SNR less than
+\item{snrTruncationThreshold}{\if{html}{\out{<double>}} detections with SNR less than
 snrTruncation threshold (in dB) will be excluded from count}
 
-\item{snrColName}{- name of column containing SNR values (only used if SNR
-truncation>-Inf)}
+\item{snrColName}{\itemize{
+\item name of column containing SNR values (only used if SNR
+truncation>-Inf)
+}}
 }
 \value{
-<numeric> number of detections in the detectionFile within specified
-  season and >= snrTruncationThreshold
+\if{html}{\out{<numeric>}} number of detections in the detectionFile within specified
+season and >= snrTruncationThreshold
 }
 \description{
 Title

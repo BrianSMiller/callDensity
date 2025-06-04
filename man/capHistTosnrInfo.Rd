@@ -9,10 +9,14 @@ capHistTosnrInfo}
 capHistTosnrInfo(capHistTab)
 }
 \arguments{
-\item{capHistTab}{- Capture history table of detections}
+\item{capHistTab}{\itemize{
+\item Capture history table of detections
+}}
 }
 \value{
-- SNRInfo data.frame containing SNR, detections, RL, NL
+\itemize{
+\item SNRInfo data.frame containing SNR, detections, RL, NL
+}
 }
 \description{
 Convert capture history DATA.FRAME into the 'SNRinfo' format used

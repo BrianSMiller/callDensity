@@ -7,25 +7,29 @@
 simulateDetector(detParams, sim)
 }
 \arguments{
-\item{detParams}{- A data.frame of parameters for simulating the acoustic
+\item{detParams}{\itemize{
+\item A data.frame of parameters for simulating the acoustic
 detector. The simulated detector will follow a logistic curve 'plogis' with
 the 'location', and 'scale' specified in the columns of detParams. The
 detector will also have a false discovery rate, 'c' specified in detParams
 as well as a mean and standard deviation of the distribution of the
-false-positive-to-noise-ratio, 'fpMean', and 'fpSD' respectively.}
+false-positive-to-noise-ratio, 'fpMean', and 'fpSD' respectively.
+}}
 
-\item{sim}{- a simulation data.frame created by simCallLocation and
-simCallAcoustics}
+\item{sim}{\itemize{
+\item a simulation data.frame created by simCallLocation and
+simCallAcoustics
+}}
 }
 \value{
 sim - simulation data.frame with additional columns for the detector
-  status and rows for false positives. Columns added by this function
-  include:
-     detect_table - logical indicating which calls were detected
-     groundTruth - logical indicating whether the call is a true positive (1)
-       or false positive (0).
-     group - factor with three levels indicating whether the call is a true
-       positive, false positive, or false negative.
+status and rows for false positives. Columns added by this function
+include:
+detect_table - logical indicating which calls were detected
+groundTruth - logical indicating whether the call is a true positive (1)
+or false positive (0).
+group - factor with three levels indicating whether the call is a true
+positive, false positive, or false negative.
 }
 \description{
 Given parameters of an acoustic detector and a callDensity simulation,

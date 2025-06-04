@@ -29,7 +29,7 @@ no false positive detections included in the data for either observer.
 Models are fitted using the VGAM package (Yee, Stoklosa & Huggins 2015).
 
 Yee, Thomas W., Jakub Stoklosa, and Richard M. Huggins. “The VGAM Package for
- Capture-Recapture Data Using the Conditional Likelihood.” Journal of
- Statistical Software 65 (June 1, 2015): 1–33.
- https://doi.org/10.18637/jss.v065.i05.
+Capture-Recapture Data Using the Conditional Likelihood.” Journal of
+Statistical Software 65 (June 1, 2015): 1–33.
+https://doi.org/10.18637/jss.v065.i05.
 }

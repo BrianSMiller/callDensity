@@ -7,14 +7,20 @@
 Nc_CV(Nc, pa, c)
 }
 \arguments{
-\item{Nc}{- Number of calls detected in the dataset (see function
-countDetections())}
+\item{Nc}{\itemize{
+\item Number of calls detected in the dataset (see function
+countDetections())
+}}
 
-\item{pa}{- Average probability of detection in the study area (see function
-pDetInArea())}
+\item{pa}{\itemize{
+\item Average probability of detection in the study area (see function
+pDetInArea())
+}}
 
-\item{c}{- false discovery rate (proportion of false positive detections
-divided by the total number predicted positive)}
+\item{c}{\itemize{
+\item false discovery rate (proportion of false positive detections
+divided by the total number predicted positive)
+}}
 }
 \value{
 cv.Nc - coefficient of variation of the number of detected calls
@@ -31,9 +37,10 @@ sigma^2= n * pa * (1-pa)
 We require n, the number of trials conducted, but we have Nc, the number of
 positive detections. So we correct for false positives, then scale true
 positives by pa to get total number of trials
-
-2) n =  (Nc*(1-c)/pa; # n: the number of trials conducted We substitute the
-right hand side back into 1) to get: 3) sigma^2 = (Nc*(1-c)/pa*pa*(1-pa);
+\enumerate{
+\item n =  (Nc*(1-c)/pa; # n: the number of trials conducted We substitute the
+right hand side back into 1) to get: 3) sigma^2 = (Nc*(1-c)/pa\emph{pa}(1-pa);
 dividing by and multiplying by pa is the same as multiplying by one, leaving
-4) sigma^2 = Nc * (1-c) * (1-pa)
+\item sigma^2 = Nc * (1-c) * (1-pa)
+}
 }

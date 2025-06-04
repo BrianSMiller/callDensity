@@ -7,12 +7,16 @@
 deploymentDurationFromsoundFolderCsv(fullYearEffortFile, season = "year")
 }
 \arguments{
-\item{fullYearEffortFile}{- csv file containing a row for each time period
+\item{fullYearEffortFile}{\itemize{
+\item csv file containing a row for each time period
 that was included in the study and columns named startDate and duration.
 startDate should be a matlab datenum, and duration should be numeric
-and in seconds.}
+and in seconds.
+}}
 
-\item{season}{- default='year'}
+\item{season}{\itemize{
+\item default='year'
+}}
 }
 \description{
 Calculate deployment duration from a Matlab soundFolder csv file.

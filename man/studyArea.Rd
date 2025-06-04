@@ -7,11 +7,15 @@
 studyArea(w, truncationDistance = w)
 }
 \arguments{
-\item{w}{- Radius of study area}
+\item{w}{\itemize{
+\item Radius of study area
+}}
 
-\item{truncationDistance}{- Matrix of truncation distances [1 x Nr]. Nr is
+\item{truncationDistance}{\itemize{
+\item Matrix of truncation distances \link{1 x Nr}. Nr is
 the number of radial transects in the simulation (i.e. the same as the
-number of TL profiles).}
+number of TL profiles).
+}}
 }
 \value{
 Area of the simulation

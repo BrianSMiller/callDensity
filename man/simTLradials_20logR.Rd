@@ -8,11 +8,17 @@ spreading law.}
 simTLradials_20logR(maxRange, rangeStep, numTransects)
 }
 \arguments{
-\item{maxRange}{- Length of each radial transect}
+\item{maxRange}{\itemize{
+\item Length of each radial transect
+}}
 
-\item{rangeStep}{- increment between points on each transect where TL}
+\item{rangeStep}{\itemize{
+\item increment between points on each transect where TL
+}}
 
-\item{numTransects}{- Number of radial transects (i.e. columns in result)}
+\item{numTransects}{\itemize{
+\item Number of radial transects (i.e. columns in result)
+}}
 }
 \value{
 TL -

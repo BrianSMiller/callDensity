@@ -7,7 +7,9 @@
 plotSpatialDetections(sim)
 }
 \arguments{
-\item{sim}{- callDensity simulation}
+\item{sim}{\itemize{
+\item callDensity simulation
+}}
 }
 \value{
 ggplot object of type geom_bin_2d

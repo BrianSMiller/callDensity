@@ -2,7 +2,8 @@
 % Please edit documentation in R/callDensityEstimate.R
 \name{cdeFromParamFile}
 \alias{cdeFromParamFile}
-\title{Call Density Estimate - Main function that accepts parameter file and season#' title: "Call Density"
+\title{Call Density Estimate - Main function that accepts parameter file and season
+title: "Call Density"
 author: "Brian Miller"
 date: "2022-10-12"}
 \usage{

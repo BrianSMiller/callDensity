@@ -2,10 +2,7 @@
 % Please edit documentation in R/callDensityEstimate.R
 \name{cde}
 \alias{cde}
-\title{Call Density Estimate
-title: "Call Density"
-author: "Brian Miller"
-date: "2022-10-12"}
+\title{Call Density Estimate using auxiliary information from sonar equation}
 \usage{
 cde(
   Nc,
@@ -22,100 +19,127 @@ cde(
   numKnots = 5,
   output.resolution.m = 100,
   outerloop = 10,
-  transectFile = "",
-  simResultsFile = "",
-  paFile = "",
+  transectFile = NULL,
+  simResultsFile = NULL,
+  paFile = NULL,
   truncationDistance = Inf,
   snrTruncationThreshold = -Inf,
   siteCode = "",
-  densityResultsFile = ""
+  densityResultsFile = NULL
 )
 }
 \arguments{
-\item{Nc}{- Total count of true positive detections for call density estimate}
+\item{Nc}{Total count of true positive detections for call density estimate}
 
-\item{capHistTab}{- Capture history table used to derive false positive rate.
-Can also be used to derive probability of detection as a function of SNR if
-snrDetFun is not specified.}
+\item{capHistTab}{Capture history table used to derive false positive rate.
+Can also be used to derive probability of detection as a function of SNR
+for estimating \eqn{p_a} if snrDetFun is not specified.}
 
-\item{SL}{- List containing distribution of source level parameters.
+\item{SL}{List containing distribution of source level parameters.
 SL must contain named elements named: mean, sd, and sampleSize.}
 
-\item{TL}{- Data.frame of transmission losses for Monte Carlo simulation. The
+\item{TL}{Data.frame of transmission losses for Monte Carlo simulation. The
 first column must contain the ranges, the remaining columns contain
 transmission losses (in dB) for each radial transect at that range.}
 
-\item{A}{- Scalar indicating the area for the call density estimate
+\item{A}{Scalar indicating the area for the call density estimate
 (default=1)}
 
 \item{k}{Number of sensors (default=1)}
 
-\item{season}{TimeCode specifying month, season, or year for outputs}
+\item{season}{TimeCode specifying month, season, or year for outputs.
+Timecodes follow the same form as those from the World Ocean Atlas.}
 
-\item{snrDetFun}{OPTIONAL linear-model like structure (GLM,GAM,SCAM,etc)
-specifying the SNR-detection function to use. If this is not included,
-then the SNR-detection function will be derived from the capture history
-table.}
+\item{snrDetFun}{(Optional) Linear-model like structure
+(GLM,GAM,SCAM,VGLM,etc) specifying the SNR-detection function to use. If
+this is not included, then the SNR-detection function will be derived from
+the capture history table.}
 
-\item{NL}{list or data.frame containing distribution of noise level
-parameters. Must contain items named: mean, sd, and sampleSize (similar to
-SL).}
+\item{NL}{(Optional and Experimental/Unsupported) list or data.frame
+containing distribution of noise level parameters. Must contain items
+named: mean, sd, and sampleSize (similar to SL). If not provided, NL will
+be estimated from the capture history table (and snrDetFun).}
 
-\item{modelType}{- Either 'glm','gam','scam',or 'vglm' indicating which type
+\item{modelType}{Either 'glm','gam','scam',or 'vglm' indicating which type
 of model to use for estimating probability of detection as a function of
 SNR (default='scam')}
 
-\item{numKnots}{- number of knots to use wor modelling detection function vs
+\item{numKnots}{Number of knots to use wor modelling detection function vs
 SNR (only if model types 'gam' or 'scam') default = 5}
 
 \item{output.resolution.m}{Spatial resolution along radial transects for
 estimating probability of detection in area. Default = 100}
 
-\item{outerloop}{- Number of bootstrap iterations for Monte Carlo simulation}
+\item{outerloop}{Number of bootstrap iterations for Monte Carlo simulation}
 
-\item{transectFile}{- Optional name of text file to store probability of
-detection at each output.resolution.m step (potentially yielding a large file)}
+\item{transectFile}{(Optional) Output text file name where probability of
+detection will be saved. This includes the probability of detection at
+each output.resolution.m step, so potentially yields a large file (hundreds
+of MB). Default is to not write this information to disk.}
 
-\item{simResultsFile}{- Optional name of text file to store Monte Carlo
-Simulation parameters and results}
+\item{simResultsFile}{(Optional) Name of output text file where Monte Carlo
+Simulation parameters and results will be saved. Default is to not write
+this information to disk.}
 
-\item{paFile}{- Optional name of text file to store mean probability of
-detection per transect and overall area}
+\item{paFile}{\itemize{
+\item (Optional) Name of output text file where mean probability
+of detection per transect and overall area will be saved. Default is to not
+write this information to disk.
+}}
 
-\item{truncationDistance}{scalar or matrix of truncation distances.
-If a matrix is provided, then the dimensions should be 1xN with N being
-the same as the number of transects}
+\item{truncationDistance}{scalar or matrix of truncation distances. If a
+matrix is provided, then the dimensions should be 1xN with each column
+corresponding to a radial transect and N being the the total number of
+transects.}
 
-\item{snrTruncationThreshold}{scalar SNR in dB below which the probability of
-detection will be forcibly set to zero.}
+\item{snrTruncationThreshold}{(Experimental/Unsupported) scalar SNR in dB
+below which the probability of detection will be forcibly set to zero.}
 
-\item{siteCode}{Optional string containing a code or label associated with
-the site}
+\item{siteCode}{(Optional) string containing a code or label associated with
+the site. Default is '' (i.e. blank).}
 
-\item{densityResultsFile}{Optional name of csv file where final call density
+\item{densityResultsFile}{(Optional) name of csv file where final call density
 results will be written as a data.frame}
 }
 \value{
-data.frame containing call density inputs, results, and CVs
+\code{cde} returns a data.frame containing the results of the call
+density estimate \eqn{\hat{D}_c}, intermediate results such as \eqn{p_a,
+  c}, coefficient of variation of these terms, and the input parameters.
 }
 \description{
-This function estimates call density with all parameters included as function
+Applies the auxiliary information methods of Castro et. al. (2024)/Harris
+(2012) to obtain call density, \eqn{\hat{D_c}} using the cannonical density
+equation:
+\deqn{D_c = \frac{N_c*(1-c)}{kTA\hat{p}_a}}
+and sonar equations
+\deqn{SNR = RL - NL}
+\deqn{RL = SL - TL}
+where:
+\itemize{
+\item \eqn{\hat{D_c}} is call density
+\item \eqn{N_c} is number of calls
+\item \eqn{c} is false discovery rate
+\item \eqn{k} is number of sensors (here always 1)
+\item \eqn{T} is the duration of data analysed
+\item \eqn{A} is the study area (in km\\^2)
+\item \eqn{\hat{p}_a} is the probability of detection in the study area.
+}
+\cr
+\eqn{\hat{p}_a} is estimated via \code{pDetInArea}, a Monte Carlo simulation using
+auxiliary information for the sonar equation, so requires:
+\itemize{
+\item SL - Distribution of source levels (mean, sd, samplesize)
+\item TL - Transmission loss model
+\item NL - Distribution of noise levels
+\item snrDetFun - a model of the relationship between SNR and probability
+of detection either via a capture history table or supplied detection
+function
+}
+}
+\details{
+\code{cde} estimates call density with all parameters included as function
 arguments. This is in contrast to the previous operation, i.e. where a
 data.frame of parameters was used to indicate which files to load from disk.
 Here no parameter file/data.frame is used, so all data and parameters are
 must already be objects in memory;
-}
-\details{
-Density of blue whale D-calls (BmD) in long-term moored recording dataset.
-Apply methods of Castro, Harris, et al (in prep) to obtain call density.
-
-$D_c = \\frac{N_c*(1-c)}{kTP_a{\\pi}w^2}$
-where:
-$D_c$ is call density
-$N_c$ is number of calls
-$c$ is false discovery rate
-$k$ is number of sensors (here always 1)
-$T$ is the duration of data analysed
-$P_a$ is the probability of detection in the study area
-${\\pi}w^2$ is the study area (in km\\^2)
 }

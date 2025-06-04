@@ -7,14 +7,22 @@
 deploymentDuration(duration, startDate, season = "year")
 }
 \arguments{
-\item{duration}{- list of recording durations (in s)}
+\item{duration}{\itemize{
+\item list of recording durations (in s)
+}}
 
-\item{startDate}{- list of start dates for each duration}
+\item{startDate}{\itemize{
+\item list of start dates for each duration
+}}
 
-\item{season}{- Subset the startDate by this season/month/year (default='year')}
+\item{season}{\itemize{
+\item Subset the startDate by this season/month/year (default='year')
+}}
 }
 \value{
-- duration of effort (as numeric)
+\itemize{
+\item duration of effort (as numeric)
+}
 }
 \description{
 Calculate deployment duration from recording start times and durations
