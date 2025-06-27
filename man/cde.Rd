@@ -22,7 +22,7 @@ cde(
   transectFile = NULL,
   simResultsFile = NULL,
   paFile = NULL,
-  truncationDistance = Inf,
+  truncationDistance = max(TL[, 1]),
   snrTruncationThreshold = -Inf,
   siteCode = "",
   densityResultsFile = NULL
@@ -110,7 +110,7 @@ density estimate \eqn{\hat{D}_c}, intermediate results such as \eqn{p_a,
 Applies the auxiliary information methods of Castro et. al. (2024)/Harris
 (2012) to obtain call density, \eqn{\hat{D_c}} using the cannonical density
 equation:
-\deqn{D_c = \frac{N_c*(1-c)}{kTA\hat{p}_a}}
+\deqn{D_c = \frac{N_c(1-c)}{kTA\hat{p}_a}}
 and sonar equations
 \deqn{SNR = RL - NL}
 \deqn{RL = SL - TL}

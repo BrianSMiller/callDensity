@@ -226,12 +226,30 @@ nPositiveSubset <- with(capHistTab,sum(detect_table1 | detect_table2))
 # Number positive detections in FULL set
 Nc <- sum(simDet2$detect_table)       
 
+# SNRinfo is used to calculate snrDetFun for detector2 assuming detector1 is the
+# ground truth. This is an observer ground (OG) so includes false positives from
+# detector1, but does not include detections from detector2 not detected on
+# detector1
+SNRinfo <- capHistTosnrInfo(capHistTab)
+
 
 ```
 
 ## Calculate call densities using callDensity package
 
 We fit a capture-recapture model to these adjudicated data using the VGAM package with the function 'vglm' [@yee2015].
+
+```{r GLM p.det, warning=FALSE, message=FALSE}
+
+snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
+                                              modelType = "glm")
+
+results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
+                   SL = SL, TL = TL, A = A, modelType = 'glm', 
+                   truncationDistance = truncDist)
+
+
+```
 
 ```{r VGLM p.det, warning=FALSE, message=FALSE}
 

@@ -263,6 +263,16 @@ simsTocaptureHistoryTable <- function(subsampleDet1, subsampleDet2){
   capHistTab$group2[is.na(capHistTab$group2)]<-
     capHistTab$group1[is.na(capHistTab$group2)]
 
+  # Consolidate some columns to match format of previous Matlab capHistTab
+  capHistTab$SNR <- rowMeans(capHistTab[,c('snr1','snr2')],na.rm = TRUE)
+  capHistTab$t <- capHistTab$datetime
+  capHistTab$season <- time2season(capHistTab$t)
+  capHistTab$month <- time2monthCode(capHistTab$t)
+  capHistTab$noiseRMSdB <- rowMeans(capHistTab[,c('noiseRMSdB1','noiseRMSdB2')],
+                                    na.rm = TRUE)
+  capHistTab$signalRMSdB <- rowMeans(capHistTab[,c('signalRMSdB1','signalRMSdB2')],
+                                     na.rm = TRUE)
+
   return (capHistTab)
 }
 

@@ -14,7 +14,7 @@ pDetInArea(
   paFile = NULL,
   output.resolution.m = 100,
   outerloop = 1000,
-  truncationDistance = (Inf),
+  truncationDistance = max(TL[, 1]),
   snrTruncationThreshold = -Inf
 )
 }

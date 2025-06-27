@@ -61,9 +61,8 @@ pDetInArea <-
   function(res.1, SL, TLlookup,  NL, # Sonar equation inputs
            transectFile=NULL, simResultsFile=NULL, paFile=NULL,# output names
            output.resolution.m = 100, outerloop = 1000,
-           truncationDistance=(Inf), snrTruncationThreshold=-Inf) {
-    ### A5.2 Code used for the Monte Carlo Simulation
-
+           truncationDistance=max(TL[,1]), snrTruncationThreshold=-Inf) {
+  ### A5.2 Code used for the Monte Carlo Simulation
   # Written (started) 04 Jul 10 by Danielle Harris
   # This version edited 01 Sept 11
   # This version edited by FRC up to apr21
@@ -150,7 +149,7 @@ pDetInArea <-
   #remove TLlookup to save memory
   rm(TLlookup)
 
-  gc() #garbage collect function to free up memory after removing an object
+  # gc() #garbage collect function to free up memory after removing an object
   #*****************************************************************************
 
   # STEP 2 #############################
@@ -160,7 +159,7 @@ pDetInArea <-
 
   #*****************************************************************************
   # STEP 3 #################################
-  #create a summary results matrix
+  #create a summary results matricies
 
   #Number of model parameters: 2 columns for SL mean/st.dev, 2 for NL$mean/st.dev,
   # plus 2 or more  columns for coef values
@@ -169,6 +168,7 @@ pDetInArea <-
   no.coef <- length(coef(res.1))
   no.model.params <- no.core.params  + no.coef
 
+  # Matrix that holds bootstrapped parameters (inputs and not actually results)
   results1000sim<-matrix(NA,outerloop,no.model.params)
 
   # create a large results matrix for all pdets drawn from simulation
@@ -177,7 +177,12 @@ pDetInArea <-
   # (there are 10000 range steps per profile, and there are no.profiles profiles
   # and 1000 iterations)
   resultsallpdets<-matrix(NA,numTLrowsubset,(no.profiles*outerloop))
-  dim(resultsallpdets)
+
+  # Pre-allocate matrices outside the main loop
+  allSL <- matrix(NA, numTLrowsubset, no.profiles)
+  allNL <- matrix(NA, numTLrowsubset, no.profiles)
+  allSNR <- matrix(NA, numTLrowsubset, no.profiles)
+  allpdet <- matrix(NA, numTLrowsubset, no.profiles)
 
   ## START OF THE OUTER LOOP ####
   for (i in 1:outerloop){
@@ -243,6 +248,7 @@ pDetInArea <-
       allSL[,j]<-stats::rnorm(numTLrowsubset,
                               results1000sim[i,1],results1000sim[i,2])
     }
+
     #***************************************************************************
     ## STEP 4(b) draw 10000 values from the generated NL distribution ##########
     # put in allNL column and repeat for all transects

@@ -21,12 +21,18 @@ cv.c - coefficient of variation of the false discovery rate
 }
 \description{
 CV.c is calculated from the variance of c, which depends on the probability
-of false alarm (c), a binomial process.
+of false alarm (c), a proportion.
 }
 \details{
-Rationale for this calculation Variance of a binomial process, pa, is: 1)
-sigma^2= n * c * (1-c)
+Rationale for this calculation Variance of a proportion, c derived from a
+binomial process. Zar 2010 Eqn. 24.16 indicates sigma^2 = pq/n
+here p = c, q = (1-c), and n is the number of detections inspected when
+estimating c, so:
+\enumerate{
+\item var(c)= c * (1-c)/n
+}
 
-We require n, the number of trials conducted (i.e. how many detections were
-inspected when estimating c) and the estimate of c
+And required inputs are n, the number of trials conducted (i.e. how many
+detections were inspected when estimating c) and the estimate of c (as a
+proportion between 0 and 1 inclusive).
 }

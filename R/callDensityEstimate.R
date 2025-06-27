@@ -119,7 +119,7 @@ cde <- function (Nc,
                  simResultsFile=NULL,
                  paFile=NULL,
                  ###
-                 truncationDistance=Inf,
+                 truncationDistance=max(TL[,1]),
                  snrTruncationThreshold=-Inf,
                  siteCode='',
                  densityResultsFile=NULL
@@ -179,7 +179,7 @@ cde <- function (Nc,
   # Per-transect mean and SD of pa now returned in the list of pDetResults, so
   # no need to read or write it to a file
   pa.all.transects <- pDetResults$perTransectMeanSD
-  CV.pa <- pa_CV(pa.all.transects)
+  CV.pa <- pa_CV(pa.all.transects,truncationDistance)
 
   #CV_Nc------------------------------------------------------------------------
   CV.Nc <- Nc_CV(Nc,pa,c)
@@ -533,14 +533,18 @@ Nc_CV <- function(Nc,pa,c){
 #' c_CV: Coefficient of Variation (CV) of false discovery rate (c).
 #'
 #' CV.c is calculated from the variance of c, which depends on the probability
-#' of false alarm (c), a binomial process.
+#' of false alarm (c), a proportion.
 #'
-#' Rationale for this calculation Variance of a binomial process, pa, is: 1)
-#' sigma^2= n * c * (1-c)
+#' Rationale for this calculation Variance of a proportion, c derived from a
+#'  binomial process. Zar 2010 Eqn. 24.16 indicates sigma^2 = pq/n
+#'  here p = c, q = (1-c), and n is the number of detections inspected when
+#'  estimating c, so:
 #'
-#' We require n, the number of trials conducted (i.e. how many detections were
-#' inspected when estimating c) and the estimate of c
+#' 1) var(c)= c * (1-c)/n
 #'
+#' And required inputs are n, the number of trials conducted (i.e. how many
+#' detections were inspected when estimating c) and the estimate of c (as a
+#' proportion between 0 and 1 inclusive).
 #'
 #' @param n - Number of trials used to estimate c
 #' @param c - false discovery rate (proportion of false positive detections
@@ -550,9 +554,10 @@ Nc_CV <- function(Nc,pa,c){
 #' @export
 #'
 c_CV <- function(n,c){
-  var.c = n * c * (1-c) # variance of c
 
-  # Calculate the standard deviation of Nc
+  var.c = c * (1-c)/n  # variance of c
+
+  # Calculate the standard deviation/standard error of c
   sd.c = sqrt(var.c)
 
   # Calculate the coefficient of variation of c. Here n*c is mean of the
@@ -571,6 +576,29 @@ c_CV <- function(n,c){
 #'between transects and homogeneity of error. The summation of SDs assumes a
 #'conservative model.
 #'
+#'Follows from Eqn. 6.19 and 6.20 from Harris (2012) PhD Thesis Chapter 6
+#' var_total_Pa = SE_Pa^2 + (sum(SD_Pa_t)/n_t)^2  Eqn.6.19
+#' SE_total_Pa = sqrt(var_total_Pa)               Eqn.6.20
+#'
+#' where:
+#'
+#' var_total_Pa = variance of the overall mean probability of detection
+#'   incorporating all sources of variance
+#' SE_total_Pa = standard error of the overall mean probability of detection
+#'   incorporating all sources of variance
+#'
+#' SE_Pa = standard error of the n_t transect-specific mean probabilities
+#'   of detection
+#' SD_Pa_t = standard deviation of each transect-specific mean probability of
+#'   detection
+#' t = transect (1 - n_t)
+#' n_t = total number of transects (8 in Harris's thesis, but adjustable here)
+#'
+#' Note: to allow the lengths of transects to vary requires additional weighting
+#' beyond that described by Harris (2012). We account for this with the wt
+#' parameter, which should contain the area for each transect. We adapt Eqn.6.19
+#' So that SE_Pa is derived from the use the weighted mean, and the right-most
+#' term (mean of standard deviations) is also a weighted mean.
 #'
 #'@param pa.all.transects - matrix containing two columns and same number of
 #'  rows as number of transects. The first column contains the mean pa and the
@@ -579,23 +607,36 @@ c_CV <- function(n,c){
 #'
 #'@returns CV.pa - CV of the probability of deteciton in the area
 #'@export
-pa_CV <- function(pa.all.transects){
+pa_CV <- function(pa.all.transects, wt=rep(1,dim(pa.all.transects)[1]-1) ){
 # The above function, pDetInArea writes results to a bunch of files
 # Load the file that we need that has the p_a in them, and ignore the others
 
-no.transects <- dim(pa.all.transects)[1]-1;
-
-pa.all.transects<- as.data.frame(pa.all.transects)
-
+no.transects <- dim(pa.all.transects)[1]-1; # n_t
 names(pa.all.transects)<-c('Mean','SD')
 
-# Radials are in rows
-y=pa.all.transects[1:no.transects,]
+# Assume no per-transect pa values are NA
+pa.all.transects<- as.data.frame(pa.all.transects)
+
+# Normalise weights (since they're likely areas along sector)
+wt <- wt/sum(wt)
+
+pa_t <- pa.all.transects[1:no.transects,1]
+
+overall_weighted_mean_pa = weighted.mean(x = pa_t, w = wt)
+
+se_pa = overall_weighted_mean_pa/sqrt(no.transects)
+sd_pa_t = y$SD
+
+# furthest right term in Eqn.6.19, but now weighted by the area of each transect
+# as well as
+overall_weighted_mean_SD <- weighted.mean(sd_pa_t,wt)
 
 ## IMPORTANT: to check if the var, SE and CV calculation is correct ##
-varp.pa<-((sd(y$Mean)/sqrt(no.transects))^2)+((sum(y$SD)/no.transects)^2)
-sep.pa<-sqrt(varp.pa)
-CV.pa<-sep.pa/mean(y$Mean)
+var_total_Pa<- se_pa^2 + overall_weighted_mean_SD^2
+se_total_Pa<-sqrt(var_total_Pa)
+
+CV.pa<- se_total_Pa/ overall_weighted_mean_pa
+
 return(CV.pa)
 }
 

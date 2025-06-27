@@ -58,18 +58,18 @@ Start with *n* calls within radius *R* of the hydrophone. This should produce a 
 # 1) Generate a distribution of n calls within radius R of the hydrophone with a
 # known call density Uniform random in circle
 
-n = 5e5; # number of simulated calls (regardless of whether detected or not); 
-R = 5e5; # radius in m (i.e. 1e6=1000km)
+n = 5e6; # number of simulated calls (regardless of whether detected or not); 
+R = 1e6; # radius in m (i.e. 1e6=1000km)
 k <- 1   # number of sensors (always 1 for single hydrophone moorings)
 minDate <- as.POSIXct("2025-01-01")
 maxDate <- as.POSIXct("2026-01-01")
-Time <- as.numeric(difftime(maxDate,minDate,unit="days"))/365*24 # in years
+Time <- as.numeric(difftime(maxDate,minDate,unit="days"))/(365) # in years
 
 # Call density, D_c is n/A 
 A = studyArea(R/1e3) # Circular study area in km^2
 TrueCallDensity = n/(A*Time) # calls/km^2/time
 
-set.seed(2)
+set.seed(1)
 # 1) Generate n uniformly distributed calls within radius R and time period Time
 sim <- simCallLocation(n=n, R=R, minDate=minDate, maxDate=maxDate)
 print(TrueCallDensity)
@@ -292,23 +292,9 @@ A GAM or SCAM should also be able to provide a good fit to a logistic function, 
 
 snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
                                               modelType = "glm")
-snrDetFun.glm$r.sq <- with(summary(snrDetFun.glm), 1 - deviance/null.deviance)
 
-Pa.glm <- callDensity::pDetInArea(snrDetFun.glm, SL=SL, TLlookup = TL, NL=NLsamp,
-           output.resolution.m=100,
-           outerloop = 10,
-           truncationDistance=R, # in m
-           snrTruncationThreshold =-Inf)
-pa.glm <- Pa.glm$overall
-
-
-# Density estimation equation
-Dc.glm <- (Nc * (1 - c_subsample) )/( k * A * pa.glm * Time )
-
-results.glm <- data.frame(Dc=Dc.glm, SampleSize=n_subsample, A = A,
-                      NLmean = NLsamp$mean, NLsd = NLsamp$sd, # Noise
-                      model='glm', c=c_subsample, Pa=pa.glm,  # Detector params
-                      row.names = 'NL from detections')
+results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
+                   SL = SL, TL = TL, NL=NLsamp, A = A, modelType = 'glm')
 
 
 ```
@@ -319,15 +305,21 @@ Table showing how the the results of each call density estimate compare to the t
 
 ```{r Call.Density.Results, echo=TRUE, warning=FALSE}
 
-results.true = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
-                     NLmean = NL$mean, NLsd = NL$sd,            # Noise
-                     model=det2params$func, c = det2params$c, # Detector params
-                     Pa = mean(simDet2$p_det,na.rm=TRUE), 
-                     row.names='Truth')
+results.true = data.frame(season='year',    siteCode='',  Nc=n, c=det2params$c,
+                          k=1, T=Time, A=A, pa=mean(simDet2$p_det,na.rm=TRUE),
+                          SLmean=SL$mean, SLsd=SL$sd, NLmean=NL$mean, NLsd=NL$sd,
+                          modelType='true', CV.Nc=0, CV.c=0, CV.pa=0, 
+                          Dc=TrueCallDensity,  CV.Dc=0)
+# results.true = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
+#                      NLmean = NL$mean, NLsd = NL$sd,            # Noise
+#                      model=det2params$func, c = det2params$c, # Detector params
+#                      Pa = mean(simDet2$p_det,na.rm=TRUE), 
+#                      row.names='Truth')
 
 results<-rbind( results.true, results.glm)
-
-kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 4), 
+res <- subset(results,select=c('Dc','Nc','A','NLmean','NLsd','modelType','c',
+                               'pa') )
+kableExtra::kbl(res, digits = c(4,3,0,1, 2, NA, 3, 4), 
                 col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
                              'Model','c','P_a')) %>% 
   kableExtra::kable_classic(full_width=FALSE)
@@ -350,28 +342,12 @@ Here we simulate this by taking the mean NL from all the rows in the capture his
 
 ```{r GLM p.det with independently estimated NL, warning=FALSE, message=FALSE}
 
-snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
-                                              modelType = "glm")
-snrDetFun.glm$r.sq <- with(summary(snrDetFun.glm), 1 - deviance/null.deviance)
 
 # 'Independent' estimate of NL 
 NLind <- callDensity::nlFromSnrInfo(SNRinfo, snrDetFun.glm)
 
-Pa.NLi <- callDensity::pDetInArea(snrDetFun.glm, SL=SL, TLlookup = TL, NL=NLind,
-           output.resolution.m=100,
-           outerloop = 100,
-           truncationDistance=R, # in m
-           snrTruncationThreshold =-Inf)
-pa.NLi <- Pa.NLi$overall
-
-
-# Density estimation equation
-Dc.NLi <- (Nc * (1 - c_subsample) )/( k * A * pa.NLi * Time )
-
-results.NLind <- data.frame(Dc=Dc.NLi, SampleSize=n_subsample, A = A,# Environment
-                      NLmean = NLind$mean, NLsd = NLind$sd,      # Noise
-                      model='glm',  c=c_subsample, Pa=pa.NLi,  # Detector params
-                      row.names = 'NL independent')
+results.NLind <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
+                   SL = SL, TL = TL, NL=NLind, A = A, modelType = 'glm')
 
 ```
 
@@ -379,11 +355,12 @@ results.NLind <- data.frame(Dc=Dc.NLi, SampleSize=n_subsample, A = A,# Environme
 
 results<-rbind( results.true, results.glm, results.NLind)
 
-kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 4), 
+res <- subset(results,select=c('Dc','Nc','A','NLmean','NLsd','modelType','c',
+                               'pa') )
+kableExtra::kbl(res, digits = c(4,3,0,1, 2, NA, 3, 4), 
                 col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
                              'Model','c','P_a')) %>% 
   kableExtra::kable_classic(full_width=FALSE)
-
 
 ```
 
@@ -401,7 +378,31 @@ We fit a capture-recapture model to these adjudicated data using the VGAM packag
 
 ```{r VGLM p.det, warning=FALSE, message=FALSE}
 library(VGAM)
-### Adjudicated capture recapture model
+
+#VGLMs work a bit differently. We still pass in a capture history table. But now
+#the ground-truth column is in a column separate from detect_table1 (here
+#groundTruth2). we want to include in our CH table all predicted positive
+#detections from either detector, not just the ground-truth. We fit the vglm
+#detection function outside of the call to cde, and pass it in as a parameter.
+#For the vglm fit, we want only adjudicated positive detections (no false
+#positives). Then we rename all the   columns from detector1 (i.e. that end in
+#1) to something that won't conflict. Finally, we rename our ground-truth column
+#to detect_table1, since that is what the cde function expects to be
+#ground-truth. 
+#
+#TODO: Change the column name in the capture history table to groundtruth or
+#make this an explicit parameter.
+
+ch <- subset(capHistTab,
+                      (capHistTab$detect_table1 | capHistTab$detect_table2))
+# Rename all detector 1 to something that won't conflict e.g. i
+names(ch) <- gsub('1','i',names(capHistTab))
+
+# Rename adjudicated to detect_table1
+names(ch)[names(ch)=='groundTruth2']<-'detect_table1'
+
+
+### Adjudicated positive for VGLM capture recapture model
 adjudicated <- subset(capHistTab,capHistTab$groundTruth1 &
                 (capHistTab$detect_table1 | capHistTab$detect_table2))
 
@@ -411,39 +412,39 @@ summary(adjudicated$group2)
 # Number of adjudicated positive detections
 n_adj <- dim(adjudicated)[1]
 
-# Combine SNR of both detectors (shouldn't be necessary unless we've somehow
-# made them different)
-adjudicated$SNR <-   rowMeans(
-  subset(adjudicated,select=c('snr1','snr2')) ,na.rm=T) #dB
-
 # Subset used for calculating false discovery rate of detector 2. Actually, we
 # use the fact that the false discovery rate is equal to (1-precision). 
-tp <- subset(capHistTab, as.logical(capHistTab$detect_table2), 
-              select = c('groundTruth2') )
-precision <- sum(tp)/dim(tp)[1]
-adj_c <- 1-precision
+pp2 = sum(capHistTab$detect_table2==TRUE,na.rm=TRUE) # Predicted positive det2
+fp2 = sum(capHistTab$detect_table2==TRUE & capHistTab$groundTruth2==FALSE,
+          na.rm=TRUE) # false positives from det2
+
+adj_c <- fp2/pp2
+
 
 observerNames = c("detect_table1", "detect_table2")
 snrDetFun.vglm <- fitSNRvglm(adjudicated, observerNames, 
                              whichObserver = "detect_table2")
 # Best estimate of NL 
-NLadj <- nlFromSnrInfo(SNRinfo, snrDetFun.vglm)
+# NLadj <- nlFromSnrInfo(adjudicated, snrDetFun.vglm)
+
+results.vglm <- cde(Nc=Nc, capHistTab = ch, snrDetFun = snrDetFun.vglm,
+                   SL = SL, TL = TL, A = A, modelType = 'vglm')
 
 
-Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
-           output.resolution.m=100,
-           outerloop = 10,
-           truncationDistance=R, # in m
-           snrTruncationThreshold =-Inf)
-pa.vglm <- Pa.vglm$overall
-
-# Density estimation equation
-Dc.vglm <- (Nc * (1 - adj_c) )/( k * A * pa.vglm * Time )
-
-results.vglm <- data.frame(Dc=Dc.vglm, SampleSize=n_adj, A = A,# Environment
-                      NLmean = NLadj$mean, NLsd = NLadj$sd,# Noise
-                      model='vglm', c=adj_c, Pa=pa.vglm,  # Detector params
-                      row.names = 'Adjudicated Capture-recapture\nNL independent')
+# Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
+#            output.resolution.m=100,
+#            outerloop = 10,
+#            truncationDistance=R, # in m
+#            snrTruncationThreshold =-Inf)
+# pa.vglm <- Pa.vglm$overall
+# 
+# # Density estimation equation
+# Dc.vglm <- (Nc * (1 - adj_c) )/( k * A * pa.vglm * Time )
+# 
+# results.vglm <- data.frame(Dc=Dc.vglm, SampleSize=n_adj, A = A,# Environment
+#                       NLmean = NLadj$mean, NLsd = NLadj$sd,# Noise
+#                       model='vglm', c=adj_c, Pa=pa.vglm,  # Detector params
+#                       row.names = 'Adjudicated Capture-recapture\nNL independent')
 
 ```
 
@@ -451,7 +452,9 @@ results.vglm <- data.frame(Dc=Dc.vglm, SampleSize=n_adj, A = A,# Environment
 
 results<-rbind( results.true, results.glm, results.NLind, results.vglm)
 
-kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 4), 
+res <- subset(results,select=c('Dc','Nc','A','NLmean','NLsd','modelType','c',
+                               'pa') )
+kableExtra::kbl(res, digits = c(4,3,0,1, 2, NA, 3, 4), 
                 col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
                              'Model','c','P_a')) %>% 
   kableExtra::kable_classic(full_width=FALSE)
@@ -461,11 +464,11 @@ kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 4),
 ```{r eval=TRUE, include=TRUE}
 
 # short version of results for paper
-res <- subset(results, select =c(SampleSize,NLmean, c, Pa, Dc))
+res <- subset(results, select =c(NLmean, c, pa, Dc))
 res$error <- (res$Dc[1]-res$Dc)/res$Dc[1]*100
 rownames(res)<- c('Truth','OG incorrect NL','OG corrected NL','CR')
 
-kableExtra::kbl(res, digits = c(0,1,3,4, 4, 1), 
+kableExtra::kbl(res, digits = c(1,3,4, 4, 1), 
                 col.names= c('$N_c$', '$\\overline{\\small{NL}}$',
                              '$\\hat{c}$','$\\hat{p}_a$', '$D_c$','% Error')) %>% 
   kableExtra::kable_classic(full_width=FALSE)
