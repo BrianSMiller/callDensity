@@ -466,17 +466,8 @@ pDetInArea <-
               perTransectMeanSD = pdetsandvar,
               meanOfAllTransects = meanOfAllTransects))
 
-  ### If W ok, FINAL ###
-
-  ##############################################################
-
   # Once have looked at the results, decide an appropriate truncation distance,
   # w Redo Steps 5-7 using the different truncation distance
-  # NB: The truncation distance may well be different for each source level. In
-  # the case of Sri Lankan blue whale calls, a truncation distance of 500 km
-  # could be applied to the simulation run with Sri Lankan call source levels.
-  # Therefore Steps 5-7 could be redone with a distance of 500km. In the
-  # simulation using Antarctic call source levels, the truncation distance
-  # should be left at 1000km.
+  ### If W ok, FINAL ###
 
 }

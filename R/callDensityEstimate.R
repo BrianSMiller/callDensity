@@ -179,10 +179,12 @@ cde <- function (Nc,
   # Per-transect mean and SD of pa now returned in the list of pDetResults, so
   # no need to read or write it to a file
   pa.all.transects <- pDetResults$perTransectMeanSD
-  CV.pa <- pa_CV(pa.all.transects,truncationDistance)
+  CV.pa <- pa_CV(pa.all.transects,wt = truncationDistance^2)
 
   #CV_Nc------------------------------------------------------------------------
-  CV.Nc <- Nc_CV(Nc,pa,c)
+  #CV.Nc <- Nc_CV(Nc,pa,c)
+  CV.Nc <- 0 # There is no error on the number of detections. It is what it is.
+
 
   #  ### Finally, estimate Dc (Density of calls) [calls $h^{-1} km^{-2}$]
   # Dc --------------------------------------------------------------------------
@@ -194,7 +196,7 @@ cde <- function (Nc,
   #  ## Collate into data frame and write to csv file
   # Format output---------------------------------------------------------------
 
-  result <- data.frame(season, siteCode,Nc,c,k,T,A,pa,
+  result <- data.frame(season, siteCode, Nc, c, k, T, A, pa,
                        SL$mean,SL$sd,NL$mean,NL$sd,modelType,
                        CV.Nc,CV.c,CV.pa,Dc,CV.Dc)
   names(result) <- c('season','siteCode','Nc','c','k','T','A','pa',
@@ -381,7 +383,6 @@ falseDiscoveryRate <- function(ch,
 #'
 #' @returns CV of false discovery rate using Cochran approximation
 #' @seealso c_CV
-#' @export
 #'
 falseDiscoveryCV <- function(hourlyFalsePosFile,season){
   #  ### $CV_c$ (Cochran approx.);
@@ -421,7 +422,6 @@ falseDiscoveryCV <- function(hourlyFalsePosFile,season){
 #' @param season Month or season over which to subset the data. Months can be
 #' 01-12, and seasons can be 'summer','autumn','winter','spring', or 'year'.
 #' @seealso falseDiscoveryRate, c_CV
-#' @export
 #'
 falseDiscoveryRateFromNth<- function(falsePositiveXlsx,season='year'){
   ffp <- readxl::read_xlsx(falsePositiveXlsx,sheet = 'conference')
@@ -536,11 +536,11 @@ Nc_CV <- function(Nc,pa,c){
 #' of false alarm (c), a proportion.
 #'
 #' Rationale for this calculation Variance of a proportion, c derived from a
-#'  binomial process. Zar 2010 Eqn. 24.16 indicates sigma^2 = pq/n
+#'  binomial process. Zar 2010 Eqn. 24.17 indicates sigma^2 = pq/(n-1)
 #'  here p = c, q = (1-c), and n is the number of detections inspected when
 #'  estimating c, so:
 #'
-#' 1) var(c)= c * (1-c)/n
+#' 1) var(c)= c * (1-c)/(n-1)
 #'
 #' And required inputs are n, the number of trials conducted (i.e. how many
 #' detections were inspected when estimating c) and the estimate of c (as a
@@ -555,7 +555,7 @@ Nc_CV <- function(Nc,pa,c){
 #'
 c_CV <- function(n,c){
 
-  var.c = c * (1-c)/n  # variance of c
+  var.c = c * (1-c)/(n-1)  # variance of c
 
   # Calculate the standard deviation/standard error of c
   sd.c = sqrt(var.c)
@@ -608,36 +608,34 @@ c_CV <- function(n,c){
 #'@returns CV.pa - CV of the probability of deteciton in the area
 #'@export
 pa_CV <- function(pa.all.transects, wt=rep(1,dim(pa.all.transects)[1]-1) ){
-# The above function, pDetInArea writes results to a bunch of files
-# Load the file that we need that has the p_a in them, and ignore the others
+  # The above function, pDetInArea outputs a bunch of lists/files that need
+  # further wrangling.
+  # NOTE: There's an assumption is that no per-transect pa values are NA.
 
-no.transects <- dim(pa.all.transects)[1]-1; # n_t
-names(pa.all.transects)<-c('Mean','SD')
+  # last row is not a transect, but the overall mean, so remove it
+  names(pa.all.transects)<-c('Mean','SD')
+  no.transects <- dim(pa.all.transects)[1]-1;
+  pa_t <- pa.all.transects[1:no.transects,1]   # per-transect Mean of pDet
+  sd_pa_t = pa.all.transects[1:no.transects,2] # per-transect SD of pDet
 
-# Assume no per-transect pa values are NA
-pa.all.transects<- as.data.frame(pa.all.transects)
+  # Normalise weights (since they're likely areas along sector)
+  wt <- wt/sum(wt)
 
-# Normalise weights (since they're likely areas along sector)
-wt <- wt/sum(wt)
+  overall_weighted_mean_pa = weighted.mean(x = pa_t, w = wt)
 
-pa_t <- pa.all.transects[1:no.transects,1]
+  se_pa = overall_weighted_mean_pa/sqrt(no.transects)
 
-overall_weighted_mean_pa = weighted.mean(x = pa_t, w = wt)
+  # furthest right term in Eqn.6.19, but now weighted by area of each transect
+  overall_weighted_mean_SD <- weighted.mean(sd_pa_t,wt)
 
-se_pa = overall_weighted_mean_pa/sqrt(no.transects)
-sd_pa_t = y$SD
+  ## IMPORTANT: to check if the var, SE and CV calculation is correct ##
+  var_total_Pa<- se_pa^2 + overall_weighted_mean_SD^2
 
-# furthest right term in Eqn.6.19, but now weighted by the area of each transect
-# as well as
-overall_weighted_mean_SD <- weighted.mean(sd_pa_t,wt)
+  se_total_Pa<-sqrt(var_total_Pa)
 
-## IMPORTANT: to check if the var, SE and CV calculation is correct ##
-var_total_Pa<- se_pa^2 + overall_weighted_mean_SD^2
-se_total_Pa<-sqrt(var_total_Pa)
+  CV.pa<- se_total_Pa/ overall_weighted_mean_pa
 
-CV.pa<- se_total_Pa/ overall_weighted_mean_pa
-
-return(CV.pa)
+  return(CV.pa)
 }
 
 #' Coefficient of Variation (CV) for call density (Dc)

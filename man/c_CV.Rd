@@ -25,11 +25,11 @@ of false alarm (c), a proportion.
 }
 \details{
 Rationale for this calculation Variance of a proportion, c derived from a
-binomial process. Zar 2010 Eqn. 24.16 indicates sigma^2 = pq/n
+binomial process. Zar 2010 Eqn. 24.17 indicates sigma^2 = pq/(n-1)
 here p = c, q = (1-c), and n is the number of detections inspected when
 estimating c, so:
 \enumerate{
-\item var(c)= c * (1-c)/n
+\item var(c)= c * (1-c)/(n-1)
 }
 
 And required inputs are n, the number of trials conducted (i.e. how many
