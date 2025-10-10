@@ -31,11 +31,12 @@ library(kableExtra)
 
 1)  Spatial distribution of calls
     A)  Effect of land, ice, and other zero-probability areas
-    B)  Effect of non-uniform distribution of calls in area
+    B)  Effect of non-uniform distribution of calls in area (clustered/concentrated)
 2)  **Truncation in SNR**
 3)  **Detectors with different slopes**
 4)  Minimum number of recaptures/effort required to get a reliable estimate
 5)  More realistic Transmission Loss models and effects of mismatch
+
 
 As usual, we start with the density equation:
 

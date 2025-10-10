@@ -157,7 +157,7 @@ cde <- function (Nc,
     NL <- nlFromSnrInfo(SNRinfo, snrDetFun)
   }
 
-  pDetResults <- pDetInArea(snrDetFun, SL, TL,  NL, # Sonar equation inputs
+  pDetResults <- pDetInArea(snrDetFun, SL, TL,  NL, # Sonar eq. inputs
                             output.resolution.m=output.resolution.m,
                             outerloop=outerloop,
                             truncationDistance=truncationDistance,
@@ -222,7 +222,8 @@ cde <- function (Nc,
 ## CountDetections--------------------------------------------------------------
 #' Title
 #'
-#' @param detectionFile - File containing detections for the full dataset.
+#' @param detectionFile - Text file or data.frame containing detections for the
+#' full dataset.
 #'   File format must be tab separated with header, and must contain the
 #'   following columns:
 #'    t0: <double> Matlab datenum
@@ -245,9 +246,12 @@ countDetections <- function(detectionFile,
                             season='year',
                             snrTruncationThreshold=-Inf,
                             snrColName = 'snr') {
-  # detectionFile must be
-  det <- read.delim(detectionFile, sep = '\t', header = TRUE)
-
+  # detectionFile must be tab delimited
+  if (class(detectionFile)=='character'){
+    det <- read.delim(detectionFile, sep = '\t', header = TRUE)
+  }else {
+    det <- detectionFile
+  }
   if (snrTruncationThreshold != -Inf){ # Only if truncation requested
     if ( snrColName %in% colnames(det) ){
       det <- subset(det,det$snr>=snrTruncationThreshold)

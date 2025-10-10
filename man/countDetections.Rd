@@ -13,7 +13,8 @@ countDetections(
 }
 \arguments{
 \item{detectionFile}{\itemize{
-\item File containing detections for the full dataset.
+\item Text file or data.frame containing detections for the
+full dataset.
 File format must be tab separated with header, and must contain the
 following columns:
 t0: \if{html}{\out{<double>}} Matlab datenum
