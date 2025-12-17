@@ -345,6 +345,7 @@ pDetInArea <-
   # SIMULATION ENDED - NOW PRODUCE THE RESULTS #################################
   #Save originally selected parameters for the simulation
   if (!is.null(simResultsFile)){
+    dir.create(dirname(results1000sim), showWarnings = FALSE)
     utils::write.table(results1000sim,file=simResultsFile,
                      row.names=F,col.names=F)
   }
@@ -426,6 +427,7 @@ pDetInArea <-
   pdetsandvar[1:no.profiles,2]<-st.devPt
   pdetsandvar[no.profiles+1,2]<-st.errorPt
   if (!is.null(paFile)){
+    dir.create(dirname(paFile), showWarnings = FALSE)
     utils::write.table(pdetsandvar,file=paFile, row.names=F,
                        col.names = c("Mean","SD"))
   }
@@ -451,6 +453,7 @@ pDetInArea <-
   names(allDetFunctions)<-dimnames(allTLlookup_h)[[2]]
 
   if (!is.null(transectFile)){
+    dir.create(dirname(transectFile), showWarnings = FALSE)
     data.table::fwrite(allDetFunctions, file=transectFile)
   }
 
