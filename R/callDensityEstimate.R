@@ -329,8 +329,7 @@ deploymentDurationFromsoundFolderCsv <- function(fullYearEffortFile,
 #' the rows where detect_table2==T & detect_table1==T.
 #'
 #'
-#' @param capHistFile file name of capture history table (TODO pass as
-#'   data.frame instead of file).
+#' @param ch data.frame with capture history table
 #' @param season a character indicating the season or month for which to
 #'   estimate call density
 #' @param snrTruncationThreshold - Exclude rows with SNR below this threshold

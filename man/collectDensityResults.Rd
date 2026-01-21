@@ -4,12 +4,12 @@
 \alias{collectDensityResults}
 \title{Load specified density results text files in a directory}
 \usage{
-collectDensityResults(path, siteCode)
+collectDensityResults(path, densityString = paste0("^density_", siteCode))
 }
 \arguments{
 \item{path}{Location (path) of text files containing call density results}
 
-\item{siteCode}{Prefix of _density files to be loaded}
+\item{densityString}{Prefix of _density files to be loaded}
 }
 \value{
 Data.frame of all call density results in the specified path

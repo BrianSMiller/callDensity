@@ -307,6 +307,13 @@ return(NL)
 #'
 #' @export
 capHist2snrInfo <- function(snr,season='year'){
+  if (class(snr)=='character'){
+  stop(paste0("Calling capHistToSnrInfo with a file name is deprecated.\n",
+                 "Instead call capHist2SnrInfo with the capture ",
+                 "history table in a data.frame.")
+       )
+  }
+
 
   # remove false positives
   snr <- snr[snr$detect_table1==1,]
@@ -577,18 +584,56 @@ fitSNRbySeason <- function(SNRinfo, season=year, useGLM=TRUE, numKnots=3){
   return(p2)
 }
 
+# Helper function to convert predicted response from vglms into a detection
+# functions that we can use here
+#' Title
+#'
+#' @param snrDetFun.vglm
+#' @param snrs
+#' @param whichObserver
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+predVglmPDet <- function(snrDetFun.vglm, snrs,
+                         whichObserver=snrDetFun.vglm@extra$whichObserver){
+  preds.vglm0=VGAM::predict(snrDetFun.vglm,type='response',newdata=snrs,
+                      type.fitted='onempall0')# One minus probability of all 0s
+  preds.vglm=VGAM::predict(snrDetFun.vglm,type='response',newdata=snrs)
+  ix <- which(colnames(preds.vglm)==whichObserver)
+  # pr =apply(cbind(preds.vglm[,ix],preds.vglm0),1,prod)
+  pr = preds.vglm0*preds.vglm[,ix]
+
+
+  xlims <- c(-20,20)
+  ylims <- c(0,1)
+
+  par(cex=0.8,mar=c(3.1,3.1,0.25,0),mgp=c(2.1,1,0))
+  plot( snr$SNR, xlim= xlims, ylim=ylims,
+      type="n", xlab="SNR", ylab = "P(Detection)")
+  grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 1)
+
+
+  lines(  snrs$SNR,pr,lty='solid',lwd=2)
+
+  return (pr)
+}
+
+
+
 #' Load specified density results text files in a directory
 #'
 #' @returns Data.frame of all call density results in the specified path
 #'
 #' @param path Location (path) of text files containing call density results
 #'
-#' @param siteCode Prefix of _density files to be loaded
+#' @param densityString Prefix of _density files to be loaded
 #'
 #' @export
-collectDensityResults <- function (path, siteCode){
-  files <- dir(path=path, pattern = paste0('^density_',siteCode),
-               full.names = TRUE)
+collectDensityResults <- function (path,
+                                   densityString=paste0('^density_',siteCode)){
+  files <- dir(path=path, pattern = densityString, full.names = TRUE)
   d <- utils::read.csv(files[1])
 
   for (i in 2:length(files))   {
@@ -618,7 +663,7 @@ collectDensityResults <- function (path, siteCode){
 densityInputTable <-function(d, separateCommon=TRUE){
 
   if (separateCommon){
-    commonTable <- subset(d[1,], select=c('k','w','SLmean','SLsd'))
+    commonTable <- subset(d[1,], select=c('k','A','SLmean','SLsd'))
     rownames(commonTable) <- 'All'
     common <- kableExtra::kbl(commonTable, row.names=TRUE) %>%
       kableExtra::kable_classic_2(full_width=FALSE)
@@ -735,7 +780,7 @@ densityPlot <- function(d){
 #' circle).
 #'
 #' @param w  - Radius of study area
-#' @param truncationDistance - Matrix of truncation distances [1 x Nr]. Nr is
+#' @param truncationDistance - Matrix of truncation distances \code{[1 x Nr]}. Nr is
 #'   the number of radial transects in the simulation (i.e. the same as the
 #'   number of TL profiles).
 #'
@@ -782,15 +827,68 @@ ciFromCV <- function(a, cv){
 
 #' Read a capture history csv file (e.g. created in Matlab)
 #'
+#' Required columns for each observer are detect_, snr_, signalRMSdB_,
+#' noiseRMSdB_, and the underscore is followed by input parameter observerNames.
+#'    -detect_ columns are binary i.e. 1 a detection and 0 for absence
+#'    -snr_, signalRMSdB_, and noiseRMSdB_ are all numeric and in dB
+#'    -groundTruth is the binary column to use as ground-truth detections. It
+#'     can be a detect_observerName or another column.
+#' OG capture history tables have exactly two observers with suffixes,
+#'   observerNames=c('table1','table2'). These are the type of tables used in
+#'   the 'Beyond Counting Calls' manuscript.
+#' CR capture history tables can have N observers and can have any number of
+#'   suffixes of any form. MultiCaptureHistoryTable from the common ground
+#'   manuscript produces suffixes of the form:
+#'   ('observer1','observerN-1','observerN')
+#'
 #' @param capHistFile - name of the csv or txt file that contains capture
 #'   histories. TODO: Document the required columns/file format better
-#'
+#' @param observerNames - list of strings that correspond to the suffixes used
+#'   for each observer. Default: c('table1','table2')
+#' @param groundTruth - Name of column with binary data used as ground-truth.
+#' @param whichObserver - Name of observer for which detection function will be
+#'   modelled, and call density estimated
 #' @returns capture history table as data.frame
 #' @export
 #'
-readCapHist <- function(capHistFile){
+readCapHist <- function(capHistFile,
+                        observerNames = c('table1','table2'),
+                        groundTruth = 'table1',
+                        whichObserver = 'detect_table2'){
   ch <- read.csv(file = capHistFile,na.strings = c('NaN','NA'))
+
+  # TODO: Check for required input columns
+
+  # TODO: Convert columns into format that can be used downstream
+
+  # Add columns for times and seasons
   ch <- capHistTimeSeason(ch)
   return(ch)
 }
 
+# Convert multi-observer capture history table into an CR capture history table
+#' Title
+#'
+#' @param d
+#' @param table1suffix
+#' @param table2suffix
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+mchToCR <- function (d, table1suffix, table2suffix){
+  # Column names
+  d1 <- paste0('detect_',table1suffix)      # detection from first observer
+  d2 <- paste0('detect_',table2suffix)      # detection from detector of interest
+  ch <- subset(d, subset = (d[,d1] | d[,d2]),
+               select = c('t0','tEnd','fLow','fHigh','SNR','signalRMSdB',
+                          'noiseRMSdB','noiseDev','verdict',d1,d2))
+  ch$t <- ch$t0
+  names(ch)[1:4]<- paste0(names(ch)[1:4],'_table1')
+  names(ch)[names(ch)=='verdict']<-'detect_table1'
+  # names(ch) <- gsub(table1suffix,'table1',names(ch))
+  names(ch) <- gsub(table2suffix,'table2',names(ch))
+  ch<-capHistTimeSeason(ch)
+  return(ch)
+}

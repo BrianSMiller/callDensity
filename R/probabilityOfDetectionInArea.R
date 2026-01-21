@@ -38,7 +38,7 @@
 #'  (b) Calculate the standard deviation of transect-specific p(det) values
 #'  (c) Save results in a table and print the table for future calculations
 #'
-#' @param res.1 SNR-Detection function from fitSNRdetectionFunc. Must be an
+#' @param detFun SNR-Detection function from fitSNRdetectionFunc. Must be an
 #'   object of class GLM, GAM, SCAM, or VGLM that can be passed to functions
 #'   coef() and vcov()
 #' @param SL Distribution of source levels (data.frame with columns mean,sd)
@@ -58,7 +58,7 @@
 #'
 #' @export
 pDetInArea <-
-  function(res.1, SL, TLlookup,  NL, # Sonar equation inputs
+  function(detFun, SL, TLlookup,  NL, # Sonar equation inputs
            transectFile=NULL, simResultsFile=NULL, paFile=NULL,# output names
            output.resolution.m = 100, outerloop = 1000,
            truncationDistance=max(TL[,1]), snrTruncationThreshold=-Inf) {
@@ -165,7 +165,7 @@ pDetInArea <-
   # plus 2 or more  columns for coef values
   no.core.params <- 4;
 
-  no.coef <- length(coef(res.1))
+  no.coef <- length(coef(detFun))
   no.model.params <- no.core.params  + no.coef
 
   # Matrix that holds bootstrapped parameters (inputs and not actually results)
@@ -213,10 +213,10 @@ pDetInArea <-
     #characterisation curve The random part involves taking a random set of the
     #coefficients for the model - these will be used later vcov adopted in the
     #place of Vp for GAM
-    if (any(class(res.1)=='scam') | any(class(res.1)=='gam') ){
-      br<-MASS::mvrnorm(1,as.vector(coef(res.1)),res.1$Vp)
+    if (any(class(detFun)=='scam') | any(class(detFun)=='gam') ){
+      br<-MASS::mvrnorm(1,as.vector(coef(detFun)),detFun$Vp)
     }else { # Class is a glm or vglm
-      br<-MASS::mvrnorm(1,as.vector(coef(res.1)),vcov(res.1))
+      br<-MASS::mvrnorm(1,as.vector(coef(detFun)),vcov(detFun))
     }
     results1000sim[i,5:no.model.params]<-br # save in parameter matrix
 
@@ -252,6 +252,9 @@ pDetInArea <-
     #***************************************************************************
     ## STEP 4(b) draw 10000 values from the generated NL distribution ##########
     # put in allNL column and repeat for all transects
+
+    prob_warnings <-FALSE # Warning flag for probabilities beyond [0,1] range
+
     for (j in 1:no.profiles){
       allNL[,j]<-stats::rnorm(numTLrowsubset,
                               results1000sim[i,3],results1000sim[i,4])
@@ -273,7 +276,7 @@ pDetInArea <-
       # for more information about the predict function The lpmatrix contains
       # values which when multiplied by the coefficients, gives predicted values
       # (on the scale of the link function)
-      #   Xp<-predict(res.1,newd,type="lpmatrix")
+      #   Xp<-predict(detFun,newd,type="lpmatrix")
       #   #multiply the lpmatrix by the randomly chosen coefficient values. Use
       #   #inv.logit to put the predicted values on the scale of the response
       #   #function (i.e p(det) values)
@@ -281,9 +284,9 @@ pDetInArea <-
 
       # Code above only seems to apply for standard MGCV GAMs Since we might
       # have a GAM, GLM, SCAM or VGLMwe need to do something different. We will
-      # swap the resampled coefficents into the res.1 model, then predict on the
+      # swap the resampled coefficents into the detFun model, then predict on the
       # scale of the response using the new dataset
-      res.1.newcoeff<-res.1
+      detFun.newcoeff<-detFun
 
       # VGLM/VGAMs handled a bit differently than GAMs, SCAMs, and GLMs
       # The differences here go beyond just syntax (tho this is different too).
@@ -292,42 +295,52 @@ pDetInArea <-
       # WhichObserver will be included in the model under extra if it has been
       # fit via callDensity::fitSNRvglm. Otherwise, the default behaviour here
       # is to use the response of the last observer.
-      if (any(class(res.1)=='vglm')){
-        res.1.newcoeff@coefficients<-br
-        pred0<-VGAM::predict(res.1.newcoeff,newdata=newd,type="response",
-                                   type.fitted='onempall0')
-        predmatrix<-VGAM::predict(res.1.newcoeff,newdata=newd,type="response")
+      if (inherits(detFun,'vglm')){
+        detFun.newcoeff@coefficients<-br
+        pred0<-VGAM::predict(detFun.newcoeff,newdata=newd,type="response",
+                                   type.fitted='onempall0',na.action=na.pass)
+        predmatrix<-VGAM::predict(detFun.newcoeff,newdata=newd,type="response",
+                                  na.action=na.pass)
 
         # VGLMs can have multiple observers, so we need to know which of these
         # to use for probability of detection.
-        index = ifelse(is.null(res.1.newcoeff@extra$whichObserver),
+        index = ifelse(is.null(detFun.newcoeff@extra$whichObserver),
                dim(predmatrix)[2],
-               which(colnames(predmatrix)==res.1.newcoeff@extra$whichObserver) )
+               which(colnames(predmatrix)==detFun.newcoeff@extra$whichObserver) )
 
         predmatrix<- predmatrix[,index]
-        predmatrix =apply(cbind(predmatrix,pred0),1,prod)
+
+        # predmatrix =apply(cbind(predmatrix,pred0),1,prod)
+        predmatrix = predmatrix*pred0 # faster than apply(cbind()) call above?
+        # if (length(predmatrix) != 9800){
+        #   cat("Transect: ",j,"\n")
+        #   cat("predmatrix class: ",class(predmatrix),
+        #       "dimensions:", dim(predmatrix), "\n")
+        #   cat("pred0 class: ",class(pred0), "dimensions:", dim(pred0), "\n")
+        #   cat("newd class: ",class(newd), "dimensions:", nrow(newd), "\n")
+        #  # browser()
+        # }
+
       }else {
-        res.1.newcoeff$coefficients<-br
-        predmatrix<-predict(res.1.newcoeff,newd,type="response")
+        detFun.newcoeff$coefficients<-br
+        predmatrix<-predict(detFun.newcoeff,newd,type="response")
       }
 
       # set pdet<-0 when SNR is below the truncation threshold
-      predmatrix[which(newd < snrTruncationThreshold)]<-NA
-
-      # set pdet<-NA when the distance along radial[,j] >= truncDistance[,j]
-      predmatrix <- predmatrix + allTrunc[,j]
+      # and set pdet<-NA when the distance along radial[,j] >= truncDistance[,j]
+      predmatrix[which(newd$SNR < snrTruncationThreshold | is.na(allTrunc[,j]))]<-NA
 
       # Check that: 0 <= predmatrix/probabilities <= 1 or else force them to be
       # This is needed because some models (looking at you VGAMs) produce
       # probabilities below zero or above 1 (e.g. -Inf and Inf)
       if (any( predmatrix < 0, na.rm = TRUE)){
-        warning("Probabilities <0 encountered and set to zero")
-        predmatrix[which(predmatrix < 0)]<-0
+        prob_warnings <- TRUE
+        predmatrix[predmatrix < 0]<-0
       }
 
       if (any( predmatrix > 1, na.rm = TRUE)){
-        warning("Probabilities >1 encountered and set to 1")
-        predmatrix[which(predmatrix > 1)]<-1
+        prob_warnings <- TRUE
+        predmatrix[predmatrix > 1]<-1
       }
 
       # Save the prob(det) in allpdet
@@ -335,7 +348,11 @@ pDetInArea <-
 
     }
 
+    if (prob_warnings){
+      warning("Probabilities outside [0,1] were encountered and clamped")
+    }
     # Once pdet full with 5 columns, save allpdet in resultsallpdets
+
     resultsallpdets[,((no.profiles*i)-(no.profiles-1)):(no.profiles*i)]<-allpdet
 
   }

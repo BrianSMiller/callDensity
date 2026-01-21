@@ -5,7 +5,7 @@
 \title{Monte-Carlo simulation to predict average probability of detection in area}
 \usage{
 pDetInArea(
-  res.1,
+  detFun,
   SL,
   TLlookup,
   NL,
@@ -19,7 +19,7 @@ pDetInArea(
 )
 }
 \arguments{
-\item{res.1}{SNR-Detection function from fitSNRdetectionFunc. Must be an
+\item{detFun}{SNR-Detection function from fitSNRdetectionFunc. Must be an
 object of class GLM, GAM, SCAM, or VGLM that can be passed to functions
 coef() and vcov()}
 

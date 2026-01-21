@@ -4,17 +4,48 @@
 \alias{readCapHist}
 \title{Read a capture history csv file (e.g. created in Matlab)}
 \usage{
-readCapHist(capHistFile)
+readCapHist(
+  capHistFile,
+  observerNames = c("table1", "table2"),
+  groundTruth = "table1",
+  whichObserver = "detect_table2"
+)
 }
 \arguments{
 \item{capHistFile}{\itemize{
 \item name of the csv or txt file that contains capture
 histories. TODO: Document the required columns/file format better
 }}
+
+\item{observerNames}{\itemize{
+\item list of strings that correspond to the suffixes used
+for each observer. Default: c('table1','table2')
+}}
+
+\item{groundTruth}{\itemize{
+\item Name of column with binary data used as ground-truth.
+}}
+
+\item{whichObserver}{\itemize{
+\item Name of observer for which detection function will be
+modelled, and call density estimated
+}}
 }
 \value{
 capture history table as data.frame
 }
 \description{
-Read a capture history csv file (e.g. created in Matlab)
+Required columns for each observer are detect_, snr_, signalRMSdB_,
+noiseRMSdB_, and the underscore is followed by input parameter observerNames.
+-detect_ columns are binary i.e. 1 a detection and 0 for absence
+-snr_, signalRMSdB_, and noiseRMSdB_ are all numeric and in dB
+-groundTruth is the binary column to use as ground-truth detections. It
+can be a detect_observerName or another column.
+OG capture history tables have exactly two observers with suffixes,
+observerNames=c('table1','table2'). These are the type of tables used in
+the 'Beyond Counting Calls' manuscript.
+CR capture history tables can have N observers and can have any number of
+suffixes of any form. MultiCaptureHistoryTable from the common ground
+manuscript produces suffixes of the form:
+('observer1','observerN-1','observerN')
 }

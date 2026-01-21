@@ -12,7 +12,7 @@ studyArea(w, truncationDistance = w)
 }}
 
 \item{truncationDistance}{\itemize{
-\item Matrix of truncation distances \link{1 x Nr}. Nr is
+\item Matrix of truncation distances \code{[1 x Nr]}. Nr is
 the number of radial transects in the simulation (i.e. the same as the
 number of TL profiles).
 }}
