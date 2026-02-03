@@ -72,7 +72,12 @@ TrueCallDensity = n/(A*Time) # calls/km^2/time
 set.seed(1)
 # 1) Generate n uniformly distributed calls within radius R and time period Time
 sim <- simCallLocation(n=n, R=R, minDate=minDate, maxDate=maxDate)
-print(TrueCallDensity)
+cat('Study area (km^2): ', A, '\n')
+cat('Number of calls: ', n ,'\n');
+cat('Time units:', Time, '\n')
+cat('True call density (calls per km^2 per unit time): ',TrueCallDensity, '\n')
+
+
 ```
 
 ## Assign sonar equation parameters to each call (SL,NL,TL)
@@ -293,8 +298,8 @@ A GAM or SCAM should also be able to provide a good fit to a logistic function, 
 snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
                                               modelType = "glm")
 
-results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
-                   SL = SL, TL = TL, NL=NLsamp, A = A, modelType = 'glm')
+glmTime1 <- system.time(results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
+                   SL = SL, TL = TL, NL=NLsamp, A = A, modelType = 'glm'))
 
 
 ```
@@ -346,8 +351,8 @@ Here we simulate this by taking the mean NL from all the rows in the capture his
 # 'Independent' estimate of NL 
 NLind <- callDensity::nlFromSnrInfo(SNRinfo, snrDetFun.glm)
 
-results.NLind <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
-                   SL = SL, TL = TL, NL=NLind, A = A, modelType = 'glm')
+glmTime2 <- system.time(results.NLind <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
+                   SL = SL, TL = TL, NL=NLind, A = A, modelType = 'glm'))
 
 ```
 
@@ -427,9 +432,11 @@ snrDetFun.vglm <- fitSNRvglm(adjudicated, observerNames,
 # Best estimate of NL 
 # NLadj <- nlFromSnrInfo(adjudicated, snrDetFun.vglm)
 
-results.vglm <- cde(Nc=Nc, capHistTab = ch, snrDetFun = snrDetFun.vglm,
-                   SL = SL, TL = TL, A = A, modelType = 'vglm')
+vglmTime <- system.time(results.vglm <- cde(Nc=Nc, capHistTab = ch, snrDetFun = snrDetFun.vglm,
+                   SL = SL, TL = TL, A = A, modelType = 'vglm'))
 
+cat('Computational costs:\n\n')
+print(rbind(glmTime1,glmTime2,vglmTime))
 
 # Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
 #            output.resolution.m=100,
@@ -445,6 +452,7 @@ results.vglm <- cde(Nc=Nc, capHistTab = ch, snrDetFun = snrDetFun.vglm,
 #                       NLmean = NLadj$mean, NLsd = NLadj$sd,# Noise
 #                       model='vglm', c=adj_c, Pa=pa.vglm,  # Detector params
 #                       row.names = 'Adjudicated Capture-recapture\nNL independent')
+
 
 ```
 

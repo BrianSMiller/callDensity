@@ -624,6 +624,11 @@ pa_CV <- function(pa.all.transects, wt=rep(1,dim(pa.all.transects)[1]-1) ){
   # Normalise weights (since they're likely areas along sector)
   wt <- wt/sum(wt)
 
+  # Only a single transect length provided
+  if (length(wt)==1) {
+    wt = rep(wt,length(pa_t))
+  }
+
   overall_weighted_mean_pa = weighted.mean(x = pa_t, w = wt)
 
   se_pa = overall_weighted_mean_pa/sqrt(no.transects)
