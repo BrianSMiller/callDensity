@@ -49,7 +49,7 @@ D_c = \frac{N_c(1-c)}{kTp_aA}
 
 where: $D_c$ is call density, $N_c$ is number of calls, $c$ is false discovery rate, $k$ is number of sensors (here always 1), $T$ is the duration of data analysed (in hours), $p_a$ is the probability of detection in the study area, and $A$ is the study area (in km\^2).
 
-## Generate known call distribution in space.
+## Generate known call distribution in space and time.
 
 Start with *n* calls within radius *R* of the hydrophone. This should produce a known call density with a uniform random distribution in a circle around the hydrophone. Assuming the recorder is located at centre of study area then distances are the magnitude of the x & y location. A uniform density and increasing area with larger distances should yield a triangular distance distribution.
 
@@ -58,7 +58,7 @@ Start with *n* calls within radius *R* of the hydrophone. This should produce a 
 # 1) Generate a distribution of n calls within radius R of the hydrophone with a
 # known call density Uniform random in circle
 
-n = 5e6; # number of simulated calls (regardless of whether detected or not); 
+n = 1e6; # number of simulated calls (regardless of whether detected or not); 
 R = 1e6; # radius in m (i.e. 1e6=1000km)
 k <- 1   # number of sensors (always 1 for single hydrophone moorings)
 minDate <- as.POSIXct("2025-01-01")
@@ -84,11 +84,7 @@ cat('True call density (calls per km^2 per unit time): ',TrueCallDensity, '\n')
 
 ### a) Source Level (SL)
 
-Assume source level, SL, is that of Antarctic blue whale song (as in @castro2024).
-
-However, to keep things clearer in this simple example, we use a lower standard deviation than was used by @castro2024.
-
-The values we chose match reasonably well with those that have been estimated for this animal mean of 189 dB and standard deviation of 3-8 dB. Realistic values should help make our simulation better match reality.
+Assume source level, SL, is that of Antarctic blue whale song (as in @castro2024), a mean of 190 dB re 1 uPa.However, to keep things clearer in this simple example, we use a standard deviation of 4 dB, which is lower than that used by @castro2024. These values match reasonably well with those that have been estimated for this animal mean of 189 dB and standard deviation of 3-8 dB. Realistic values should help make our simulation better match reality.
 
 ### b) Noise Level (NL)
 
@@ -104,9 +100,11 @@ We assign TL to each call using a simple spherical spreading propagation model:
 TL = 20  log_{10}  d
 \end{equation}
 
-This TL model is a commonly used analytical expression for transmission loss. Despite it's simplicity, it remains physically plausible and interpretable.
+This TL model is a commonly used analytical expression for transmission loss. It is a gross oversimplification compared to real-world transmission losses. However, it has a sound theoretical basis that is readily interpretable (i.e. it's an inverse square law, which is common in physics). 
 
-Finally, with our acoustic properties assigned, we apply the passive sonar equation (in dB): \begin{equation}
+There has already been some investigations of how uncertainty in TL affects call density (e.g. Helble et al 2013), and TL variability and mismatch is not the focus of this vignette, so there's reasonable justification for keeping this part simple. 
+
+Finally, with our acoustic properties assigned, we apply the passive sonar equation (in dB): \begin{equation}sim
 SNR = SL-TL-NL
 \end{equation}
 
@@ -124,11 +122,22 @@ TL <- simTLradials_20logR(maxRange=R, rangeStep=100, numTransects=4)
 
 ```
 
+Here's the code from the callDensity package used to simulate sonar eq parameters for calls
+
+`simCallAcoustics<-` 
+```{r, code=simTLradials_20logR, eval=FALSE}
+```
+And the code for the fucntion to simulate TL
+
+`simTLradials_20logR <- ` 
+```{r, code=simTLradials_20logR, eval=FALSE}
+```
+
 ## Simulate detection process
 
 To simulate the detection process we need to make some assumptions about the behaviour of the detector.
 
-Generally, it is assumed the detector has a high probability of detection at high SNR, and a low(er) probability of detection at low SNR. In quantitative sonar performance modelling sometimes a step-function or logistic curve is used when an analytical expression is required. If ground truth data on the detectors performance are available, these models can be fit to the detection data.
+Generally, if not by definition, a detector has a higher probability of detection at high SNR, and a lower probability of detection at low SNR. In quantitative sonar performance modelling sometimes a step-function or logistic curve is used when an analytical expression is required. If ground truth data on the detectors performance are available, these models can be fit to the detection data.
 
 Assume probability of detection, p_det, for both detectors follows a logistic curve with SNR as the only independent variable. We can assign a location/intercept for this curve (i.e. location along x-axis where p_det=0.5). We can also assign a scale/slope of the curve to represent the steepness of the transition between low proability and high probability.
 
@@ -186,11 +195,19 @@ Now we create a function that will take the detector parameters above and simula
 
 ```{r simulate.detectors, warning=FALSE, message=FALSE}
 
+
+
 # Simulate two detectors each with the different parameters
 simDet1<- simulateDetector(det1params,sim)
 simDet2<- simulateDetector(det2params,sim)
 
 ```
+
+Code used to simulate the detection process:
+`simulateDetector <- `
+```{r, code=simulateDetector, eval=FALSE}
+```
+
 
 View the spatial detection density (which is not the same as spatial call density since it accounts for neither detection probability nor time).
 
@@ -236,11 +253,18 @@ ggplot(subsampleDet2, aes(x=datetime, weights=detect_table) )+
 
 ```
 
+Code used to implement subsampling:
+`subsampleSimInTime <- `
+```{r, code=subsampleSimInTime, eval=FALSE}
+```
+
 ## Detection matching between detector 1 and 2
 
-Both detectors (simulated subsets) operate on the same set of calls (i.e. they are different subsets of the same underlying simulation). So we can find detections from one detector that match those of the other detector by merging the detections into a capture history table.
+Both detectors (simulated subsets) operate on the same set of calls (i.e. they are different subsets of the same underlying simulation). So we can find detections from one detector that match those of the other detector by merging the detections into a capture history table. We accoomplish this with by a full-outer join of the tables with the timestamp/datetime, as the key/matching-variable.
 
-Presently, false positives have randomly generated date-times, so have a negligible chance of matching between the two detectors.
+NB: Real world detections from independent observers rarely have timestamps that match exactly, so real data would require matching criteria that can accomodate some amount of error in detection times, locations, and other parameters.
+
+Presently, false positives have randomly generated date-times, so have a negligible chance of matching between the two detectors (i.e. false positives on one detector are independent from the other). In reality false-positives are unlikely to be fully independent, so there is an opportunity to improve the realism of the simulation by estimating correlation in false positives for real datasets, and then simulating that relationship here.  
 
 *TODO: Create false positives in a way that better approximates their real-world occurrence (i.e. in a way that allows them to be matched between detectors).*
 
@@ -248,6 +272,11 @@ Presently, false positives have randomly generated date-times, so have a negligi
 
 capHistTab <- simsTocaptureHistoryTable(subsampleDet1, subsampleDet2)
 
+```
+
+Code used to merge simulated detections into a capture history table:
+`simsTocaptureHistoryTable <- `
+```{r, code=simsTocaptureHistoryTable, eval=FALSE}
 ```
 
 Convert this capture history table into an SNRinfo table, and treat detector1 as ground truth.
@@ -293,20 +322,25 @@ The detector was a logistic function, so fitting a GLM should provide good resul
 
 A GAM or SCAM should also be able to provide a good fit to a logistic function, but to keep this concise we leave fitting those as an exercise for the reader (see callDensity vignette).
 
+The callDensity package provides a convenience function fitSNRdetectionFunc to fit GLM, GAM, and SCAM models:
+`fitSNRdetectionFunc <- `
+```{r, code=fitSNRdetectionFunc, eval=FALSE}
+```
+
 ```{r GLM p.det, warning=FALSE, message=FALSE}
 
 snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
                                               modelType = "glm")
 
-glmTime1 <- system.time(results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
-                   SL = SL, TL = TL, NL=NLsamp, A = A, modelType = 'glm'))
+results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
+                   SL = SL, TL = TL, NL=NLsamp, A = A, modelType = 'glm')
 
 
 ```
 
 ## Results
 
-Table showing how the the results of each call density estimate compare to the true values. The only difference between the three estimates is type of model used to fit the SNR-detection function (glm, gam, scam).
+Table showing how the the results of the estimated call density compare to the true values. 
 
 ```{r Call.Density.Results, echo=TRUE, warning=FALSE}
 
@@ -339,11 +373,11 @@ This suggests that we should consider estimating the noise level distribution in
 
 Additionally, the estimates of false discovery rate also appear biased. This arises from true positive detections from detector2 being incorrectly classified as false positive detections because they were missed by detector1.
 
-# Revisit GLM model using independently estimated NL
+# Revisit GLM model using improved estimate of NL
 
-Let's assume that we can estimate NL independently from the detections. In practice this could potentially be achieved by making NL measurements systematically throughout the recordings independent of whether that portion of the recording contained a detection.
+Addressing the bias in our NL should improve our estimates of call density. This bias arises because our NL distribution came from the NL around our detections. However, detections with low NL will be over-represented because they are more likely to have high SNR, thus are more likely to be detected. 
 
-Here we simulate this by taking the mean NL from all the rows in the capture history table (of subsamples from each detector) regardless of whether the call/row was a true positive, false negative, or false positive for either detector.
+To account for the over-representation of detections with lower NL in our sample, we can use our fitted detection function (the GLM from above). Specifically, we can add to our estimated mean NL, the SNR at which the probability of detection is 50%. [NOTE: I can't fully explain how I arrived at this, other than it intuitively made sense to me to 'add back in the difference between detected NL and average SNR,' and it seems to work reasonably well. There is possibly some well-known principle or statistical relationship here that might be recognizable to those more knowledgeable about such things. If so, would be good to update this with that better more mathematical explanation.]
 
 ```{r GLM p.det with independently estimated NL, warning=FALSE, message=FALSE}
 
@@ -351,10 +385,16 @@ Here we simulate this by taking the mean NL from all the rows in the capture his
 # 'Independent' estimate of NL 
 NLind <- callDensity::nlFromSnrInfo(SNRinfo, snrDetFun.glm)
 
-glmTime2 <- system.time(results.NLind <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
-                   SL = SL, TL = TL, NL=NLind, A = A, modelType = 'glm'))
+results.NLind <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
+                   SL = SL, TL = TL, NL=NLind, A = A, modelType = 'glm')
 
 ```
+
+CallDensity package code for correcting NL distribution by adding back in the SNR for 50% probability of detection:
+`nlFromSnrInfo <- `
+```{r, code=nlFromSnrInfo, eval=FALSE}
+```
+
 
 ```{r}
 
@@ -369,7 +409,7 @@ kableExtra::kbl(res, digits = c(4,3,0,1, 2, NA, 3, 4),
 
 ```
 
-Using the correct mean value for the NL distribution yeilds estimates of Dc and P_a that are substantially closer to the true value.
+Using the correct mean value for the NL distribution yeilds estimates of Dc and P_a that are closer to the true value.
 
 However, the estimate of the false discovery rate is still incorrect leading to a bias in Dc and P_a.
 
@@ -432,27 +472,8 @@ snrDetFun.vglm <- fitSNRvglm(adjudicated, observerNames,
 # Best estimate of NL 
 # NLadj <- nlFromSnrInfo(adjudicated, snrDetFun.vglm)
 
-vglmTime <- system.time(results.vglm <- cde(Nc=Nc, capHistTab = ch, snrDetFun = snrDetFun.vglm,
-                   SL = SL, TL = TL, A = A, modelType = 'vglm'))
-
-cat('Computational costs:\n\n')
-print(rbind(glmTime1,glmTime2,vglmTime))
-
-# Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
-#            output.resolution.m=100,
-#            outerloop = 10,
-#            truncationDistance=R, # in m
-#            snrTruncationThreshold =-Inf)
-# pa.vglm <- Pa.vglm$overall
-# 
-# # Density estimation equation
-# Dc.vglm <- (Nc * (1 - adj_c) )/( k * A * pa.vglm * Time )
-# 
-# results.vglm <- data.frame(Dc=Dc.vglm, SampleSize=n_adj, A = A,# Environment
-#                       NLmean = NLadj$mean, NLsd = NLadj$sd,# Noise
-#                       model='vglm', c=adj_c, Pa=pa.vglm,  # Detector params
-#                       row.names = 'Adjudicated Capture-recapture\nNL independent')
-
+results.vglm <- cde(Nc=Nc, capHistTab = ch, snrDetFun = snrDetFun.vglm,
+                   SL = SL, TL = TL, A = A, modelType = 'vglm')
 
 ```
 
