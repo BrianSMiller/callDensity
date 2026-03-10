@@ -535,23 +535,6 @@ fitSNRvgam <- function(SNRinfo,
 }
 
 
-#' Plot SNR-detection function (ggplot2)
-#' @param res.1 An SNR-detection function from fitSNRdetectionFunc
-#'
-#' @export
-showSNRdetectionFunc <-  function(res.1){
-
-  p1 <- marginaleffects::plot_predictions(res.1, condition='SNR',
-                                  type='response',conf_level=0.95)+
-    ggplot2::labs(x = c("SNR (dB)"), y = "P(detecting a call)" , title = NULL)+
-      ggplot2::theme(legend.position="bottom",
-                     legend.key.height = unit(0.25,"cm"),
-                     legend.key.width = unit(0.25,"cm"),
-                     legend.text = element_text(size = 6))
-    summary(res.1)
-    return(p1)
-}
-
 #' Model SNR-detection function with season as a factor (deprecated?)
 #'
 #' @param SNRinfo Data.frame containing columns SNR, Detected, and season
@@ -602,20 +585,20 @@ predVglmPDet <- function(snrDetFun.vglm, snrs,
                       type.fitted='onempall0')# One minus probability of all 0s
   preds.vglm=VGAM::predict(snrDetFun.vglm,type='response',newdata=snrs)
   ix <- which(colnames(preds.vglm)==whichObserver)
-  # pr =apply(cbind(preds.vglm[,ix],preds.vglm0),1,prod)
-  pr = preds.vglm0*preds.vglm[,ix]
+  pr =apply(cbind(preds.vglm[,ix],preds.vglm0),1,prod)
+  # pr = preds.vglm0*preds.vglm[,ix]
 
 
-  xlims <- c(-20,20)
-  ylims <- c(0,1)
-
-  par(cex=0.8,mar=c(3.1,3.1,0.25,0),mgp=c(2.1,1,0))
-  plot( snr$SNR, xlim= xlims, ylim=ylims,
-      type="n", xlab="SNR", ylab = "P(Detection)")
-  grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 1)
-
-
-  lines(  snrs$SNR,pr,lty='solid',lwd=2)
+  # xlims <- c(-20,20)
+  # ylims <- c(0,1)
+  #
+  # par(cex=0.8,mar=c(3.1,3.1,0.25,0),mgp=c(2.1,1,0))
+  # plot( snr$SNR, xlim= xlims, ylim=ylims,
+  #     type="n", xlab="SNR", ylab = "P(Detection)")
+  # grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 1)
+  #
+  #
+  # lines(  snrs$SNR,pr,lty='solid',lwd=2)
 
   return (pr)
 }
@@ -700,75 +683,6 @@ densityResultsTable<- function (d){
   return (list(resultsTable,result))
 }
 
-#' Bar-plot of detection rates by timeCodes (ggplot2)
-#' @param d Data.frame of call density results
-#'
-#' @importFrom ggplot2 ggplot geom_bar geom_errorbar ylab xlab labs aes
-#'   theme_minimal theme element_text
-#' @export
-detectionRatePlot <- function(d){
-
-  gRate <- ggplot2::ggplot(data=d, aes(x=season, y=Nc/T, fill=season))+
-    ggplot2::geom_bar(stat="identity",show.legend=F)+
-    # scale_y_continuous(limits=c(0,15))+
-    # geom_errorbar(aes(ymin=CI.low, ymax=CI.high),
-    #      width=0.5, position=position_dodge(0.9))+
-    ggplot2::ylab(latex2exp::TeX(
-      "Mean detection rate ($ calls \\cdot h^{-1})" ) )+
-    ggplot2::xlab('')+
-    ggplot2::ggtitle(siteCode, )+
-    ggplot2::labs(tag="(A)") +
-    ggplot2::theme_minimal()+
-    ggplot2::theme(plot.tag = element_text(),
-          plot.tag.position = c(0.2, 0.975),
-          plot.title = element_text(hjust = 0.5))
-}
-
-#' Bar-plot of detection rates by timeCodes and scaled (corrected) by precision (ggplot2)
-#' @param d Data.frame of call density results
-#'
-#' @importFrom ggplot2 ggplot geom_bar geom_errorbar ylab xlab labs aes
-#'   theme_minimal theme element_text
-#' @export
-detectionRateCorrectedPlot <- function(d){
-
-  gRateCorrected <- ggplot2::ggplot(data=d, aes(x=season, y=(Nc*c)/T, fill=season))+
-    ggplot2::geom_bar(stat="identity",show.legend=F)+
-    # scale_y_continuous(limits=c(0,15))+
-    # geom_errorbar(aes(ymin=CI.low, ymax=CI.high),
-    #               width=0.5, position=position_dodge(0.9))+
-    ggplot2::ylab(latex2exp::TeX(
-      "Mean detection rate ($ calls \\cdot h^{-1})" ) )+
-    ggplot2::xlab('')+
-    ggplot2::ggtitle(siteCode, )+
-    ggplot2::labs(tag="(A)") +
-    ggplot2::theme_minimal()+
-    ggplot2::theme(plot.tag = element_text(),
-          plot.tag.position = c(0.2, 0.975),
-          plot.title = element_text(hjust = 0.5))
-}
-
-#' Bar-plot of call density by timeCodes (ggplot2)
-#' @param d Data.frame of call density results
-#'
-#' @importFrom ggplot2 ggplot geom_bar geom_errorbar ylab xlab labs aes
-#'   theme_minimal theme element_text
-#' @importFrom latex2exp TeX
-#' @export
-densityPlot <- function(d){
-
-  gDen <- ggplot2::ggplot(data=d, aes(x=season, y=Dc, fill=season))+
-    ggplot2::geom_bar(stat="identity",show.legend=F)+
-    ggplot2::geom_errorbar(aes(ymin=CI.low, ymax=CI.high), width=0.5,)+
-    # scale_y_continuous(limits=c(0,0.25))+
-    ggplot2::ylab(latex2exp::TeX(
-      "Call density ($ calls \\cdot h^{-1} \\cdot 1000 \\cdot km^{-2}$)" ) )+
-    ggplot2::xlab('')+
-    ggplot2::labs(tag="(B)") +
-    ggplot2::theme_minimal()+
-    ggplot2::theme(plot.tag = element_text(),
-          plot.tag.position = c(0.225, 0.975))
-}
 
 #' Calculate study area for call density estimate.
 #'
@@ -891,4 +805,424 @@ mchToCR <- function (d, table1suffix, table2suffix){
   names(ch) <- gsub(table2suffix,'table2',names(ch))
   ch<-capHistTimeSeason(ch)
   return(ch)
+}
+
+
+
+#' Resolve column names from a prefix pattern or explicit vector
+#'
+#' Helper to standardise column selection across functions. If \code{prefix} is
+#' a single string it is used as a \code{grepl} pattern against \code{df_names};
+#' if it is a character vector of length > 1 it is used directly as column names.
+#'
+#' @param df_names Character vector of column names (i.e. \code{names(df)}).
+#' @param prefix Either a single character string pattern or a character vector
+#'   of explicit column names.
+#'
+#' @return A character vector of resolved column names.
+#'
+#' @keywords internal
+resolveColumns <- function(df_names, prefix) {
+  if (length(prefix) > 1) {
+    prefix
+  } else {
+    df_names[grepl(prefix, df_names)]
+  }
+}
+
+
+#' Pivot SNR observer columns to long format
+#'
+#' Helper used by the SNR plotting functions. Selects columns matching
+#' \code{snr_prefix} and pivots them to long format, attaching observer labels.
+#'
+#' @param df A data frame containing SNR observer columns.
+#' @param snr_prefix Either a single character string pattern identifying SNR
+#'   columns (e.g. \code{"snr_observer"}), or a character vector of explicit
+#'   column names. Defaults to \code{"snr_observer"}.
+#' @param obs_labels Named character vector mapping numeric observer indices
+#'   (as character) to display labels, e.g. \code{c("1"="Alice","2"="Bob")}.
+#' @param extra_cols Integer or character vector of additional column indices or
+#'   names to retain (e.g. \code{"i"} for a time index). Defaults to
+#'   \code{NULL}.
+#'
+#' @return A long-format data frame with columns \code{observer} (factor) and
+#'   \code{snr}, plus any columns specified in \code{extra_cols}.
+#'
+#' @importFrom tidyr pivot_longer
+#' @keywords internal
+pivotSNR <- function(df, snr_prefix = "snr_observer", obs_labels,
+                     extra_cols = NULL) {
+  snr_cols <- resolveColumns(names(df), snr_prefix)
+  nObs     <- length(snr_cols)
+  col_ix   <- c(snr_cols, extra_cols)
+
+  # strip the common prefix for names_prefix only when pattern-based
+  names_pfx <- if (length(snr_prefix) == 1) snr_prefix else ""
+
+  out <- tidyr::pivot_longer(df[, col_ix, drop = FALSE],
+                             cols           = tidyr::all_of(snr_cols),
+                             names_prefix   = names_pfx,
+                             names_to       = "observer",
+                             values_to      = "snr",
+                             values_drop_na = TRUE)
+  out$observer <- obs_labels[out$observer]
+  out$observer <- factor(out$observer, levels = obs_labels)
+  out
+}
+
+#' Compute pretty SNR limits across observer columns
+#'
+#' Finds the minimum and maximum SNR values across all matching observer
+#' columns and returns pretty axis limits.
+#'
+#' @param df A data frame containing SNR observer columns.
+#' @param snr_prefix Either a single character string pattern identifying SNR
+#'   columns, or a character vector of explicit column names. Defaults to
+#'   \code{"snr_observer"}.
+#'
+#' @return A numeric vector of length 2 giving \code{c(min, max)} pretty limits.
+#'
+#' @examples
+#' \dontrun{
+#' computeSNRLims(ap)
+#' computeSNRLims(d, snr_prefix = c("snr_observer1", "snr_observer2"))
+#' }
+#'
+#' @export
+computeSNRLims <- function(df, snr_prefix = "snr_observer") {
+  snr_cols <- resolveColumns(names(df), snr_prefix)
+  all_vals <- unlist(df[, snr_cols, drop = FALSE], use.names = FALSE)
+  lims     <- pretty(range(all_vals, na.rm = TRUE))
+  c(min(lims), max(lims))
+}
+
+#' Compute row-wise mean across observer columns
+#'
+#' For each entry in \code{prefixes}, finds matching columns and appends a new
+#' column to \code{d} containing the row-wise mean, ignoring \code{NA}s.
+#'
+#' @param d A data frame containing observer metric columns.
+#' @param prefixes A named list or named character vector where names become the
+#'   new column names and values are either a single string pattern or a
+#'   character vector of explicit column names. Defaults to
+#'   \code{list(SNR = "snr_observer", noiseRMSdB = "noiseRMSdB_observer",
+#'   signalRMSdB = "signalRMSdB_observer")}.
+#'
+#' @return The input data frame \code{d} with one additional column per entry
+#'   in \code{prefixes}.
+#'
+#' @examples
+#' \dontrun{
+#' # Default: pattern-based
+#' d <- addObserverMeans(d)
+#'
+#' # Mixed: pattern-based and explicit
+#' d <- addObserverMeans(d, prefixes = list(
+#'   SNR        = "snr_observer",
+#'   noiseRMSdB = c("noiseRMSdB_observer1", "noiseRMSdB_observer2")
+#' ))
+#' }
+#'
+#' @export
+addObserverMeans <- function(d,
+                             prefixes = list(
+                               SNR         = "snr_observer",
+                               noiseRMSdB  = "noiseRMSdB_observer",
+                               signalRMSdB = "signalRMSdB_observer"
+                             )) {
+  for (col_name in names(prefixes)) {
+    matched    <- resolveColumns(names(d), prefixes[[col_name]])
+    d[[col_name]] <- rowMeans(d[, matched, drop = FALSE], na.rm = TRUE)
+  }
+  d
+}
+
+#' Plot SNR-detection function (ggplot2)
+#' @param res.1 An SNR-detection function from fitSNRdetectionFunc
+#'
+#' @export
+showSNRdetectionFunc <-  function(res.1){
+
+  p1 <- marginaleffects::plot_predictions(res.1, condition='SNR',
+                                          type='response',conf_level=0.95)+
+    ggplot2::labs(x = c("SNR (dB)"), y = "P(detecting a call)" , title = NULL)+
+    ggplot2::theme(legend.position="bottom",
+                   legend.key.height = unit(0.25,"cm"),
+                   legend.key.width = unit(0.25,"cm"),
+                   legend.text = element_text(size = 6))
+  summary(res.1)
+  return(p1)
+}
+
+
+
+#' Bar-plot of detection rates by timeCodes (ggplot2)
+#' @param d Data.frame of call density results
+#'
+#' @importFrom ggplot2 ggplot geom_bar geom_errorbar ylab xlab labs aes
+#'   theme_minimal theme element_text
+#' @export
+detectionRatePlot <- function(d){
+
+  gRate <- ggplot2::ggplot(data=d, aes(x=season, y=Nc/T, fill=season))+
+    ggplot2::geom_bar(stat="identity",show.legend=F)+
+    # scale_y_continuous(limits=c(0,15))+
+    # geom_errorbar(aes(ymin=CI.low, ymax=CI.high),
+    #      width=0.5, position=position_dodge(0.9))+
+    ggplot2::ylab(latex2exp::TeX(
+      "Mean detection rate ($ calls \\cdot h^{-1})" ) )+
+    ggplot2::xlab('')+
+    ggplot2::ggtitle(siteCode, )+
+    ggplot2::labs(tag="(A)") +
+    ggplot2::theme_minimal()+
+    ggplot2::theme(plot.tag = element_text(),
+                   plot.tag.position = c(0.2, 0.975),
+                   plot.title = element_text(hjust = 0.5))
+}
+
+#' Bar-plot of detection rates by timeCodes and scaled (corrected) by precision (ggplot2)
+#' @param d Data.frame of call density results
+#'
+#' @importFrom ggplot2 ggplot geom_bar geom_errorbar ylab xlab labs aes
+#'   theme_minimal theme element_text
+#' @export
+detectionRateCorrectedPlot <- function(d){
+
+  gRateCorrected <- ggplot2::ggplot(data=d, aes(x=season, y=(Nc*c)/T, fill=season))+
+    ggplot2::geom_bar(stat="identity",show.legend=F)+
+    # scale_y_continuous(limits=c(0,15))+
+    # geom_errorbar(aes(ymin=CI.low, ymax=CI.high),
+    #               width=0.5, position=position_dodge(0.9))+
+    ggplot2::ylab(latex2exp::TeX(
+      "Mean detection rate ($ calls \\cdot h^{-1})" ) )+
+    ggplot2::xlab('')+
+    ggplot2::ggtitle(siteCode, )+
+    ggplot2::labs(tag="(A)") +
+    ggplot2::theme_minimal()+
+    ggplot2::theme(plot.tag = element_text(),
+                   plot.tag.position = c(0.2, 0.975),
+                   plot.title = element_text(hjust = 0.5))
+}
+
+#' Bar-plot of call density by timeCodes (ggplot2)
+#' @param d Data.frame of call density results
+#'
+#' @importFrom ggplot2 ggplot geom_bar geom_errorbar ylab xlab labs aes
+#'   theme_minimal theme element_text
+#' @importFrom latex2exp TeX
+#' @export
+densityPlot <- function(d){
+
+  gDen <- ggplot2::ggplot(data=d, aes(x=season, y=Dc, fill=season))+
+    ggplot2::geom_bar(stat="identity",show.legend=F)+
+    ggplot2::geom_errorbar(aes(ymin=CI.low, ymax=CI.high), width=0.5,)+
+    # scale_y_continuous(limits=c(0,0.25))+
+    ggplot2::ylab(latex2exp::TeX(
+      "Call density ($ calls \\cdot h^{-1} \\cdot 1000 \\cdot km^{-2}$)" ) )+
+    ggplot2::xlab('')+
+    ggplot2::labs(tag="(B)") +
+    ggplot2::theme_minimal()+
+    ggplot2::theme(plot.tag = element_text(),
+                   plot.tag.position = c(0.225, 0.975))
+}
+
+
+
+#' Multi-Observer Detection Count
+#'
+#' Counts and visualises detection agreement patterns across multiple observers.
+#' Each row is encoded as a binary string representing each observer's detection
+#' decision, and the frequency of each unique pattern is returned as a data frame
+#' and displayed as a bar chart.
+#'
+#' @param ch A data frame containing observer detection columns. Each detection
+#'   column should contain binary values (0/1).
+#' @param detect_prefix Either a single character string used as a pattern to
+#'   identify detection columns by name (e.g. \code{"detect_observer"} will
+#'   match \code{detect_observer1}, \code{detect_observer2}, etc.), or a
+#'   character vector of explicit column names (e.g.
+#'   \code{c("detect_obs1", "detect_obs2")}). Defaults to
+#'   \code{"detect_observer"}.
+#' @param ... Additional ggplot2 layers (e.g. scales, themes, annotations)
+#'   passed to the plot via \code{+}.
+#'
+#' @return A data frame with two columns:
+#'   \describe{
+#'     \item{category}{A factor giving the binary string pattern of observer
+#'       detections (e.g. \code{"101"} means observers 1 and 3 detected,
+#'       observer 2 did not).}
+#'     \item{count}{An integer giving the number of rows matching that pattern.}
+#'   }
+#'
+#' @details
+#' When \code{detect_prefix} is a single string, columns are identified by
+#' \code{grepl(detect_prefix, names(ch))}. When \code{detect_prefix} is a
+#' character vector of length > 1, those column names are used directly.
+#'
+#' @examples
+#' ch <- data.frame(
+#'   detect_observer1 = c(1, 0, 1, 1),
+#'   detect_observer2 = c(1, 1, 0, 1),
+#'   detect_observer3 = c(0, 0, 1, 1)
+#' )
+#'
+#' # Default
+#' result <- multiObserverDetectionCount(ch)
+#'
+#' # With extra ggplot2 layers
+#' result <- multiObserverDetectionCount(ch,
+#'   ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45)))
+#'
+#' @importFrom ggplot2 ggplot aes geom_bar labs theme_bw theme element_line
+#' @export
+multiObserverDetectionCount <- function(ch,
+                                        detect_prefix = "detect_observer",
+                                        ...) {
+  detectColumns <- resolveColumns(names(ch), detect_prefix)
+  nObservers    <- length(detectColumns)
+
+  detBin <- apply(ch[, detectColumns, drop = FALSE], 1, function(row) {
+    paste(row, collapse = "")
+  })
+
+  ven       <- factor(detBin)
+  counts_df <- as.data.frame(table(ven))
+  colnames(counts_df) <- c("category", "count")
+
+  p <- ggplot2::ggplot(counts_df, ggplot2::aes(x = category, y = count)) +
+    ggplot2::geom_bar(stat = "identity") +
+    ggplot2::labs(
+      x = sprintf("Observer binary mask (%s)", paste(1:nObservers, collapse = "")),
+      y = "Number of detections"
+    ) +
+    ggplot2::theme_bw() +
+    ggplot2::theme(panel.grid.major = ggplot2::element_line(colour = "grey80"),
+                   panel.grid.minor = ggplot2::element_line(colour = "grey90")) +
+    Reduce(`+`, list(...))
+
+  print(p)
+  return(counts_df)
+}
+
+
+#' Plot SNR time series for the adjudicated subset
+#'
+#' Pivots SNR observer columns to long format and produces a scatter plot of
+#' SNR against a time index column, coloured by observer.
+#'
+#' @param ap A data frame containing SNR observer columns and a time index column.
+#' @param obs_labels Named character vector mapping numeric observer indices
+#'   (as character) to display labels.
+#' @param snr_prefix Either a single character string pattern identifying SNR
+#'   columns, or a character vector of explicit column names. Defaults to
+#'   \code{"snr_observer"}.
+#' @param time_col Name of the time index column. Defaults to \code{"i"}.
+#' @param snr_lims Numeric vector of length 2 giving y-axis limits. If
+#'   \code{NULL} (default), limits are computed from the data using
+#'   \code{\link{computeSNRLims}}.
+#' @param title Plot title. Defaults to
+#'   \code{"Adjudicated subset: SNR time series by detector"}.
+#' @param ... Additional ggplot2 layers (e.g. scales, themes, annotations)
+#'   passed to the plot via \code{+}.
+#'
+#' @return A \code{ggplot} object (invisibly).
+#'
+#' @examples
+#' \dontrun{
+#' plotSNRTimeSeries(ap, obs_labels)
+#'
+#' # Shared limits with extra layer
+#' lims <- computeSNRLims(d)
+#' plotSNRTimeSeries(ap, obs_labels, snr_lims = lims,
+#'   ggplot2::theme(legend.position = "bottom"))
+#' }
+#'
+#' @importFrom ggplot2 ggplot aes geom_point ylim labs theme_bw
+#' @export
+plotSNRTimeSeries <- function(ap,
+                              obs_labels,
+                              snr_prefix = "snr_observer",
+                              time_col   = "i",
+                              snr_lims   = NULL,
+                              title      = "Adjudicated subset: SNR time series by detector",
+                              ...) {
+  snr_cols <- resolveColumns(names(ap), snr_prefix)
+  snrs     <- pivotSNR(ap, snr_prefix, obs_labels, extra_cols = time_col)
+  snr_lims <- snr_lims %||% computeSNRLims(ap, snr_prefix)
+
+  p <- ggplot2::ggplot(snrs, ggplot2::aes(x = .data[[time_col]],
+                                          y = snr,
+                                          colour = observer)) +
+    ggplot2::geom_point(alpha = 0.3) +
+    ggplot2::ylim(snr_lims) +
+    ggplot2::labs(title = title, x = "Date", y = "SNR (dB)") +
+    ggplot2::theme_bw() +
+    Reduce(`+`, list(...))
+
+  print(p)
+  invisible(p)
+}
+
+
+#' Plot SNR histogram by observer
+#'
+#' Pivots SNR observer columns to long format and produces a faceted histogram
+#' of SNR distributions, one panel per observer.
+#'
+#' @param df A data frame containing SNR observer columns.
+#' @param obs_labels Named character vector mapping numeric observer indices
+#'   (as character) to display labels.
+#' @param snr_prefix Either a single character string pattern identifying SNR
+#'   columns, or a character vector of explicit column names. Defaults to
+#'   \code{"snr_observer"}.
+#' @param snr_lims Numeric vector of length 2 giving x-axis limits. If
+#'   \code{NULL} (default), limits are computed from the data using
+#'   \code{\link{computeSNRLims}}.
+#' @param binwidth Histogram bin width in dB. Defaults to \code{0.5}.
+#' @param title Plot title. Defaults to \code{"SNR distribution by detector"}.
+#' @param ... Additional ggplot2 layers (e.g. scales, themes, annotations)
+#'   passed to the plot via \code{+}.
+#'
+#' @return A \code{ggplot} object (invisibly).
+#'
+#' @examples
+#' \dontrun{
+#' plotSNRHistogram(ap, obs_labels,
+#'   title = "Adjudicated subset: SNR distribution by detector")
+#'
+#' # Shared limits with extra layer
+#' lims <- computeSNRLims(d)
+#' plotSNRHistogram(ap, obs_labels, snr_lims = lims,
+#'   title = "Adjudicated subset: SNR distribution by detector",
+#'   ggplot2::scale_fill_brewer(palette = "Dark2"))
+#' plotSNRHistogram(d, obs_labels, snr_lims = lims,
+#'   title = "Full dataset: SNR distribution by detector",
+#'   ggplot2::scale_fill_brewer(palette = "Dark2"))
+#' }
+#'
+#' @importFrom ggplot2 ggplot aes geom_histogram facet_grid xlim labs theme_bw
+#' @export
+plotSNRHistogram <- function(df,
+                             obs_labels,
+                             snr_prefix = "snr_observer",
+                             snr_lims   = NULL,
+                             binwidth   = 0.5,
+                             title      = "SNR distribution by detector",
+                             ...) {
+  snr_cols <- resolveColumns(names(df), snr_prefix)
+  snrLng   <- pivotSNR(df, snr_prefix, obs_labels)
+  snr_lims <- snr_lims %||% computeSNRLims(df, snr_prefix)
+
+  p <- ggplot2::ggplot(snrLng, ggplot2::aes(snr, fill = observer)) +
+    ggplot2::geom_histogram(position = "identity", alpha = 0.4,
+                            binwidth = binwidth) +
+    ggplot2::facet_grid(observer ~ .) +
+    ggplot2::xlim(snr_lims) +
+    ggplot2::labs(title = title, x = "SNR (dB)", y = "Count") +
+    ggplot2::theme_bw() +
+    Reduce(`+`, list(...))
+
+  print(p)
+  invisible(p)
 }
