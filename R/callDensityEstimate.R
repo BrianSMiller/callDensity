@@ -564,9 +564,9 @@ c_CV <- function(n,c){
   # Calculate the standard deviation/standard error of c
   sd.c = sqrt(var.c)
 
-  # Calculate the coefficient of variation of c. Here n*c is mean of the
-  # binomial process (number of trials multiplied by number of false positives)
-  cv.c <- sd.c / (n*c)
+  # Calculate the coefficient of variation of c. Here c is mean of the
+  # binomial process
+  cv.c <- sd.c / (c)
 
   return(cv.c)
 }
