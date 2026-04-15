@@ -300,11 +300,18 @@ return(NL)
 
 }
 
-#' Convert a capture history FILE of multiple detections into an SNR.Info file
+#' Convert a capture history table into an SNRinfo data.frame
 #'
-#' @param capHistFile A capture history file containing detections and SNR info
-#' @param season A timeCode corresponding to months, seasons, or year
+#' @param snr A capture history data.frame containing detections and SNR info.
+#'   Must have columns \code{detect_table1}, \code{detect_table2},
+#'   \code{signalRMSdB}, \code{noiseRMSdB}, \code{t}, \code{month}, and
+#'   \code{season}. Passing a file path here is deprecated and will error.
+#' @param season A timeCode corresponding to months, seasons, or 'year'
+#'   (the default, which returns all rows).
 #'
+#' @returns SNRinfo data.frame with columns \code{Detected}, \code{CallRL},
+#'   \code{NoiseRL}, \code{SNR}, \code{t}, \code{month}, and \code{season},
+#'   filtered to the requested timeCode.
 #' @export
 capHist2snrInfo <- function(snr,season='year'){
   if (class(snr)=='character'){
@@ -569,16 +576,24 @@ fitSNRbySeason <- function(SNRinfo, season=year, useGLM=TRUE, numKnots=3){
 
 # Helper function to convert predicted response from vglms into a detection
 # functions that we can use here
-#' Title
+#' Predict probability of detection from a VGLM SNR-detection function
 #'
-#' @param snrDetFun.vglm
-#' @param snrs
-#' @param whichObserver
+#' Helper that combines the per-observer detection probability and the
+#' "any-observer detected" probability from a fitted VGLM into a single
+#' marginal probability of detection at each supplied SNR.
 #'
-#' @returns
+#' @param snrDetFun.vglm A fitted VGLM SNR-detection function (e.g. from
+#'   \code{\link{fitSNRvglm}}) carrying \code{@extra$whichObserver}.
+#' @param snrs A data.frame with at least one column named \code{SNR}, giving
+#'   the SNR values at which to predict the probability of detection.
+#' @param whichObserver Character. Name of the observer column to use for
+#'   predictions. Defaults to \code{snrDetFun.vglm@extra$whichObserver} (the
+#'   observer baked into the fitted model by \code{\link{fitSNRvglm}}).
+#'
+#' @returns Numeric vector of probabilities of detection (one per row in
+#'   \code{snrs}) for the chosen observer.
 #' @export
 #'
-#' @examples
 predVglmPDet <- function(snrDetFun.vglm, snrs,
                          whichObserver=snrDetFun.vglm@extra$whichObserver){
   preds.vglm0=VGAM::predict(snrDetFun.vglm,type='response',newdata=snrs,
@@ -781,16 +796,30 @@ readCapHist <- function(capHistFile,
 }
 
 # Convert multi-observer capture history table into an CR capture history table
-#' Title
+#' Convert a multi-observer capture history table to a two-observer CR table
 #'
-#' @param d
-#' @param table1suffix
-#' @param table2suffix
+#' Extracts a two-observer (table1, table2) capture-recapture capture history
+#' table from a multi-observer source table by selecting only rows where at
+#' least one of the two named observers detected the event, and renaming the
+#' relevant columns to the \code{_table1}/\code{_table2} suffixes expected by
+#' the rest of the callDensity package. The \code{verdict} column from the
+#' source is used as the ground-truth detection for table1.
 #'
-#' @returns
+#' @param d A multi-observer capture history data.frame containing per-event
+#'   columns \code{t0}, \code{tEnd}, \code{fLow}, \code{fHigh}, \code{SNR},
+#'   \code{signalRMSdB}, \code{noiseRMSdB}, \code{noiseDev}, \code{verdict},
+#'   plus per-observer detection columns named
+#'   \code{detect_<observerSuffix>}.
+#' @param table1suffix Character. Suffix of the observer columns to remap to
+#'   the \code{_table1} role (treated as ground truth via \code{verdict}).
+#' @param table2suffix Character. Suffix of the observer columns to remap to
+#'   the \code{_table2} role (the detector being evaluated).
+#'
+#' @returns A capture history data.frame in the two-observer (table1, table2)
+#'   format expected by \code{\link{cde}}, with time/season columns added by
+#'   \code{\link{capHistTimeSeason}}.
 #' @export
 #'
-#' @examples
 mchToCR <- function (d, table1suffix, table2suffix){
   # Column names
   d1 <- paste0('detect_',table1suffix)      # detection from first observer
