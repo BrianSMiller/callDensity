@@ -2,13 +2,33 @@
 % Please edit documentation in R/callDensitySupport.R
 \name{mchToCR}
 \alias{mchToCR}
-\title{Title}
+\title{Convert a multi-observer capture history table to a two-observer CR table}
 \usage{
 mchToCR(d, table1suffix, table2suffix)
 }
 \arguments{
-\item{table2suffix}{}
+\item{d}{A multi-observer capture history data.frame containing per-event
+columns \code{t0}, \code{tEnd}, \code{fLow}, \code{fHigh}, \code{SNR},
+\code{signalRMSdB}, \code{noiseRMSdB}, \code{noiseDev}, \code{verdict},
+plus per-observer detection columns named
+\code{detect_<observerSuffix>}.}
+
+\item{table1suffix}{Character. Suffix of the observer columns to remap to
+the \code{_table1} role (treated as ground truth via \code{verdict}).}
+
+\item{table2suffix}{Character. Suffix of the observer columns to remap to
+the \code{_table2} role (the detector being evaluated).}
+}
+\value{
+A capture history data.frame in the two-observer (table1, table2)
+format expected by \code{\link{cde}}, with time/season columns added by
+\code{\link{capHistTimeSeason}}.
 }
 \description{
-Title
+Extracts a two-observer (table1, table2) capture-recapture capture history
+table from a multi-observer source table by selecting only rows where at
+least one of the two named observers detected the event, and renaming the
+relevant columns to the \code{_table1}/\code{_table2} suffixes expected by
+the rest of the callDensity package. The \code{verdict} column from the
+source is used as the ground-truth detection for table1.
 }

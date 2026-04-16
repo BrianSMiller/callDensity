@@ -1,0 +1,351 @@
+---
+title: "Parallel performance benchmarking"
+output: 
+  html_document: default
+  rmarkdown::html_vignette:
+    vignette: >
+      %\VignetteIndexEntry{Parallel performance benchmarking}
+      %\VignetteEncoding{UTF-8}
+      %\VignetteEngine{knitr::rmarkdown}
+  pdf_document: default
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  fig.width = 6,
+  fig.height = 3.75, 
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(callDensity)
+library(ggplot2)
+library(VGAM)
+```
+
+# Parallel performance benchmarking
+
+The `pDetInArea` function performs a Monte Carlo simulation that can be
+parallelized via the `parallel` argument in `cde()`. This vignette helps you
+find the optimal number of parallel workers for your hardware by benchmarking
+`cde()` with both lightweight (scam) and heavyweight (vglm) detection
+functions across a range of worker counts.
+
+**Important:** The optimal worker count depends on your CPU, memory, and
+operating system. Results from one machine won't transfer to another. Run
+this vignette on the machine you plan to use for production analyses.
+
+## Key findings from development
+
+During development on a 64-core Windows machine, we found:
+
+- **scam/gam/glm models:** Per-iteration work is too lightweight for
+  parallel overhead. `parallel=TRUE` is *slower* than serial. Use the
+  default `parallel=FALSE`.
+- **vglm models:** `VGAM::predict` is expensive enough to benefit from
+  parallelism. A 9--12x speedup was achieved with 16--30 workers using
+  `future.callr` as the backend.
+- **Too many workers hurts:** Beyond ~50% of available cores, resource
+  exhaustion (memory, file handles) can cause crashes on Windows. More
+  workers also means more serialization overhead per chunk.
+- **`future.callr`** is the recommended backend on Windows. The default
+  `future::multisession` can serialize execution under RStudio's knit
+  button.
+
+## Generate simulated test data
+
+We use the package's simulation functions to create a self-contained test
+dataset with known ground truth.
+
+```{r simulate.calls}
+set.seed(42)
+
+n <- 1e6
+R <- 1e6          # radius in m
+k <- 1
+minDate <- as.POSIXct("2025-01-01")
+maxDate <- as.POSIXct("2026-01-01")
+Time <- as.numeric(difftime(maxDate, minDate, unit = "hours"))
+
+A <- studyArea(R / 1e3)  # km^2
+
+# Source level and noise level distributions
+SL <- data.frame(mean = 189, sd = 8, sampleSize = 350)
+NL <- data.frame(mean = 90, sd = 5, sampleSize = 1000)
+
+# Simulate call locations
+sim <- simCallLocation(n = n, R = R, minDate = minDate, maxDate = maxDate)
+
+# Simulate acoustic properties (SL, NL, TL, SNR)
+sim <- simCallAcoustics(sim, SL = SL, NL = NL)
+
+cat("Simulated", n, "calls within", R/1e3, "km radius\n")
+cat("Study area:", round(A), "km^2\n")
+```
+
+## Simulate detectors and create capture histories
+
+We simulate two detectors: one with good sensitivity (detector 1) and one
+slightly worse (detector 2). This mirrors the real-world scenario where we
+have a human analyst and an automated detector.
+
+```{r simulate.detectors}
+# Detector 1: good sensitivity (like a human analyst)
+det1params <- data.frame(location = 2, scale = 2, c = 0.05, func = 'logistic',
+                         fpMean = -5, fpSD = 3)
+simDet1 <- simulateDetector(det1params, sim)
+
+# Detector 2: slightly worse (like an automated detector)
+det2params <- data.frame(location = 4, scale = 2.5, c = 0.10, func = 'logistic',
+                         fpMean = -3, fpSD = 4)
+simDet2 <- simulateDetector(det2params, sim)
+
+# Subsample to create annotated subset (as in real analyses)
+subsampleDet1 <- subsampleSimInTime(simDet1, minDate, maxDate, 
+                                     interval = '41 hour', duration = 3600)
+subsampleDet2 <- subsampleSimInTime(simDet2, minDate, maxDate, 
+                                     interval = '41 hour', duration = 3600)
+
+# Create capture history table
+capHistTab <- simsTocaptureHistoryTable(subsampleDet1, subsampleDet2)
+
+cat("Capture history table:", nrow(capHistTab), "rows\n")
+```
+
+## Simulate transmission loss radials
+
+```{r simulate.TL}
+TL <- simTLradials_20logR(maxRange = R, rangeStep = 20, numTransects = 8)
+truncDist <- matrix(rep(R, 8), nrow = 1)
+season <- factor("year")
+
+cat("TL table:", nrow(TL), "range steps x", ncol(TL)-1, "transects\n")
+```
+
+## Fit detection functions
+
+We fit both a scam (lightweight) and a vglm (heavyweight) detection
+function so we can benchmark both code paths.
+
+```{r fit.scam, warning=FALSE, message=FALSE}
+# OG-style capture history for scam
+ch_scam <- capHistTab
+ch_scam$detect_table1 <- as.logical(ch_scam$groundTruth1)
+ch_scam$detect_table2 <- as.logical(ch_scam$detect_table2)
+ch_scam$snr_table2 <- ch_scam$snr2
+ch_scam$signalRMSdB_table2 <- ch_scam$signalRMSdB2
+ch_scam$noiseRMSdB_table2 <- ch_scam$noiseRMSdB2
+
+# Fit scam detection function
+SNRinfo_scam <- capHist2snrInfo(ch_scam)
+detFun_scam <- fitSNRdetectionFunc(SNRinfo_scam, modelType = 'scam',
+                                    numKnots = 5)
+cat("scam model fitted:", class(detFun_scam)[1], "\n")
+```
+
+```{r fit.vglm, warning=FALSE, message=FALSE}
+# Adjudicated data for VGLM (true positives only from both detectors)
+adjudicated <- subset(capHistTab, capHistTab$groundTruth1 &
+                        (capHistTab$detect_table1 | capHistTab$detect_table2))
+
+observerNames <- c("detect_table1", "detect_table2")
+detFun_vglm <- fitSNRvglm(adjudicated, observerNames,
+                            whichObserver = "detect_table2")
+
+# CR-style capture history for cde
+ch_vglm <- capHistTab
+ch_vglm$detect_table1 <- as.logical(
+  ch_vglm$detect_table1 | ch_vglm$detect_table2)
+ch_vglm$detect_table2 <- as.logical(ch_vglm$detect_table2)
+ch_vglm$snr_table2 <- ch_vglm$snr2
+ch_vglm$signalRMSdB_table2 <- ch_vglm$signalRMSdB2
+ch_vglm$noiseRMSdB_table2 <- ch_vglm$noiseRMSdB2
+
+Nc <- sum(simDet2$detect_table)
+
+cat("vglm model fitted:", paste(class(detFun_vglm), collapse=", "), "\n")
+cat("Total detections (Nc):", Nc, "\n")
+```
+
+## Configure benchmark parameters
+
+Adjust these to suit your machine. Start conservative and increase
+`max_workers` if your system has headroom.
+
+```{r config}
+# Number of Monte Carlo iterations for benchmarking.
+# Use 100 for a quick survey (~15 min), 1000 for production timings.
+outerloop <- 256
+
+# Worker counts to test. Adjust based on your core count.
+n_cores <- parallelly::availableCores()
+cat("Available cores:", n_cores, "\n")
+
+# Test a range from serial through ~75% of cores.
+# Going beyond ~50% of cores may cause resource exhaustion on Windows.
+worker_counts <- unique(sort(c(
+  4,
+  min(8, n_cores - 1),
+  min(16, n_cores - 1),
+  min(round(n_cores / 2), n_cores - 1),
+  min(round(n_cores * 0.75), n_cores - 1)
+)))
+worker_counts <- worker_counts[worker_counts >= 4]
+
+cat("Worker counts to test:", worker_counts, "\n")
+```
+
+## Run benchmarks
+
+```{r benchmark, message=FALSE, warning=FALSE}
+# Helper: run a timed cde call
+run_timed_cde <- function(ch, detFun, model_type, outerloop, parallel) {
+  elapsed <- system.time(
+    cde(Nc = Nc, capHistTab = ch, snrDetFun = detFun,
+        SL = SL, TL = TL, T = Time, A = A,
+        modelType = model_type, season = season,
+        outerloop = outerloop, truncationDistance = truncDist,
+        output.resolution.m = 100, siteCode = "bench",
+        parallel = parallel)
+  )["elapsed"]
+  as.numeric(elapsed)
+}
+
+results <- data.frame()
+
+# --- Serial baselines --------------------------------------------------------
+cat("\n=== Serial baselines ===\n")
+
+cat("  scam serial... ")
+t_scam_serial <- run_timed_cde(ch_scam, detFun_scam, "scam", outerloop, FALSE)
+cat(round(t_scam_serial, 1), "s\n")
+
+cat("  vglm serial... ")
+t_vglm_serial <- run_timed_cde(ch_vglm, detFun_vglm, "vglm", outerloop, FALSE)
+cat(round(t_vglm_serial, 1), "s\n")
+
+results <- rbind(results, data.frame(
+  model = c("scam", "vglm"), workers = 0, outerloop = outerloop,
+  elapsed_s = c(t_scam_serial, t_vglm_serial),
+  stringsAsFactors = FALSE
+))
+
+# --- Parallel benchmarks -----------------------------------------------------
+for (nw in worker_counts) {
+  cat(sprintf("\n=== %d workers ===\n", nw))
+
+  # Set plan and warm up
+  future::plan(future.callr::callr, workers = nw)
+
+  cat("  Warming up... ")
+  warmup_t <- system.time(
+    cde(Nc = Nc, capHistTab = ch_vglm, snrDetFun = detFun_vglm,
+        SL = SL, TL = TL, T = Time, A = A,
+        modelType = "vglm", season = season, outerloop = 5,
+        truncationDistance = truncDist, output.resolution.m = 100,
+        siteCode = "warmup", parallel = TRUE)
+  )["elapsed"]
+  cat(round(as.numeric(warmup_t), 1), "s\n")
+
+  # scam parallel
+  cat("  scam parallel... ")
+  t_scam <- run_timed_cde(ch_scam, detFun_scam, "scam", outerloop, TRUE)
+  cat(round(t_scam, 1), "s\n")
+
+  # vglm parallel
+  cat("  vglm parallel... ")
+  t_vglm <- run_timed_cde(ch_vglm, detFun_vglm, "vglm", outerloop, TRUE)
+  cat(round(t_vglm, 1), "s\n")
+
+  results <- rbind(results, data.frame(
+    model = c("scam", "vglm"), workers = nw, outerloop = outerloop,
+    elapsed_s = c(t_scam, t_vglm),
+    stringsAsFactors = FALSE
+  ))
+}
+
+# Clean up
+future::plan('sequential')
+```
+
+## Results
+
+```{r results.table}
+# Add speedup column
+serial_times <- results[results$workers == 0, c("model", "elapsed_s")]
+names(serial_times)[2] <- "serial_s"
+results <- merge(results, serial_times, by = "model")
+results$speedup <- round(results$serial_s / results$elapsed_s, 1)
+
+# Sort for display
+results <- results[order(results$model, results$workers), ]
+rownames(results) <- NULL
+
+knitr::kable(results[, c("model", "workers", "elapsed_s", "speedup")],
+             digits = c(NA, 0, 1, 1),
+             col.names = c("Model", "Workers", "Elapsed (s)", "Speedup"),
+             caption = paste("Benchmark results: outerloop =", outerloop))
+```
+
+```{r results.plot, fig.width=6, fig.height=4}
+ggplot(results, aes(x = workers, y = speedup, colour = model, group = model)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 1, linetype = "dashed", colour = "grey50") +
+  annotate("text", x = max(results$workers) * 0.8, y = 0.8,
+           label = "serial baseline", colour = "grey50", size = 3) +
+  scale_x_continuous(breaks = c(0, worker_counts)) +
+  labs(
+    title = "Parallel speedup vs number of workers",
+    subtitle = paste("outerloop =", outerloop, " |  cores =", n_cores),
+    x = "Number of workers",
+    y = "Speedup (serial time / parallel time)",
+    colour = "Model type"
+  ) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+## Interpretation
+
+Look at the plot above to find your optimal worker count:
+
+- **scam/gam/glm models:** If the scam line stays near or below 1.0x (the
+  dashed baseline), parallel execution adds overhead without benefit. Use
+  `parallel=FALSE` for these models.
+
+- **vglm models:** The vglm line should rise with more workers. The optimal
+  point is where the curve starts to flatten --- adding more workers beyond
+  that gives diminishing returns and increases memory pressure.
+
+- **If any test crashed** with a `FutureLaunchError`, that worker count
+  exceeds your system's resources. Use fewer workers.
+
+## Recommended configuration
+
+Based on your results, set the plan in your analysis script:
+
+```r
+# Replace N with your optimal worker count from the plot above
+future::plan(future.callr::callr, workers = N)
+
+# Then call cde with parallel=TRUE for vglm models only
+result <- cde(..., modelType = "vglm", parallel = TRUE)
+```
+
+For scam/gam/glm models, omit `parallel` or set it to `FALSE`:
+
+```r
+result <- cde(..., modelType = "scam")  # serial by default
+```
+
+## Save results
+
+```{r save.results}
+outfile <- sprintf("parallel_benchmarks_%s.csv",
+                   format(Sys.time(), "%Y%m%d_%H%M"))
+write.csv(results, file = outfile, row.names = FALSE)
+cat("Results saved to", outfile, "\n")
+```

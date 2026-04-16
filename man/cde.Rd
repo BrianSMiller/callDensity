@@ -25,7 +25,8 @@ cde(
   truncationDistance = max(TL[, 1]),
   snrTruncationThreshold = -Inf,
   siteCode = "",
-  densityResultsFile = NULL
+  densityResultsFile = NULL,
+  parallel = FALSE
 )
 }
 \arguments{
@@ -100,6 +101,28 @@ the site. Default is '' (i.e. blank).}
 
 \item{densityResultsFile}{(Optional) name of csv file where final call density
 results will be written as a data.frame}
+
+\item{parallel}{Logical. If TRUE, the Monte Carlo simulation inside
+pDetInArea runs in parallel via future.apply::future_lapply, using
+whatever future plan is currently active. Set the plan before calling
+cde(), e.g. \code{future::plan(future.callr::callr, workers = 30)}.
+Default FALSE (serial).
+
+Parallel execution provides significant speedups for computationally
+expensive models (e.g. VGLM/VGAM detection functions from the VGAM
+package), where each Monte Carlo iteration involves multiple calls to
+\code{VGAM::predict}. For lightweight models (e.g. scam, gam, glm),
+the per-iteration work is too fast relative to the overhead of
+dispatching to and collecting from parallel workers, and
+\code{parallel=TRUE} will typically be \emph{slower} than serial
+execution.
+
+As a rule of thumb: use \code{parallel=TRUE} for VGLM-based detection
+functions (\code{modelType='vglm'}) and \code{parallel=FALSE}
+(the default) for everything else.
+
+Requires the \pkg{future.apply} package. If not installed, falls back
+to serial execution with a warning.}
 }
 \value{
 \code{cde} returns a data.frame containing the results of the call

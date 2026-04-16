@@ -61,7 +61,7 @@ simCallLocation <- function(n=1e6, R=1e6, minDate=Sys.time(), maxDate=startDate+
 simCallAcoustics <- function(sim,
                              SL=data.frame(mean=190, sd=4, sampleSize=350),
                              NL= data.frame(mean=84, sd = 4, sampleSize = n),
-                             TL=function(r){20*log(r)}
+                             TL=function(r){20*log10(r)}
 ){
   n = dim(sim)[1]
   sim$SL <- rnorm(n, mean=SL$mean, sd=SL$sd)       # Realised SL for each call

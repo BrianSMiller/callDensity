@@ -2,7 +2,7 @@
 % Please edit documentation in R/callDensitySupport.R
 \name{predVglmPDet}
 \alias{predVglmPDet}
-\title{Title}
+\title{Predict probability of detection from a VGLM SNR-detection function}
 \usage{
 predVglmPDet(
   snrDetFun.vglm,
@@ -11,8 +11,22 @@ predVglmPDet(
 )
 }
 \arguments{
-\item{whichObserver}{}
+\item{snrDetFun.vglm}{A fitted VGLM SNR-detection function (e.g. from
+\code{\link{fitSNRvglm}}) carrying \code{@extra$whichObserver}.}
+
+\item{snrs}{A data.frame with at least one column named \code{SNR}, giving
+the SNR values at which to predict the probability of detection.}
+
+\item{whichObserver}{Character. Name of the observer column to use for
+predictions. Defaults to \code{snrDetFun.vglm@extra$whichObserver} (the
+observer baked into the fitted model by \code{\link{fitSNRvglm}}).}
+}
+\value{
+Numeric vector of probabilities of detection (one per row in
+\code{snrs}) for the chosen observer.
 }
 \description{
-Title
+Helper that combines the per-observer detection probability and the
+"any-observer detected" probability from a fitted VGLM into a single
+marginal probability of detection at each supplied SNR.
 }

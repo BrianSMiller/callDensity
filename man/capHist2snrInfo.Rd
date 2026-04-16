@@ -2,15 +2,24 @@
 % Please edit documentation in R/callDensitySupport.R
 \name{capHist2snrInfo}
 \alias{capHist2snrInfo}
-\title{Convert a capture history FILE of multiple detections into an SNR.Info file}
+\title{Convert a capture history table into an SNRinfo data.frame}
 \usage{
 capHist2snrInfo(snr, season = "year")
 }
 \arguments{
-\item{season}{A timeCode corresponding to months, seasons, or year}
+\item{snr}{A capture history data.frame containing detections and SNR info.
+Must have columns \code{detect_table1}, \code{detect_table2},
+\code{signalRMSdB}, \code{noiseRMSdB}, \code{t}, \code{month}, and
+\code{season}. Passing a file path here is deprecated and will error.}
 
-\item{capHistFile}{A capture history file containing detections and SNR info}
+\item{season}{A timeCode corresponding to months, seasons, or 'year'
+(the default, which returns all rows).}
+}
+\value{
+SNRinfo data.frame with columns \code{Detected}, \code{CallRL},
+\code{NoiseRL}, \code{SNR}, \code{t}, \code{month}, and \code{season},
+filtered to the requested timeCode.
 }
 \description{
-Convert a capture history FILE of multiple detections into an SNR.Info file
+Convert a capture history table into an SNRinfo data.frame
 }

@@ -9,7 +9,7 @@ simCallAcoustics(
   SL = data.frame(mean = 190, sd = 4, sampleSize = 350),
   NL = data.frame(mean = 84, sd = 4, sampleSize = n),
   TL = function(r) {
-     20 * log(r)
+     20 * log10(r)
  }
 )
 }

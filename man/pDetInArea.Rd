@@ -15,7 +15,8 @@ pDetInArea(
   output.resolution.m = 100,
   outerloop = 1000,
   truncationDistance = max(TL[, 1]),
-  snrTruncationThreshold = -Inf
+  snrTruncationThreshold = -Inf,
+  parallel = FALSE
 )
 }
 \arguments{
@@ -46,6 +47,13 @@ the number of transects}
 
 \item{snrTruncationThreshold}{scalar SNR in dB below which the probability of
 detection will be forcibly set to zero.}
+
+\item{parallel}{Logical. If TRUE, the Monte Carlo outer loop runs in
+parallel via future.apply::future_lapply, using whatever future plan
+is currently active (set via future::plan() before calling). If FALSE
+(default), runs serially - identical behaviour to the original
+implementation. Requires the future.apply package to be installed
+when TRUE; falls back to serial with a warning if not available.}
 }
 \description{
 The simulation has several steps:
