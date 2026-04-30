@@ -1,6 +1,7 @@
 # callDensity
   <!-- badges: start -->
   [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+  [![DOI](https://zenodo.org/badge/638054659.svg)](https://doi.org/10.5281/zenodo.19932510)
   <!-- badges: end -->
 
 ### Estimating the density of animal calls using auxiliary information from the sonar equation.
