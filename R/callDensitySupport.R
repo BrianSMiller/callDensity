@@ -447,22 +447,14 @@ var.wtd.mean.cochran <- function(x,w){
 #' @importFrom stats binomial coef predict quasibinomial rnorm sd vcov
 #'
 #' @export
-fitSNRdetectionFunc <- function(SNRinfo, modelType='gam', numKnots=3){
-  modelType <- tolower(modelType)
+fitSNRdetectionFunc <- function(SNRinfo, modelType = "gam", numKnots = 3) {
+  .Deprecated("fitDetFun")
 
-  if (modelType == 'glm'){
-    res.1=stats::glm(Detected~(SNR), data = SNRinfo,
-              family = binomial(link="logit")) # or: family quasibinomial
-  }
-  if (modelType == 'scam'){
-      res.1<-scam::scam(Detected~s(SNR, k=numKnots,bs="mpi"),
-                        data=SNRinfo,family=binomial)
-  }
-  if (modelType == 'gam'){
-      res.1<-mgcv::gam(Detected~s(SNR, k=numKnots), data=SNRinfo,
-                       family=binomial)
-  }
-    return(res.1)
+  fitDetFun(
+    SNRinfo = SNRinfo,
+    modelType = modelType,
+    numKnots = numKnots
+  )
 }
 
 #' Fit an SNR-detection function with a closed population capture-recapture glm
@@ -492,15 +484,17 @@ fitSNRdetectionFunc <- function(SNRinfo, modelType='gam', numKnots=3){
 #'
 #' @export
 fitSNRvglm <- function(SNRinfo,
-                       yColNames = c('detect_observer1','detect_observer2'),
-                       whichObserver='detect_observer2'){
+                       yColNames = c("detect_observer1","detect_observer2"),
+                       whichObserver = "detect_observer2") {
 
+  .Deprecated("fitDetFun")
 
-  res.1 <- VGAM::vglm(as.matrix(SNRinfo[,yColNames]) ~SNR,
-                posbernoulli.t(parallel.t = TRUE~0), data=SNRinfo )
-  res.1@extra$whichObserver <- whichObserver
-
-  return(res.1)
+  fitDetFun(
+    SNRinfo = SNRinfo,
+    modelType = "vglm",
+    yColNames = yColNames,
+    whichObserver = whichObserver
+  )
 }
 
 #' Fit an SNR-detection function with a closed population capture-recapture gam
@@ -529,16 +523,9 @@ fitSNRvglm <- function(SNRinfo,
 #'
 #'
 #' @export
-fitSNRvgam <- function(SNRinfo,
-                       yColNames = c('detect_observer1','detect_observer2'),
-                       whichObserver='detect_observer2'){
-
-  res.1 <- VGAM::vgam(as.matrix(SNRinfo[,yColNames]) ~ s(SNR),
-                      posbernoulli.t, data=SNRinfo,
-                      na.action = 'na.omit')
-  res.1@extra$whichObserver <- whichObserver
-
-  return(res.1)
+fitSNRvgam <- function(...) {
+  .Deprecated("fitDetFun (vglm)")
+  stop("vgam support is experimental and not currently maintained.")
 }
 
 
@@ -594,28 +581,10 @@ fitSNRbySeason <- function(SNRinfo, season=year, useGLM=TRUE, numKnots=3){
 #'   \code{snrs}) for the chosen observer.
 #' @export
 #'
-predVglmPDet <- function(snrDetFun.vglm, snrs,
-                         whichObserver=snrDetFun.vglm@extra$whichObserver){
-  preds.vglm0=VGAM::predict(snrDetFun.vglm,type='response',newdata=snrs,
-                      type.fitted='onempall0')# One minus probability of all 0s
-  preds.vglm=VGAM::predict(snrDetFun.vglm,type='response',newdata=snrs)
-  ix <- which(colnames(preds.vglm)==whichObserver)
-  pr =apply(cbind(preds.vglm[,ix],preds.vglm0),1,prod)
-  # pr = preds.vglm0*preds.vglm[,ix]
+predVglmPDet <- function(...){
+    .Deprecated("predictDetFun")
+    predictDetFun(...)$fit
 
-
-  # xlims <- c(-20,20)
-  # ylims <- c(0,1)
-  #
-  # par(cex=0.8,mar=c(3.1,3.1,0.25,0),mgp=c(2.1,1,0))
-  # plot( snr$SNR, xlim= xlims, ylim=ylims,
-  #     type="n", xlab="SNR", ylab = "P(Detection)")
-  # grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 1)
-  #
-  #
-  # lines(  snrs$SNR,pr,lty='solid',lwd=2)
-
-  return (pr)
 }
 
 
@@ -967,21 +936,27 @@ addObserverMeans <- function(d,
   d
 }
 
-#' Plot SNR-detection function (ggplot2)
-#' @param res.1 An SNR-detection function from fitSNRdetectionFunc
+#' Plot an SNR detection function with mirrored SNR distributions
+#'
+#' Shows the fitted detection function together with the distribution of
+#' detected and missed true positives. Detected calls are plotted above the
+#' detection curve and missed calls below.
+#'
+#' @param model A fitted detection model returned by fitSNRdetectionFunc(),
+#'   fitSNRvglm(), or fitSNRvgam().
+#' @param SNRinfo Original data.frame used to fit the model.
+#' @param whichObserver Observer column for vglm/vgam models. Defaults to the
+#'   observer stored in model@extra$whichObserver.
+#' @param distribution One of "density", "histogram", or "none".
+#' @param mirror.height Height of the mirrored distributions.
+#' @param npoints Number of SNR values for prediction.
+#'
+#' @return A ggplot object.
 #'
 #' @export
-showSNRdetectionFunc <-  function(res.1){
-
-  p1 <- marginaleffects::plot_predictions(res.1, condition='SNR',
-                                          type='response',conf_level=0.95)+
-    ggplot2::labs(x = c("SNR (dB)"), y = "P(detecting a call)" , title = NULL)+
-    ggplot2::theme(legend.position="bottom",
-                   legend.key.height = unit(0.25,"cm"),
-                   legend.key.width = unit(0.25,"cm"),
-                   legend.text = element_text(size = 6))
-  summary(res.1)
-  return(p1)
+showSNRdetectionFunc <- function(...) {
+  .Deprecated("showDetFun")
+  showDetFun(...)
 }
 
 
