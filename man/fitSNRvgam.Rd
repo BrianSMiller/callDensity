@@ -4,11 +4,7 @@
 \alias{fitSNRvgam}
 \title{Fit an SNR-detection function with a closed population capture-recapture gam}
 \usage{
-fitSNRvgam(
-  SNRinfo,
-  yColNames = c("detect_observer1", "detect_observer2"),
-  whichObserver = "detect_observer2"
-)
+fitSNRvgam(...)
 }
 \arguments{
 \item{SNRinfo}{A data.frame containing detection information in columns

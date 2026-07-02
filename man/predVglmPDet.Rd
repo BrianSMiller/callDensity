@@ -4,11 +4,7 @@
 \alias{predVglmPDet}
 \title{Predict probability of detection from a VGLM SNR-detection function}
 \usage{
-predVglmPDet(
-  snrDetFun.vglm,
-  snrs,
-  whichObserver = snrDetFun.vglm@extra$whichObserver
-)
+predVglmPDet(...)
 }
 \arguments{
 \item{snrDetFun.vglm}{A fitted VGLM SNR-detection function (e.g. from

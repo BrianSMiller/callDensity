@@ -11,3 +11,5 @@ vignettes/callDensity.knit.md
 /doc/
 /Meta/
 readme.html
+.positai
+..Rcheck/

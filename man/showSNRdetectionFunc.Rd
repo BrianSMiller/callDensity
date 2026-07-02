@@ -2,13 +2,30 @@
 % Please edit documentation in R/callDensitySupport.R
 \name{showSNRdetectionFunc}
 \alias{showSNRdetectionFunc}
-\title{Plot SNR-detection function (ggplot2)}
+\title{Plot an SNR detection function with mirrored SNR distributions}
 \usage{
-showSNRdetectionFunc(res.1)
+showSNRdetectionFunc(...)
 }
 \arguments{
-\item{res.1}{An SNR-detection function from fitSNRdetectionFunc}
+\item{model}{A fitted detection model returned by fitSNRdetectionFunc(),
+fitSNRvglm(), or fitSNRvgam().}
+
+\item{SNRinfo}{Original data.frame used to fit the model.}
+
+\item{whichObserver}{Observer column for vglm/vgam models. Defaults to the
+observer stored in model@extra$whichObserver.}
+
+\item{distribution}{One of "density", "histogram", or "none".}
+
+\item{mirror.height}{Height of the mirrored distributions.}
+
+\item{npoints}{Number of SNR values for prediction.}
+}
+\value{
+A ggplot object.
 }
 \description{
-Plot SNR-detection function (ggplot2)
+Shows the fitted detection function together with the distribution of
+detected and missed true positives. Detected calls are plotted above the
+detection curve and missed calls below.
 }
