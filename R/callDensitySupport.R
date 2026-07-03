@@ -262,41 +262,25 @@ noiseLevelDistribution <- function(nlFile,season='year'){
 #'   Distribution assumed to be normal.
 #' @export
 nlFromSnrInfo <- function(snrInfo, snrDetFun){
-NL = snrInfo %>% dplyr::summarise(mean=mean(NoiseRL,na.rm = TRUE),
-                             sd=sd(NoiseRL,na.rm = TRUE),
-                             sampleSize=dplyr::n()-sum(is.na(NoiseRL)))
 
-# Use the SNR intercept estimate from the VGLM to add back into the NL
-# distribution. Have resulted to a clunky kludge since I can't figure out how to
-# get the intercept on the response scale. Instead, just predict the
-# probabilities on the response scale for a grid of SNR values and lookup the
-# median value.
-snrGrid = data.frame(SNR=seq(from=-20, to=20, by=0.1))
-probs <- predict(snrDetFun,newdata=snrGrid,type='response')
+  NL = snrInfo %>% dplyr::summarise(
+    mean=mean(NoiseRL,na.rm = TRUE),
+    sd=sd(NoiseRL,na.rm = TRUE),
+    sampleSize=dplyr::n()-sum(is.na(NoiseRL))
+  )
 
-# VGLMs are handled differently than other models
-if (any(class(snrDetFun)=='vglm')){
-  predAny <- VGAM::predict(snrDetFun,newdata=snrGrid,type="response",
-                           type.fitted='onempall0')
-  predDet2 <- VGAM::predict(snrDetFun,newdata=snrGrid,type="response")
-
-  # VGLMs can have multiple observers, so we need to know which of these
-  # to use for probability of detection.
-  index = ifelse(is.null(snrDetFun@extra$whichObserver),
-                 dim(predDet2)[2],
-                 which(colnames(predDet2)==snrDetFun@extra$whichObserver) )
-
-  predDet2 <- predDet2[,index]
-  probs = apply(cbind(predDet2,predAny),1,prod)
+  # Use the SNR intercept estimate from the VGLM to add back into the NL
+  # distribution. Have resulted to a clunky kludge since I can't figure out how to
+  # get the intercept on the response scale. Instead, just predict the
+  # probabilities on the response scale for a grid of SNR values and lookup the
+  # median value.
+  snrGrid   <- data.frame(SNR = seq(from = -20, to = 20, by = 0.1))
+  probs     <- predictDetFun(snrDetFun, newdata = snrGrid)$fit
+  snrOffset <- snrGrid[which.min(abs(probs - 0.5)), ]
+  NL$mean   <- NL$mean + snrOffset
+  return(NL)
 }
 
-snrOffset <- snrGrid[which.min(abs(probs-0.5)),]
-
-NL$mean <- NL$mean+snrOffset
-
-return(NL)
-
-}
 
 #' Convert a capture history table into an SNRinfo data.frame
 #'

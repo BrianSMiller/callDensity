@@ -104,7 +104,9 @@ fitDetFun <- function(
 
   attr(res, "modelType") <- modelType
 
-  class(res) <- c("detFun", class(res))
+  if (!isS4(res)) {
+    class(res) <- c("detFun", class(res))
+  }
 
   res
 }

@@ -111,3 +111,28 @@ test_that("predictDetFunList with vglm and no newdata [known bug: model.frame fa
   )
   expect_error(predictDetFunList(list(vglm = fit_vglm), ci = FALSE))
 })
+
+test_that("nlFromSnrInfo works for glm", {
+  d <- make_snr_data()
+  expect_no_error(nlFromSnrInfo(d, fitDetFun(d, modelType = "glm")))
+})
+
+test_that("nlFromSnrInfo works for gam", {
+  d <- make_snr_data()
+  expect_no_error(nlFromSnrInfo(d, fitDetFun(d, modelType = "gam")))
+})
+
+test_that("nlFromSnrInfo works for scam", {
+  d <- make_snr_data()
+  expect_no_error(nlFromSnrInfo(d, fitDetFun(d, modelType = "scam", numKnots = 5)))
+})
+
+test_that("nlFromSnrInfo works for vglm", {
+  skip_if_not_installed("VGAM")
+  d   <- make_two_observer_data()
+  fit <- suppressWarnings(
+    fitDetFun(d, modelType = "vglm",
+              yColNames = c("detect_observer1", "detect_observer2"))
+  )
+  expect_no_error(nlFromSnrInfo(d, fit))
+})
