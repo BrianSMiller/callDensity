@@ -7,25 +7,40 @@
 showDetFun(model, ...)
 }
 \arguments{
-\item{model}{Fitted detection model from:
-fitSNRdetectionFunc(), fitSNRvglm()}
+\item{model}{Fitted detection model from fitDetFun().}
 
-\item{SNRinfo}{Data.frame used to fit the model. Must contain:
-\itemize{
-\item SNR
-\item Detected (logical or 0/1)
-}}
+\item{SNRinfo}{Data frame used to fit the model. Must contain columns
+\code{SNR} and \code{Detected} (logical or 0/1).}
 
-\item{distribution}{One of "density", "histogram", "none"}
+\item{distribution}{One of \code{"none"} (default), \code{"density"}, or
+\code{"histogram"}. Controls whether a mirrored distribution is drawn
+above y=1 (detected) and below y=0 (missed). A rug is always drawn
+unless \code{rug = FALSE}.}
 
-\item{mirror.height}{Height scaling for mirrored distributions}
+\item{rug}{Logical. If \code{TRUE} (default), draws tick marks along the
+y=1 line for detected events and along y=0 for missed events.
+For large datasets, a random subsample of \code{rug.max} points is used.}
 
-\item{npoints}{Number of SNR grid points for prediction}
+\item{rug.max}{Maximum number of rug ticks per group. Default 500.
+Set to \code{Inf} to show all points (slow for n > 2000).}
+
+\item{mirror.height}{Maximum height of mirrored distributions as a
+fraction of the y-axis range. Distributions sit outside the \link{0,1} box.
+Default 0.20.}
+
+\item{rug.alpha}{Alpha for rug ticks. Default 0.4.}
+
+\item{npoints}{Number of SNR grid points for the fitted curve. Default 300.}
+
+\item{show.counts}{Logical. If \code{TRUE} (default), adds a subtitle
+reporting the number of detections out of total observations.}
 }
 \value{
-ggplot object
+A ggplot object.
 }
 \description{
-Visualises fitted SNR detection functions together with the distribution
-of detected vs undetected events. Supports mirrored densities or histograms.
+Visualises a fitted SNR detection function together with the distribution
+of detected and missed events. By default draws a rug along the y=1
+(detected) and y=0 (missed) reference lines. Optionally overlays mirrored
+density curves or histograms above and below those lines.
 }
