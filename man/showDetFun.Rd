@@ -4,13 +4,7 @@
 \alias{showDetFun}
 \title{Plot SNR detection function with observed SNR distributions}
 \usage{
-showDetFun(
-  model,
-  SNRinfo,
-  distribution = c("density", "histogram", "none"),
-  mirror.height = 0.2,
-  npoints = 300
-)
+showDetFun(model, ...)
 }
 \arguments{
 \item{model}{Fitted detection model from:

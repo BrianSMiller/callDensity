@@ -4,7 +4,7 @@
 \alias{predictDetFun}
 \title{Predict detection function from fitted SNR models}
 \usage{
-predictDetFun(model, newdata = NULL, ci = TRUE, npoints = 300, nsim = 500)
+predictDetFun(model, ...)
 }
 \arguments{
 \item{model}{Fitted model from:

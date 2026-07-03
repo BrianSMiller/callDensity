@@ -2,41 +2,45 @@
 % Please edit documentation in R/fitDetFun.R
 \name{fitDetFun}
 \alias{fitDetFun}
-\title{Fit SNR detection function (unified interface)}
+\title{Fit an SNR detection function}
 \usage{
 fitDetFun(
   SNRinfo,
-  modelType = c("glm", "gam", "scam", "vglm"),
+  modelType = c("gam", "glm", "scam", "vglm"),
+  numKnots = 3,
   yColNames = c("detect_observer1", "detect_observer2"),
-  whichObserver = NULL,
-  numKnots = 3
+  whichObserver = NULL
 )
 }
 \arguments{
-\item{SNRinfo}{Data.frame containing:
-\itemize{
-\item SNR
-\item Detected OR observer columns (for vglm)
-}}
+\item{SNRinfo}{data.frame containing SNR and detection information.}
 
-\item{modelType}{One of:
-"glm", "gam", "scam", "vglm"}
+\item{modelType}{character.}
 
-\item{yColNames}{Observer columns for vglm models}
+\item{numKnots}{spline basis dimension for GAM/SCAM.}
 
-\item{whichObserver}{Observer used for marginal detection prediction}
+\item{yColNames}{observer columns for capture-recapture models.}
 
-\item{numKnots}{Smoothing basis size for GAM/SCAM}
-}
-\value{
-Fitted model object
+\item{whichObserver}{observer used for prediction.}
 }
 \description{
-Unified wrapper for fitting SNR-based detection functions using:
+Fits a detection function relating probability of detection to SNR.
+
+Supported model types are:
 \itemize{
 \item glm
-\item gam (mgcv)
+\item gam
 \item scam
-\item vglm (VGAM capture-recapture model)
+\item vglm (capture-recapture)
+}
+
+Fits a detection function relating probability of detection to SNR.
+
+Supported model types are:
+\itemize{
+\item glm
+\item gam
+\item scam
+\item vglm (capture-recapture)
 }
 }
