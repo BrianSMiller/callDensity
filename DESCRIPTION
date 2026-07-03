@@ -43,7 +43,8 @@ Suggests:
     rmarkdown,
     roxygen2,
     testthat (>= 3.0.0),
-    parallelly
+    parallelly,
+    future
 VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE)
 Config/testthat/edition: 3

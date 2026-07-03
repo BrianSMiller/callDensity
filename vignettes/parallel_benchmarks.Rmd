@@ -15,7 +15,8 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   fig.width = 6,
   fig.height = 3.75, 
-  comment = "#>"
+  comment = "#>",
+  eval = FALSE     # Don't run for CI -- set to true to knit locally
 )
 ```
 
