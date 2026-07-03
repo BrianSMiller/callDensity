@@ -67,7 +67,7 @@ pDetInArea <-
   function(detFun, SL, TLlookup,  NL, # Sonar equation inputs
            transectFile=NULL, simResultsFile=NULL, paFile=NULL,# output names
            output.resolution.m = 100, outerloop = 1000,
-           truncationDistance=max(TL[,1]), snrTruncationThreshold=-Inf,
+           truncationDistance=max(TLlookup[,1]), snrTruncationThreshold=-Inf,
            parallel = FALSE) {
   ### A5.2 Code used for the Monte Carlo Simulation
   # Written (started) 04 Jul 10 by Danielle Harris

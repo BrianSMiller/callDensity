@@ -2,6 +2,7 @@
 # Prediction engine for SNR detection functions
 # ============================================================
 
+
 #' Predict detection function from fitted SNR models
 #'
 #' @description
@@ -32,122 +33,184 @@
 #'   - upper (optional)
 #'
 #' @export
-predictDetFun <- function(model,
-                          newdata = NULL,
-                          ci = TRUE,
-                          npoints = 300,
-                          nsim = 500) {
+#' @export
+predictDetFun <- function(model, ...) {
+  UseMethod("predictDetFun")
+}
+
+#' @export
+predictDetFun.glm <- function(model,
+                              newdata = NULL,
+                              ci = TRUE,
+                              level = 0.95,
+                              npoints = 300,
+                              ...) {
 
   if (is.null(newdata)) {
+
     rng <- range(model.frame(model)$SNR, na.rm = TRUE)
+
     newdata <- data.frame(
       SNR = seq(rng[1], rng[2], length.out = npoints)
     )
   }
 
-  cls <- class(model)
+  fit <- stats::predict(
+    model,
+    newdata = newdata,
+    type = "response"
+  )
 
-  # ------------------------------------------------------------
-  # GLM / GAM / SCAM
-  # ------------------------------------------------------------
-  if (inherits(model, c("glm", "gam", "scam"))) {
+  out <- data.frame(
+    SNR = newdata$SNR,
+    fit = fit
+  )
 
-    fit <- stats::predict(model,
-                          newdata = newdata,
-                          type = "response")
+  if (ci) {
 
-    out <- data.frame(
-      SNR = newdata$SNR,
-      fit = fit
-    )
-
-    if (ci) {
-      pr <- stats::predict(model,
-                           newdata = newdata,
-                           type = "link",
-                           se.fit = TRUE)
-
-      crit <- 1.96
-
-      link_fit <- pr$fit
-      se <- pr$se.fit
-
-      out$lower <- stats::plogis(link_fit - crit * se)
-      out$upper <- stats::plogis(link_fit + crit * se)
-    }
-
-    return(out)
-  }
-
-  # ------------------------------------------------------------
-  # VGAM (vglm / vgam)
-  # ------------------------------------------------------------
-  if (inherits(model, c("vglm", "vgam"))) {
-
-    whichObserver <- model@extra$whichObserver
-
-    # point prediction
-    preds0 <- VGAM::predict(
+    pr <- stats::predict(
       model,
-      type = "response",
       newdata = newdata,
-      type.fitted = "onempall0"
+      type = "link",
+      se.fit = TRUE
     )
 
-    preds1 <- VGAM::predict(
-      model,
-      type = "response",
-      newdata = newdata
-    )
+    crit <- stats::qnorm((1 + level) / 2)
 
-    ix <- which(colnames(preds1) == whichObserver)
+    out$lower <- stats::plogis(pr$fit - crit * pr$se.fit)
+    out$upper <- stats::plogis(pr$fit + crit * pr$se.fit)
 
-    fit <- as.numeric(preds0 * preds1[, ix])
-
-    out <- data.frame(
-      SNR = newdata$SNR,
-      fit = fit
-    )
-
-    # --------------------------------------------------------
-    # CI via simulation (approximate, but stable)
-    # --------------------------------------------------------
-    if (ci) {
-
-      beta_hat <- coef(model)
-      V <- vcov(model)
-
-      sims <- MASS::mvrnorm(nsim, mu = beta_hat, Sigma = V)
-
-      sim_mat <- matrix(NA_real_, nrow = nsim, ncol = nrow(newdata))
-
-      for (i in seq_len(nsim)) {
-
-        tmp <- model
-        tmp@coefficients <- sims[i, ]
-
-        p0 <- VGAM::predict(
-          tmp,
-          type = "response",
-          newdata = newdata,
-          type.fitted = "onempall0"
-        )
-
-        p1 <- VGAM::predict(
-          tmp,
-          type = "response",
-          newdata = newdata
-        )
-
-        sim_mat[i, ] <- p0 * p1[, ix]
-      }
-
-      out$lower <- apply(sim_mat, 2, stats::quantile, 0.025, na.rm = TRUE)
-      out$upper <- apply(sim_mat, 2, stats::quantile, 0.975, na.rm = TRUE)
-    }
-
-    return(out)
   }
 
-  stop("Unsupported model class: ", paste(cls, collapse = ", "))
+  out
+}
+
+#' @export
+predictDetFun.gam <- predictDetFun.glm
+
+#' @export
+predictDetFun.scam <- predictDetFun.glm
+
+#' @export
+predictDetFun.vglm <- function(model,
+                               newdata = NULL,
+                               ci = FALSE,
+                               level = 0.95,
+                               npoints = 300,
+                               whichObserver = model@extra$whichObserver,
+                               ...) {
+
+  if (is.null(newdata)) {
+
+    rng <- range(model@x[, "SNR"], na.rm = TRUE)
+
+    newdata <- data.frame(
+      SNR = seq(rng[1], rng[2], length.out = npoints)
+    )
+  }
+
+  preds.any <- VGAM::predict(
+    model,
+    type = "response",
+    newdata = newdata,
+    type.fitted = "onempall0"
+  )
+
+  preds.obs <- VGAM::predict(
+    model,
+    type = "response",
+    newdata = newdata
+  )
+
+  ix <- match(whichObserver, colnames(preds.obs))
+
+  fit <- preds.any * preds.obs[, ix]
+
+  out <- data.frame(
+    SNR = newdata$SNR,
+    fit = fit
+  )
+
+  if (ci) {
+
+    warning(
+      "Confidence intervals are not yet implemented for vglm models.",
+      call. = FALSE
+    )
+
+    out$lower <- NA_real_
+    out$upper <- NA_real_
+  }
+
+  out
+}
+
+#' @export
+predictDetFun.default <- function(model, ...) {
+
+  stop(
+    "No predictDetFun() method for objects of class ",
+    paste(class(model), collapse = "/"),
+    call. = FALSE
+  )
+}
+
+# ============================================================
+# Unified multi-model prediction engine
+# ============================================================
+
+#' Predict detection functions for multiple models
+#'
+#' @description
+#' Evaluates one or more fitted detection models on a shared SNR grid and
+#' returns a long-format data frame suitable for ggplot or base plotting.
+#'
+#' @param models Named list of fitted models.
+#' @param newdata Optional data.frame with SNR column. If NULL, a grid is created.
+#' @param npoints Number of SNR grid points if newdata is NULL.
+#' @param ci Logical; include confidence intervals where available.
+#'
+#' @return data.frame with columns: SNR, model, fit, lower, upper
+#'
+#' @export
+predictDetFunList <- function(models,
+                              newdata = NULL,
+                              ci = TRUE,
+                              npoints = 300,
+                              ...) {
+
+  if (is.null(newdata)) {
+
+    rng <- range(unlist(
+      lapply(models, function(m)
+        model.frame(m)$SNR)
+    ), na.rm = TRUE)
+
+    newdata <- data.frame(
+      SNR = seq(rng[1], rng[2], length.out = npoints)
+    )
+  }
+
+  out <- do.call(
+
+    rbind,
+
+    lapply(names(models), function(nm) {
+
+      p <- predictDetFun(
+        models[[nm]],
+        newdata = newdata,
+        ci = ci,
+        ...
+      )
+
+      p$model <- nm
+      p
+
+    })
+  )
+
+  rownames(out) <- NULL
+
+  out
 }

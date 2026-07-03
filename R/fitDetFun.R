@@ -1,97 +1,110 @@
 # ============================================================
-# Unified SNR detection model fitting interface
+# Unified SNR detection model fitting
 # ============================================================
 
-#' Fit SNR detection function (unified interface)
+#' Fit an SNR detection function
 #'
 #' @description
-#' Unified wrapper for fitting SNR-based detection functions using:
-#' - glm
-#' - gam (mgcv)
-#' - scam
-#' - vglm (VGAM capture-recapture model)
+#' Fits a detection function relating probability of detection to SNR.
 #'
-#' @param SNRinfo Data.frame containing:
-#'   - SNR
-#'   - Detected OR observer columns (for vglm)
+#' Supported model types are:
 #'
-#' @param modelType One of:
-#'   "glm", "gam", "scam", "vglm"
+#' * glm
+#' * gam
+#' * scam
+#' * vglm (capture-recapture)
 #'
-#' @param yColNames Observer columns for vglm models
+#' @param SNRinfo data.frame containing SNR and detection information.
+#' @param modelType character.
+#' @param numKnots spline basis dimension for GAM/SCAM.
+#' @param yColNames observer columns for capture-recapture models.
+#' @param whichObserver observer used for prediction.
 #'
-#' @param whichObserver Observer used for marginal detection prediction
+# ============================================================
+# Unified SNR detection model fitting
+# ============================================================
+
+#' Fit an SNR detection function
 #'
-#' @param numKnots Smoothing basis size for GAM/SCAM
+#' @description
+#' Fits a detection function relating probability of detection to SNR.
 #'
-#' @return Fitted model object
+#' Supported model types are:
+#'
+#' * glm
+#' * gam
+#' * scam
+#' * vglm (capture-recapture)
+#'
+#' @param SNRinfo data.frame containing SNR and detection information.
+#' @param modelType character.
+#' @param numKnots spline basis dimension for GAM/SCAM.
+#' @param yColNames observer columns for capture-recapture models.
+#' @param whichObserver observer used for prediction.
 #'
 #' @export
-fitDetFun <- function(SNRinfo,
-                      modelType = c("glm", "gam", "scam", "vglm"),
-                      yColNames = c("detect_observer1", "detect_observer2"),
-                      whichObserver = NULL,
-                      numKnots = 3) {
+fitDetFun <- function(
+    SNRinfo,
+    modelType = c("gam", "glm", "scam", "vglm"),
+    numKnots = 3,
+    yColNames = c("detect_observer1", "detect_observer2"),
+    whichObserver = NULL) {
 
   modelType <- match.arg(modelType)
 
-  # ------------------------------------------------------------
-  # Single-observer models (binomial GLM/GAM/SCAM)
-  # ------------------------------------------------------------
+  res <- switch(
 
-  if (modelType %in% c("glm", "gam", "scam")) {
+    modelType,
 
-    fml <- stats::as.formula("Detected ~ SNR")
+    glm =
 
-    res <- switch(modelType,
+      stats::glm(
+        Detected ~ SNR,
+        data = SNRinfo,
+        family = stats::binomial()
+      ),
 
-                  glm = stats::glm(
-                    fml,
-                    data = SNRinfo,
-                    family = stats::binomial(link = "logit")
-                  ),
+    gam =
 
-                  gam = mgcv::gam(
-                    fml + mgcv::s(SNR, k = numKnots),
-                    data = SNRinfo,
-                    family = stats::binomial
-                  ),
+      mgcv::gam(
+        Detected ~ s(SNR, k = numKnots),
+        data = SNRinfo,
+        family = stats::binomial()
+      ),
 
-                  scam = scam::scam(
-                    Detected ~ scam::s(SNR, k = numKnots, bs = "mpi"),
-                    data = SNRinfo,
-                    family = stats::binomial
-                  )
-    )
+    scam =
 
-    attr(res, "modelType") <- modelType
+      scam::scam(
+        Detected ~ s(SNR, k = numKnots, bs = "mpi"),
+        data = SNRinfo,
+        family = stats::binomial()
+      ),
 
-    return(res)
-  }
+    vglm = {
 
-  # ------------------------------------------------------------
-  # Capture-recapture model (VGAM vglm)
-  # ------------------------------------------------------------
+      fit <- VGAM::vglm(
 
-  if (modelType == "vglm") {
+        as.matrix(SNRinfo[, yColNames]) ~ SNR,
 
-    res <- VGAM::vglm(
-      as.matrix(SNRinfo[, yColNames]) ~ SNR,
-      VGAM::posbernoulli.t(parallel.t = TRUE ~ 0),
-      data = SNRinfo
-    )
+        VGAM::posbernoulli.t(parallel.t = TRUE ~ 0),
 
-    attr(res, "modelType") <- "vglm"
+        data = SNRinfo
+      )
 
-    if (is.null(whichObserver)) {
-      whichObserver <- yColNames[length(yColNames)]
+      if (is.null(whichObserver))
+        whichObserver <- tail(yColNames, 1)
+
+      fit@extra$whichObserver <- whichObserver
+      fit@extra$yColNames <- yColNames
+
+      fit
     }
 
-    res@extra$whichObserver <- whichObserver
-    res@extra$yColNames <- yColNames
+  )
 
-    return(res)
-  }
+  attr(res, "modelType") <- modelType
 
-  stop("Unsupported modelType")
+  class(res) <- c("detFun", class(res))
+
+  res
 }
