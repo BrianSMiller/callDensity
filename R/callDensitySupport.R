@@ -206,7 +206,6 @@ listTLFiles <- function(p,season=''){
 #'
 #' @returns new detection parameters with filenames that have updated folders
 #' @export
-#'
 updateDetectionFolder <- function(p, newFolder){
   d <- p$detectorParams
   d$folder <- newFolder
@@ -262,7 +261,6 @@ noiseLevelDistribution <- function(nlFile,season='year'){
 #'   distribution of noise levels. Column names are mean, sd, and sampleSize.
 #'   Distribution assumed to be normal.
 #' @export
-#'
 nlFromSnrInfo <- function(snrInfo, snrDetFun){
 NL = snrInfo %>% dplyr::summarise(mean=mean(NoiseRL,na.rm = TRUE),
                              sd=sd(NoiseRL,na.rm = TRUE),
@@ -371,7 +369,6 @@ capHist2snrInfo <- function(snr,season='year'){
 #'
 #' @returns - SNRInfo data.frame containing SNR, detections, RL, NL
 #' @export
-#'
 capHistTosnrInfo <- function(capHistTab){
 
   # Assume detect_table1 is ground truth, so only keep rows where
@@ -580,7 +577,6 @@ fitSNRbySeason <- function(SNRinfo, season=year, useGLM=TRUE, numKnots=3){
 #' @returns Numeric vector of probabilities of detection (one per row in
 #'   \code{snrs}) for the chosen observer.
 #' @export
-#'
 predVglmPDet <- function(...){
     .Deprecated("predictDetFun")
     predictDetFun(...)$fit
@@ -684,7 +680,6 @@ densityResultsTable<- function (d){
 #'
 #' @returns Area of the simulation
 #' @export
-#'
 studyArea <- function(w, truncationDistance=w){
   A = pi*w^2
   if (any(truncationDistance < w)     ){
@@ -748,7 +743,6 @@ ciFromCV <- function(a, cv){
 #'   modelled, and call density estimated
 #' @returns capture history table as data.frame
 #' @export
-#'
 readCapHist <- function(capHistFile,
                         observerNames = c('table1','table2'),
                         groundTruth = 'table1',
@@ -788,7 +782,6 @@ readCapHist <- function(capHistFile,
 #'   format expected by \code{\link{cde}}, with time/season columns added by
 #'   \code{\link{capHistTimeSeason}}.
 #' @export
-#'
 mchToCR <- function (d, table1suffix, table2suffix){
   # Column names
   d1 <- paste0('detect_',table1suffix)      # detection from first observer
