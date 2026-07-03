@@ -512,6 +512,40 @@ Adjudicated capture-recapture along with independently estimated NL yields more 
 ## Inspect detection functions for insights
 
 ```{r compare snr detection functions, warning=FALSE}
+
+# Clone vglm and swap whichObserver for second observer curve
+snrDetFun.vglm2 <- snrDetFun.vglm
+other_observer  <- setdiff(
+  colnames(VGAM::predict(snrDetFun.vglm, newdata = data.frame(SNR = 0),
+                         type = "response")),
+  snrDetFun.vglm@extra$whichObserver
+)[1]
+snrDetFun.vglm2@extra$whichObserver <- other_observer
+
+# Ground truth from simulation
+truth <- data.frame(
+  SNR   = c(simDet2$snr,      capHistTab$snr1),
+  p_det = c(simDet2$p_det,    capHistTab$p_det1),
+  group = c(rep("Observer 2", nrow(simDet2)),
+            rep("Observer 1", nrow(capHistTab)))
+)
+
+models <- list(
+  "GLM"          = snrDetFun.glm,
+  "VGLM obs1"    = snrDetFun.vglm,
+  "VGLM obs2"    = snrDetFun.vglm2
+)
+names(models)[2] <- paste0("VGLM (", snrDetFun.vglm@extra$whichObserver, ")")
+names(models)[3] <- paste0("VGLM (", other_observer, ")")
+
+showDetFun(models) +
+  ggplot2::geom_line(data=truth, alpha = 1, inherit.aes = FALSE, linewidth=.75,
+                     ggplot2::aes(x = SNR, y = p_det, linetype = group))+
+  scale_linetype_manual(values = c("Observer 2" = "dashed",
+                                   "Observer 1" = "dotted") )+
+  ggplot2::xlim(-20,20)
+```
+```{r compare snr detection functions, warning=FALSE}
 snrs <- data.frame(SNR=seq(-20,20,0.5))
 
 cols = colorRampPalette(c('#EDB120','#D95319','#0072BD','#7E2F8E','#77AC30',
