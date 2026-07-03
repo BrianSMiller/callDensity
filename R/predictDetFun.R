@@ -155,6 +155,13 @@ predictDetFun.default <- function(model, ...) {
   )
 }
 
+#' @export
+predict.detFun <- function(object, ...) {
+  # Strip the detFun class and re-dispatch to the underlying model's predict method
+  class(object) <- class(object)[class(object) != "detFun"]
+  predict(object, ...)
+}
+
 # ============================================================
 # Unified multi-model prediction engine
 # ============================================================
