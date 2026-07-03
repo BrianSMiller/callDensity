@@ -42,7 +42,7 @@ Suggests:
     knitr,
     rmarkdown,
     roxygen2,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
     parallely
 VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE)

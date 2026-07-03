@@ -63,6 +63,18 @@ test_that("coef() and Vp slot work on scam detFun objects", {
   expect_true(!is.null(fit$Vp))
 })
 
+test_that("predict() works directly on detFun objects", {
+  d      <- make_snr_data()
+  newdat <- data.frame(SNR = c(0, 5, 10))
+
+  expect_no_error(predict(fitDetFun(d, modelType = "glm"),
+                          newdata = newdat, type = "response"))
+  expect_no_error(predict(fitDetFun(d, modelType = "gam"),
+                          newdata = newdat, type = "response"))
+  expect_no_error(predict(fitDetFun(d, modelType = "scam", numKnots = 5),
+                          newdata = newdat, type = "response"))
+})
+
 # ---------------------------------------------------------------------------
 # Deprecated wrappers
 # ---------------------------------------------------------------------------
