@@ -517,6 +517,7 @@ fitSNRvgam <- function(...) {
 #' @param season Factor containing a timeCode
 #' @param useGLM Boolean, if true fit a GLM instead of GAM
 #' @param numKnots Number of knots to use in the GAM
+#' @importFrom grid unit
 #'
 #' @export
 fitSNRbySeason <- function(SNRinfo, season=year, useGLM=TRUE, numKnots=3){
