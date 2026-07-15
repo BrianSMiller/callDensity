@@ -68,12 +68,14 @@ section runs today.
 #' @param SL      data.frame with mean and sd of the source level distribution.
 #' @param truncationDistance Scalar, or one value per transect.
 #' @param nSLnodes Number of quadrature nodes for the source level integral.
+#' @param binWidth Width in dB of the transmission loss bins. See below.
 #' @return Numeric vector, same length as nl.
 pDetGivenNL <- function(nl, detFun, TL, SL,
-                        truncationDistance = max(TL[, 1]),
-                        nSLnodes = 41) {
+                        truncationDistance = max(TL[[1]]),
+                        nSLnodes = 41,
+                        binWidth = 0.25) {
 
-  range_m <- TL[, 1]
+  range_m <- TL[[1]]
   tlMat   <- as.matrix(TL[, -1, drop = FALSE])
 
   # Area weights. Each range step stands for an annulus, and the area of an
@@ -81,7 +83,29 @@ pDetGivenNL <- function(nl, detFun, TL, SL,
   # a step at 20 km. Cells beyond the truncation distance carry no weight.
   truncationDistance <- rep_len(truncationDistance, ncol(tlMat))
   wMat <- outer(range_m, truncationDistance, function(r, td) r * (r <= td))
-  totalWeight <- sum(wMat)
+
+  # Collapse the table by transmission loss. A cell at 300 km on one transect
+  # and a cell at 280 km on another contribute identically if their TL is the
+  # same, so all that matters is the total area weight at each TL. This turns
+  # 240,000 cells into a few hundred bins and makes every noise level below a
+  # sum over a short vector. It is bookkeeping, not an approximation of the
+  # physics. Only binWidth costs anything.
+  tlVec <- as.vector(tlMat)
+  wVec  <- as.vector(wMat)
+  ok    <- is.finite(tlVec) & wVec > 0
+  tlVec <- tlVec[ok]; wVec <- wVec[ok]
+
+  brks  <- seq(floor(min(tlVec)), ceiling(max(tlVec)) + binWidth, by = binWidth)
+  idx   <- .bincode(tlVec, brks, include.lowest = TRUE)
+  binW  <- as.vector(tapply(wVec, factor(idx, levels = seq_len(length(brks) - 1)),
+                            sum))
+  binW[is.na(binW)] <- 0
+  binTL <- brks[-length(brks)] + binWidth / 2
+
+  keep   <- binW > 0
+  binTL  <- binTL[keep]
+  binW   <- binW[keep]
+  totalW <- sum(binW)
 
   # Source levels. Calls are not all equally loud, so average over the SL
   # distribution using a weighted grid.
@@ -90,7 +114,7 @@ pDetGivenNL <- function(nl, detFun, TL, SL,
   slWt    <- slWt / sum(slWt)
 
   # The detection function depends on one number, SNR. So evaluate it once on a
-  # grid and interpolate, rather than calling predict() millions of times.
+  # grid and interpolate, rather than calling predict() repeatedly.
   pLookup <- if (is.function(detFun)) {
     detFun
   } else {
@@ -102,10 +126,10 @@ pDetGivenNL <- function(nl, detFun, TL, SL,
   vapply(nl, function(thisNL) {
     acc <- 0
     for (i in seq_along(slNodes)) {
-      snr <- slNodes[i] - tlMat - thisNL      # sonar equation, every cell
-      acc <- acc + slWt[i] * sum(pLookup(snr) * wMat)
+      # sonar equation, once per TL bin rather than once per cell
+      acc <- acc + slWt[i] * sum(pLookup(slNodes[i] - binTL - thisNL) * binW)
     }
-    acc / totalWeight
+    acc / totalW
   }, numeric(1))
 }
 
@@ -287,7 +311,7 @@ You know what you measured. So run it backwards.
 #' Predict the mean noise level you would measure at detections, given a
 #' candidate true noise distribution.
 predictSampledNL <- function(mu, sigma, detFun, TL, SL,
-                             truncationDistance = max(TL[, 1])) {
+                             truncationDistance = max(TL[[1]])) {
   nl <- seq(mu - 6 * sigma, mu + 6 * sigma, length.out = 121)
   wt <- dnorm(nl, mu, sigma) *
         pDetGivenNL(nl, detFun, TL, SL, truncationDistance)
@@ -329,7 +353,7 @@ down. That is what `uniroot` does.
 #' PLACEHOLDER. This will become nlFromDetections() in the package, replacing
 #' nlFromSnrInfo(). See "What is left to build" below.
 nlFromDetections <- function(snrInfo, detFun, TL, SL,
-                             truncationDistance = max(TL[, 1]),
+                             truncationDistance = max(TL[[1]]),
                              searchWidth = 25) {
 
   obsMean <- mean(snrInfo$NoiseRL, na.rm = TRUE)
@@ -388,9 +412,6 @@ computed on GLORYS12 sound speed profiles along 24 radial transects out to
 
 ## First, look at the file
 
-The layout has to be checked rather than assumed. `pDetGivenNL` needs range in
-metres in the first column and one column of TL in dB per transect.
-
 ```{r pyram.inspect}
 
 tlFile <- file.path("s:/manuscripts/2026-CopernicusPyRAM/data/output",
@@ -400,38 +421,30 @@ tlRaw <- read.csv(tlFile)
 
 dim(tlRaw)
 names(tlRaw)
-tlRaw[1:3, 1:min(5, ncol(tlRaw))]
-range(tlRaw[[1]])
+range(tlRaw$range_m)
 
 ```
 
-Expect 101 rows and 25 columns, since the pipeline runs 24 transects at 15°
-spacing with 101 range points. If the first column runs to 1e6 it is metres and
-nothing needs doing. If it runs to 1000 it is kilometres and needs multiplying.
-If the first column is not range at all, stop here and tell me what it is.
+The layout is already what `pDetGivenNL` wants: `range_m` first, then 24
+columns named by bearing from `tl000` to `tl345`. Range runs 100 m to 1000 km
+in 100 m steps, so 10,000 rows.
 
 ```{r pyram.prepare}
 
-TLpyram <- tlRaw
+# Drop any non-finite cells. Range is already in metres and starts above zero.
+TLpyram <- tlRaw[is.finite(rowSums(tlRaw)), ]
 
-# Range to metres if the file is in km.
-if (max(TLpyram[[1]]) < 1e4) TLpyram[[1]] <- TLpyram[[1]] * 1000
-
-# pyRAM returns TL as a positive loss in dB. Drop any non-finite cells and the
-# r = 0 row, where TL is undefined.
-TLpyram <- TLpyram[is.finite(rowSums(TLpyram)) & TLpyram[[1]] > 0, ]
-
-# 101 points over 1000 km is a 10 km range step, which is coarse next to the
-# 1 km step used for the spherical curve above. That matters most at short
-# range, where the area weight is small, so it should be a minor effect here.
-# Worth checking by halving the step and seeing if the curve moves.
-sprintf("%d transects, range step %.1f km, TL at 1000 km: %.1f to %.1f dB",
+sprintf("%d transects, range step %.0f m, TL at 1000 km: %.1f to %.1f dB",
         ncol(TLpyram) - 1,
-        diff(TLpyram[[1]])[1] / 1000,
+        diff(TLpyram$range_m)[1],
         min(as.numeric(TLpyram[nrow(TLpyram), -1])),
         max(as.numeric(TLpyram[nrow(TLpyram), -1])))
 
 ```
+
+The spread in that last pair is worth a glance. It is the difference between
+the best and worst of the 24 bearings at 1000 km, and at a site on a plateau
+edge it should not be small.
 
 ## The same curve, real physics
 
@@ -510,14 +523,40 @@ data.frame(
 
 ```
 
-`recovered` should land on 84 to several decimals, because this is the same
-integral run forwards and then backwards. That is a check that `uniroot` is
-bracketing and converging, not evidence that the physics is right.
+**This chunk is circular and cannot fail.** `measured` comes out of
+`predictSampledNL`, and `uniroot` then inverts `predictSampledNL` to find it
+again. Same integral forwards and backwards. It tests that the bracket is valid
+and that `uniroot` converges. It is not evidence that any of this is right.
 
-The interesting column is `bias`. Compare it to the 3 dB or so that spherical
-spreading gives. If the pyRAM curve is steeper, the bias here is larger, and
-`nlFromSnrInfo` would be further wrong at the real site than in the simulation
-it was tuned on.
+The column that means something is `bias`. Compare it to the 3 dB or so that
+spherical spreading gives. If the pyRAM curve is steeper then the bias at the
+real site is larger, and `nlFromSnrInfo` is further wrong at Kerguelen than in
+the simulation it was tuned on.
+
+The test that can fail is the simulated dataset in the next section, where
+`mean(NoiseRL)` comes from calls that were actually detected rather than from
+this integral.
+
+## Is the binning fine enough?
+
+`pDetGivenNL` collapses the TL table into bins of `binWidth` dB. That is the
+only approximation in it, so it is worth one check rather than an assumption.
+
+```{r pyram.binwidth, warning=FALSE}
+
+binCheck <- data.frame(binWidth = c(1, 0.5, 0.25, 0.1))
+binCheck$pDet84 <- vapply(binCheck$binWidth, function(b)
+  pDetGivenNL(84, detector, TLpyram, SL, binWidth = b), numeric(1))
+binCheck$nBins <- vapply(binCheck$binWidth, function(b)
+  length(seq(40, 140, by = b)), numeric(1))
+
+binCheck
+
+```
+
+If `pDet84` is stable from 0.5 dB downwards, use 0.25 and stop thinking about
+it. If it is still moving at 0.1 dB, the TL distribution has structure finer
+than the bins and this needs a closer look.
 
 ```{r pyram.seasons, eval=FALSE}
 
@@ -558,7 +597,7 @@ Two assumptions run through every plot above and neither is touched by any of
 this.
 
 Calls are assumed spread evenly in two dimensions. The area weight
-`#r * (r <= td)` in `pDetGivenNL` is that assumption written down. Clustered
+` r * (r <= td)` in `pDetGivenNL` is that assumption written down. Clustered
 calling, or calls concentrated at particular depths, changes it.
 
 Noise is assumed independent of whether whales are calling. If loud hours are
