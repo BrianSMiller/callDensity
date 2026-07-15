@@ -25,7 +25,7 @@ For large datasets, a random subsample of \code{rug.max} points is used.}
 Set to \code{Inf} to show all points (slow for n > 2000).}
 
 \item{mirror.height}{Maximum height of mirrored distributions as a
-fraction of the y-axis range. Distributions sit outside the \link{0,1} box.
+fraction of the y-axis range. Distributions sit outside the [0,1] box.
 Default 0.20.}
 
 \item{rug.alpha}{Alpha for rug ticks. Default 0.4.}

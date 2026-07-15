@@ -8,7 +8,7 @@ simCallLocation(
   n = 1e+06,
   R = 1e+06,
   minDate = Sys.time(),
-  maxDate = startDate + 86400
+  maxDate = minDate + 86400
 )
 }
 \arguments{

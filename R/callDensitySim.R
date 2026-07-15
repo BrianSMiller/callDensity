@@ -19,7 +19,7 @@
 #' @returns sim - data.frame containing a row for each simulated call and columns for the location and time of each call.
 #' @export
 #'
-simCallLocation <- function(n=1e6, R=1e6, minDate=Sys.time(), maxDate=startDate+86400){
+simCallLocation <- function(n=1e6, R=1e6, minDate=Sys.time(), maxDate=minDate+86400){
 
   # Call density, D_c is n/A
   A = pi*(R/1e3)^2 # Circular study area in km^2
@@ -152,39 +152,46 @@ simulateDetector <- function(detParams,sim){
   # Calculate number of false positives given the number of true positive
   # detections for the detector and the specified false discovery rate, c, for
   # that detector.
-  n_tp_det1 <- sum(sim$detect_table)
-  n_fp_det1 <- n_tp_det1/(1-detParams$c)-n_tp_det1
+  n_tp <- sum(sim$detect_table)
+  n_fp <- as.integer(n_tp/(1-detParams$c)-n_tp)
 
-  # Store false positives in data.frame with same format as sim
-  fp <- data.frame(matrix(ncol=length(sim),nrow=n_fp_det1))
-  colnames(fp) <- colnames(sim)
+  # A false discovery rate of zero is legitimate and yields no false positives.
+  # Skip the block rather than build a zero-row data.frame, which cannot be
+  # assigned into.
+  if (n_fp > 0){
 
-  # groundTruth=0 means that these are false positives (handy to keep in mind for
-  # when we include these in sim)
-  fp$groundTruth <- FALSE
-  fp$detect_table <- TRUE
+    # Store false positives in data.frame with same format as sim
+    fp <- data.frame(matrix(ncol=length(sim),nrow=n_fp))
+    colnames(fp) <- colnames(sim)
+
+    # groundTruth=0 means that these are false positives (handy to keep in mind for
+    # when we include these in sim)
+    fp$groundTruth <- FALSE
+    fp$detect_table <- TRUE
 
 
-  duration_s<-as.numeric(difftime(max(sim$datetime),min(sim$datetime),
-                                  units="sec"))
+    duration_s<-as.numeric(difftime(max(sim$datetime),min(sim$datetime),
+                                    units="sec"))
 
-  # Generate the right number of false positives uniformly over same time period
-  # as true positives.
-  fp$datetime <- minDate + sort(runif(n_fp_det1, 0, duration_s))
+    # Generate the right number of false positives uniformly over same time period
+    # as true positives.
+    fp$datetime <- min(sim$datetime) + sort(runif(n_fp, 0, duration_s))
 
-  # False positives don't have a location, SL, or TL, but do have NL and SNR
-  # Use same distribution of NL as true positives
-  fp$noiseRMSdB <- rnorm(n_fp_det1, mean=NL$mean, sd=NL$sd)
+    # False positives don't have a location, SL, or TL, but do have NL and SNR
+    # Use same distribution of NL as true positives
+    fp$noiseRMSdB <- rnorm(n_fp,
+                           mean = mean(sim$noiseRMSdB, na.rm=TRUE),
+                           sd   = sd(sim$noiseRMSdB, na.rm=TRUE))
 
-  # SNR distribution of false positives broadly matches that of Casey2019 human
-  # analysts
-  fp$snr <- rnorm(n_fp_det1, mean=detParams$fpMean, sd=detParams$fpSD)
+    # SNR distribution of false positives broadly matches that of Casey2019 human
+    # analysts
+    fp$snr <- rnorm(n_fp, mean=detParams$fpMean, sd=detParams$fpSD)
 
-  fp$signalRMSdB <- fp$noiseRMSdB + fp$snr
+    fp$signalRMSdB <- fp$noiseRMSdB + fp$snr
 
-  # Combine false positives into the simulation
-  sim <- rbind(sim,fp)
-
+    # Combine false positives into the simulation
+    sim <- rbind(sim,fp)
+  }
   # We've generated the right number of false positive detections now and merged
   # these into our simulation.
 
@@ -281,6 +288,8 @@ simsTocaptureHistoryTable <- function(subsampleDet1, subsampleDet2){
 #' @param sim - callDensity simulation data.frame
 #'
 #' @returns - ggplot object of type geom_histogram
+#' @importFrom ggplot2 ggplot geom_histogram labs theme
+#' @importFrom grid unit
 #' @export
 #'
 plotDetectionDistribution <- function(sim){
@@ -303,12 +312,14 @@ plotDetectionDistribution <- function(sim){
 #' @param sim - callDensity simulation
 #'
 #' @returns ggplot object of type geom_bin_2d
+#' @importFrom ggplot2 ggplot geom_bin_2d coord_equal
+#' @importFrom grid unit
 #' @export
 #'
 plotSpatialDetections <- function(sim){
 
   # Spatial distribution (excludes false positives)
-  ggplot(data=sim, aes(x=x/1e3, y=y/1e3, weight=detect_table) )+
+  ggplot2::ggplot(data=sim, aes(x=x/1e3, y=y/1e3, weight=detect_table) )+
     geom_bin_2d(alpha=1,binwidth=c(10,10))+
     coord_equal()+
     xlab("X location (km)")+
