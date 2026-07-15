@@ -107,17 +107,27 @@ The setup is the same as the second vignette. One million calls uniformly
 distributed within 1000 km of the hydrophone, blue whale source levels, a
 noise distribution, and spherical spreading.
 
-Two changes are deliberate.
+The scale is set to match the real dataset behind Miller et al. (2026). That
+study annotated 200 h of a year of recording at Casey2019 and found between
+2246 and 9054 detections per observer. Subsampling one hour in every 41 gives
+214 h here, and at the detector settings of the second vignette that yields
+about 2300 detections. Adjudicating every 8th detection, as that study did,
+takes it to roughly 280. Those are the numbers the correction has to work
+with.
 
-False positives are switched off. False positives carry noise levels that are
-not conditioned on detection, so they dilute the bias. The dilution gets
-stronger as the detection rate falls, which would put a spurious trend into the
-first sweep. Switching them off isolates the mechanism being tested.
+One change from the second vignette is deliberate. False positives are
+adjudicated away before the noise levels are estimated. The second vignette
+does this for its capture-recapture models and not for its observer ground
+truth models, so both paths already exist in that vignette. Adjudication is
+used here because it is the recommended method of Miller et al. (2026), and
+because false positives carry noise levels that were never conditioned on
+detection, which would dilute the very thing being measured.
 
-The subsample interval is shortened from 41 hours to 4 hours. The bias is a
-property of the detection process, not of the subsample. Subsample size only
-controls precision. The sweeps below reach detection rates near 1%, where 41
-hours would leave too few detections to fit a detection function.
+The detection function is fitted with a GLM on the adjudicated detections. The
+real method uses a capture-recapture model. That difference does not matter
+here, because this vignette is about the noise level estimate rather than about
+the capture-recapture machinery, and `nlFromSnrInfo` only ever uses the
+detection function to look up one number.
 
 ```{r simulation.setup, warning=FALSE, message=FALSE}
 
@@ -133,7 +143,14 @@ SL     <- data.frame(mean = 190, sd = 4, sampleSize = 350)
 NLtrue <- data.frame(mean = 84,  sd = 4, sampleSize = n)
 tlFunc <- function(r) 20 * log10(r)
 
-sim <- simCallAcoustics(simLoc, SL, NLtrue, TL = tlFunc)
+# WORKAROUND, not style. simulateDetector() draws noise levels for its false
+# positives using a variable named NL that it reads out of the global
+# environment. NL is not one of its arguments. This assignment exists only to
+# satisfy that lookup. Sweep 2 below has to keep it in step with the noise
+# distribution being tested.
+NL <- NLtrue
+
+sim <- simCallAcoustics(simLoc, SL, NL, TL = tlFunc)
 
 ```
 
@@ -143,15 +160,16 @@ whose performance we characterise.
 
 ```{r detector.setup}
 
-fpRate <- 0.1   # false positives switched off to isolate the mechanism
-
+# False discovery rates as in the second vignette. These span the range found
+# at Casey2019, where f ran from 0.02 to 0.43 across observers and detectors.
 det1params <- data.frame(location = 1, scale = 2, func = 'plogis',
-                         c = fpRate, fpMean = 0, fpSD = 2)
+                         c = 0.1, fpMean = 0, fpSD = 2)
 
 det2params <- data.frame(location = 2, scale = 4, func = 'plogis',
-                         c = fpRate, fpMean = 0, fpSD = 2)
+                         c = 0.3, fpMean = 0, fpSD = 2)
 
-subsampleInterval <- "4 hour"
+subsampleInterval <- "41 hour"   # 214 h, matching the 200 h annotated at Casey2019
+adjudicateEvery   <- 8           # every 8th detection judged, as at Casey2019
 
 ```
 
@@ -162,6 +180,11 @@ introduces no new method. It calls `simulateDetector`, `subsampleSimInTime`,
 `simsTocaptureHistoryTable`, `capHistTosnrInfo`, `fitSNRdetectionFunc` and
 `nlFromSnrInfo` in the same order as the second vignette.
 
+Adjudication is simulated by keeping only the detections that the simulation
+knows to be true positives, then keeping every 8th of those. In a real dataset
+a judge does this work, and the assumption is that the judged subset is
+representative of the period.
+
 The SNR offset applied by `nlFromSnrInfo` is recovered by difference rather
 than recomputed, so that this vignette tests the shipped function rather than a
 copy of it.
@@ -169,7 +192,8 @@ copy of it.
 ```{r sweep.helper}
 
 nlBiasTrial <- function(sim, det1params, det2params,
-                        subsampleInterval = "4 hour") {
+                        subsampleInterval = "41 hour",
+                        adjudicateEvery   = 8) {
 
   simDet1 <- simulateDetector(det1params, sim)
   simDet2 <- simulateDetector(det2params, sim)
@@ -178,8 +202,14 @@ nlBiasTrial <- function(sim, det1params, det2params,
   sub2 <- subsampleSimInTime(simDet2, interval = subsampleInterval)
 
   cht     <- simsTocaptureHistoryTable(sub1, sub2)
-  SNRinfo <- capHistTosnrInfo(cht)
 
+  # Simulated adjudication. Keep true positives, then judge every nth one.
+  # groundTruth1 is 0 for false positives, so this is a perfect judge.
+  adj <- subset(cht, as.logical(cht$groundTruth1))
+  adj <- adj[seq(1, nrow(cht), by = adjudicateEvery), ]
+
+  SNRinfo <- capHistTosnrInfo(adj)
+  
   detFun <- fitSNRdetectionFunc(SNRinfo, modelType = "glm")
 
   # Uncorrected noise level estimate. This duplicates the first three lines of
@@ -190,12 +220,12 @@ nlBiasTrial <- function(sim, det1params, det2params,
   NLind <- nlFromSnrInfo(SNRinfo, detFun)
 
   data.frame(
-    nSnrInfo   = nrow(SNRinfo),
-    detRate    = mean(simDet2$detect_table, na.rm = TRUE),
-    NLsampMean = NLsampMean,
-    NLsampSd   = NLsampSd,
-    NLindMean  = NLind$mean,
-    snrOffset  = NLind$mean - NLsampMean
+    nDetected    = nrow(cht),
+    nAdjudicated = nrow(adj),
+    NLsampMean   = NLsampMean,
+    NLsampSd     = NLsampSd,
+    NLindMean    = NLind$mean,
+    snrOffset    = NLind$mean - NLsampMean
   )
 }
 
@@ -218,20 +248,29 @@ snr50 <- seq(from = -5, to = 10, by = 3)
 sweepA <- do.call(rbind, lapply(snr50, function(s) {
   d1 <- det1params; d1$location <- s
   d2 <- det2params; d2$location <- s + 1
-  cbind(data.frame(det1Location = s), nlBiasTrial(sim, d1, d2, subsampleInterval))
+  cbind(data.frame(det1Location = s),
+        nlBiasTrial(sim, d1, d2, subsampleInterval, adjudicateEvery))
 }))
 
-sweepA$biasNeeded <- NLtrue$mean - sweepA$NLsampMean
+sweepA$biasNeeded <- NL$mean - sweepA$NLsampMean
 sweepA$residual   <- sweepA$biasNeeded - sweepA$snrOffset
 
-kbl(subset(sweepA, select = c(det1Location, detRate, NLsampMean,
-                              biasNeeded, snrOffset, residual)),
-    digits = c(1, 4, 2, 3, 3, 3),
-    col.names = c('Detector 1 location', 'Detection rate', 'Sampled NL mean',
-                  'Bias needed', 'Correction applied', 'Residual')) %>%
+kbl(subset(sweepA, select = c(det1Location, nDetected, nAdjudicated,
+                              NLsampMean, biasNeeded, snrOffset, residual)),
+    digits = c(1, 0, 0, 2, 3, 3, 3),
+    col.names = c('Detector 1 location', 'Detections', 'Adjudicated',
+                  'Sampled NL mean', 'Bias needed', 'Correction applied',
+                  'Residual')) %>%
   kable_classic(full_width = FALSE)
 
 ```
+
+The detection counts are worth pausing on. At Casey2019 the five observers and
+detectors found between 2246 and 9054 detections in 200 h, of which 681 were
+adjudicated true positives. The counts above sit in the same range. The
+sampled noise mean is an average of a quantity with a standard deviation near
+4 dB, so even the sparsest row here estimates it to better than a quarter of a
+decibel. Sample size is not what limits this correction.
 
 ```{r sweep.detector.plot, warning=FALSE, fig.height=3}
 
@@ -241,7 +280,14 @@ plotA <- data.frame(
   what  = rep(c("Bias needed", "Correction applied"), each = nrow(sweepA))
 )
 
+# Detections at Casey2019 were modal at 1-2 dB SNR and spanned roughly -5 to
+# +15 dB, so a detector with a location much above about 5 dB would find almost
+# nothing. Shade the range a real detector would plausibly occupy.
 ggplot(plotA, aes(x = snr50, y = dB, colour = what)) +
+  annotate("rect", xmin = -5, xmax = 5, ymin = -Inf, ymax = Inf,
+           fill = "grey85", alpha = 0.5) +
+  annotate("text", x = 0, y = 9, label = "plausible detectors",
+           colour = "grey30", size = 3) +
   geom_line(linewidth = 0.8) +
   geom_point(size = 2) +
   xlab("Detector 1 location (dB SNR)") +
@@ -255,11 +301,25 @@ The bias needed stays flat. The correction applied is a straight line through
 the origin, because it is the detector threshold and nothing else. The two
 curves cross once. The second vignette sits at that crossing.
 
+The right hand end of this sweep is a stress test rather than a survey of real
+detectors. Nobody would deploy a detector that only finds calls above 10 dB
+SNR. The shaded band marks where a real detector would sit, and the finding
+does not depend on the unshaded part. Within the plausible band alone, the
+residual runs from about +7 dB to about -2 dB. That is nine decibels of error
+from nothing more than the choice of detector, and the detection functions in
+figure 6 of Miller et al. (2026) span roughly that much across the observers
+and algorithms of a single real dataset.
+
 # Experiment 2: change the noise variance
 
 The derivation says the bias is $\lambda\sigma^2$, so doubling the standard
 deviation of the noise should quadruple the bias. The correction applied knows
 nothing about the noise distribution, so it should not move at all.
+
+Unlike the detector sweep, this one stays inside reality throughout. A noise
+standard deviation of 4 dB follows Castro et al. (2024). Southern Ocean band
+levels swing considerably more than that over a year as wind and sea ice
+change, so 8 dB is not an exotic choice.
 
 The acoustics are regenerated for each noise distribution. The call locations
 are not, so the geometry is held fixed.
@@ -268,24 +328,34 @@ are not, so the geometry is held fixed.
 
 nlSd <- c(1, 2, 4, 6, 8, 10)
 
-sweepB <- do.call(rbind, lapply(nlSd, function(s) {
-  NLs   <- data.frame(mean = 84, sd = s, sampleSize = n)
-  simS  <- simCallAcoustics(simLoc, SL, NLs, TL = tlFunc)
-  cbind(data.frame(nlSd = s), nlBiasTrial(simS, det1params, det2params,
-                                          subsampleInterval))
-}))
+# A for loop rather than lapply. simulateDetector reads NL from the global
+# environment, and a knitr chunk evaluates in the global environment, so
+# assigning NL here reaches it. An lapply function body would not.
+sweepB <- NULL
+for (s in nlSd) {
 
-sweepB$biasNeeded <- 84 - sweepB$NLsampMean
+  NL   <- data.frame(mean = NLtrue$mean, sd = s, sampleSize = n)
+  simS <- simCallAcoustics(simLoc, SL, NL, TL = tlFunc)
+
+  sweepB <- rbind(sweepB,
+                  cbind(data.frame(nlSd = s),
+                        nlBiasTrial(simS, det1params, det2params,
+                                    subsampleInterval, adjudicateEvery)))
+}
+
+NL <- NLtrue   # restore the global before anything else reads it
+
+sweepB$biasNeeded <- NLtrue$mean - sweepB$NLsampMean
 
 # Analytic prediction from exponential tilting. lambda follows from the
 # spreading law and the two-dimensional uniform call distribution.
 lambda <- log(10) / 10
 sweepB$tiltPredicted <- lambda * sweepB$NLsampSd^2
 
-kbl(subset(sweepB, select = c(nlSd, detRate, NLsampSd, biasNeeded,
+kbl(subset(sweepB, select = c(nlSd, nAdjudicated, NLsampSd, biasNeeded,
                               snrOffset, tiltPredicted)),
-    digits = c(1, 4, 2, 3, 3, 3),
-    col.names = c('True sd(NL)', 'Detection rate', 'Sampled sd(NL)',
+    digits = c(1, 0, 2, 3, 3, 3),
+    col.names = c('True sd(NL)', 'Adjudicated', 'Sampled sd(NL)',
                   'Bias needed', 'Correction applied',
                   'Tilt prediction')) %>%
   kable_classic(full_width = FALSE)
@@ -378,6 +448,19 @@ first three lines of `nlFromSnrInfo`. That duplication is a hint that
 `nlFromSnrInfo` is doing two separable jobs, estimating the sampled noise
 distribution and then correcting it. Splitting them would let this vignette
 call the shipped estimator for both.
+
+## A bug found while writing this
+
+`simulateDetector` draws noise levels for its false positives from a variable
+named `NL` that it reads out of the global environment. `NL` is not one of its
+arguments and it cannot be derived from the other arguments. The second
+vignette happens to define a top level object with that name, so the lookup
+lands on the right thing and the function appears to work.
+
+It should take `NL` as an argument. Until it does, any script that calls
+`simulateDetector` without a suitably named object in scope will either fail or,
+worse, silently draw false positive noise levels from an unrelated
+distribution.
 
 Two assumptions in the derivation deserve stating, because both are limitations
 of the single sensor method rather than of this vignette.
