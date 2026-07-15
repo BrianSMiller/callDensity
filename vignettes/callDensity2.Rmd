@@ -543,9 +543,12 @@ showDetFun(models) +
                      ggplot2::aes(x = SNR, y = p_det, linetype = group))+
   scale_linetype_manual(values = c("Observer 2" = "dashed",
                                    "Observer 1" = "dotted") )+
-  ggplot2::xlim(-20,20)
+  ggplot2::xlim(-20,20)+
+  ggplot2::theme(legend.position="top")+labs(color="Model",linetype="Truth")
 ```
-```{r compare snr detection functions, warning=FALSE}
+
+
+```{r deprecated compare snr detection functions, warning=FALSE}
 snrs <- data.frame(SNR=seq(-20,20,0.5))
 
 cols = colorRampPalette(c('#EDB120','#D95319','#0072BD','#7E2F8E','#77AC30',
