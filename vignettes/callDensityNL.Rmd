@@ -134,51 +134,87 @@ curveDf <- data.frame(nl = nlGrid, pDet = pCurve)
 
 ## The graph that explains everything
 
+Before plotting it, be clear about what is on the axes, because there is no
+data on this plot. Every point is a counterfactual. It asks: *if the noise were
+always exactly this loud, and never varied, what fraction of the study area
+would you be hearing calls in?*
+
+That fraction is just detection area divided by study area. So this plot is
+really about detection range, which is the quantity you think in anyway. Add
+the range at a few points and it becomes readable.
+
 ```{r curve.plot, warning=FALSE, fig.height=4}
 
-# A reference line falling exactly one decade per 10 dB, anchored on the curve
-# at 90 dB.
-anchor <- curveDf$pDet[curveDf$nl == 90]
+# Range at which a call of mean source level sits at the detector's 50% point.
+# Approximate. Ignores the spread in SL and the smoothness of the detector, so
+# it is a label, not a calculation the curve depends on.
+detRadius_km <- function(nl, SLmean = 190, loc = 1) {
+  10^((SLmean - nl - loc) / 20) / 1000
+}
+
+marks <- data.frame(nl = c(74, 84, 94, 104))
+marks$pDet  <- pDetGivenNL(marks$nl, detector, TL, SL)
+marks$label <- sprintf("%.0f km", detRadius_km(marks$nl))
+
+# A reference line falling exactly one decade per 10 dB, anchored at 90 dB.
+anchor <- pDetGivenNL(90, detector, TL, SL)
 refDf  <- data.frame(nl = nlGrid, pDet = anchor * 10^(-(nlGrid - 90) / 10))
 
 ggplot(curveDf, aes(x = nl, y = pDet)) +
   geom_line(data = refDf, linetype = "dashed", colour = "grey50",
             linewidth = 0.6) +
   geom_line(linewidth = 0.9, colour = "steelblue") +
+  geom_point(data = marks, size = 2, colour = "grey20") +
+  geom_text(data = marks, aes(label = label), hjust = -0.25, vjust = -0.4,
+            size = 3, colour = "grey20") +
   geom_vline(xintercept = 84, colour = "firebrick", linetype = "dotted") +
   annotate("text", x = 84.5, y = 1e-4, label = "true mean NL",
            colour = "firebrick", hjust = 0, size = 3) +
   scale_y_log10() +
   xlab("Noise level (dB)") +
-  ylab("Probability of detection in area") +
-  labs(caption = "Dashed grey: one decade per 10 dB")
+  ylab("Fraction of the study area you can hear into") +
+  labs(caption = "Labels: detection radius. Dashed grey: one decade per 10 dB")
 
 ```
 
-Read this plot slowly, because the rest of the vignette is a consequence of it.
+Work through two of those labelled points by hand and the plot stops being
+abstract.
 
-**The straight portion.** Over most of its range the curve falls by exactly one
-decade for every 10 dB of noise, matching the dashed line. That is geometry and
-nothing else. Raise the noise 10 dB and every call needs 10 dB more received
-level to be heard. Spherical spreading means 10 dB of received level is a
-factor of 3.16 in range, which is a factor of 10 in area. Ten times less ocean,
-ten times fewer detections. It does not matter what the detector is: a greedy
-detector and a fussy detector both lose 90% of their calls, because what
-changed is how much ocean is left, not how good the detector is.
+**At 84 dB.** A 190 dB call reaches the detector's 50% point when SNR is 1 dB,
+so when TL is $190 - 84 - 1 = 105$ dB. Under spherical spreading that is
+$10^{105/20}$ metres, or 178 km. So you are hearing calls out to roughly 178 km.
+The area you can hear into is $\pi \times 178^2 \approx 99{,}500$ km². The study
+area is $\pi \times 1000^2 \approx 3{,}140{,}000$ km². You are hearing into
+about 3% of it.
 
-This is the picture behind the algebra. On a log axis, "detections fall
-tenfold per 10 dB" is a straight line of slope $-1$ per decade. Nothing more.
+**At 94 dB.** Every call now needs 10 dB more received level. Ten decibels of
+spherical spreading is a factor of 3.16 in range. So 178 km becomes 56 km. The
+area is $\pi \times 56^2 \approx 9{,}950$ km², one tenth of what it was. You are
+hearing into 0.3% of the study area.
 
-**The shoulder on the left.** Below about 65 dB the curve flattens and stops
-falling. There is no more ocean to gain. Every call inside the study area is
-already being detected, so making the sea quieter buys you nothing.
+Ten decibels louder, ten times less ocean, ten times fewer calls. Each 10 dB
+step to the right divides the curve by 10. On a log axis that is a straight
+line, and that is all the dashed reference line is saying.
 
-That shoulder is important. It is exactly where the tidy algebra stops working,
-and it is why this vignette computes a curve instead of fitting a slope.
+**The detector never entered that.** Move its threshold and the 178 km becomes
+200 km or 150 km. The factor of ten per ten decibels does not budge, because it
+came from the geometry of a circle, not from the detector. That is the single
+most important thing on this plot, and it is why correcting the noise using a
+property of the detector cannot be right.
 
-**Where your data sits.** The red line marks the true mean noise level. It sits
-on the straight portion, which is the interesting case: noise variation there
-translates directly into detection variation.
+**The shoulder on the left.** Below about 69 dB the labelled radius would exceed
+1000 km. There is no ocean out there. It is past the edge of the study area, so
+it is not yours to hear into. The curve flattens at 1 and making the sea
+quieter buys nothing more. That shoulder is exactly where the tidy algebra
+stops working, and it is why this vignette computes a curve rather than fitting
+a slope to it.
+
+**Where your data sits.** The red line marks the true mean noise level, out on
+the straight portion, where a decibel of noise really does cost you ocean.
+
+If this plot still feels abstract, skip ahead. The next figure is the same
+curve on a linear axis, zoomed into the range your noise actually occupies, and
+it is doing the real work.
 
 # Why your measurements are biased
 
@@ -345,20 +381,151 @@ No, and this is the point of computing a curve rather than fitting a slope.
 down $20\log_{10}r$. The dashed reference line on the first plot is a
 diagnostic, not an assumption.
 
-```{r tl.placeholder, eval=FALSE}
+Spherical spreading is not a serious model for a baleen whale call at 25 Hz in
+2000 m of water at 62°S. So use a real one. The file below is pyRAM output
+computed on GLORYS12 sound speed profiles along 24 radial transects out to
+1000 km, for the South Kerguelen Plateau mooring in summer, at 25 Hz.
 
-# PLACEHOLDER.
-#
-# Rebuild the first plot with a transmission loss table that is not spherical
-# spreading. Candidates, in increasing order of realism:
-#
-#   1. Mixed spherical to cylindrical: 20*log10(rt) + 10*log10(r/rt)
-#   2. A pyRAM table from 2026-CopernicusPyRAM, Kerguelen2015 at 26 Hz
-#
-# Expect the straight portion to change slope for (1), and to become bumpy for
-# (2) where convergence zones add and remove area. Expect nlFromDetections to
-# recover the true mean in both cases, because it uses the curve rather than
-# its slope.
+## First, look at the file
+
+The layout has to be checked rather than assumed. `pDetGivenNL` needs range in
+metres in the first column and one column of TL in dB per transect.
+
+```{r pyram.inspect}
+
+tlFile <- file.path("s:/manuscripts/2026-CopernicusPyRAM/data/output",
+                    "TL_Kerguelen2015_combined_25hz_GLORYS12_summer_25Hz.csv")
+
+tlRaw <- read.csv(tlFile)
+
+dim(tlRaw)
+names(tlRaw)
+tlRaw[1:3, 1:min(5, ncol(tlRaw))]
+range(tlRaw[[1]])
+
+```
+
+Expect 101 rows and 25 columns, since the pipeline runs 24 transects at 15°
+spacing with 101 range points. If the first column runs to 1e6 it is metres and
+nothing needs doing. If it runs to 1000 it is kilometres and needs multiplying.
+If the first column is not range at all, stop here and tell me what it is.
+
+```{r pyram.prepare}
+
+TLpyram <- tlRaw
+
+# Range to metres if the file is in km.
+if (max(TLpyram[[1]]) < 1e4) TLpyram[[1]] <- TLpyram[[1]] * 1000
+
+# pyRAM returns TL as a positive loss in dB. Drop any non-finite cells and the
+# r = 0 row, where TL is undefined.
+TLpyram <- TLpyram[is.finite(rowSums(TLpyram)) & TLpyram[[1]] > 0, ]
+
+# 101 points over 1000 km is a 10 km range step, which is coarse next to the
+# 1 km step used for the spherical curve above. That matters most at short
+# range, where the area weight is small, so it should be a minor effect here.
+# Worth checking by halving the step and seeing if the curve moves.
+sprintf("%d transects, range step %.1f km, TL at 1000 km: %.1f to %.1f dB",
+        ncol(TLpyram) - 1,
+        diff(TLpyram[[1]])[1] / 1000,
+        min(as.numeric(TLpyram[nrow(TLpyram), -1])),
+        max(as.numeric(TLpyram[nrow(TLpyram), -1])))
+
+```
+
+## The same curve, real physics
+
+```{r pyram.curve, warning=FALSE, fig.height=4}
+
+pPyram <- pDetGivenNL(nlGrid, detector, TLpyram, SL)
+
+bothDf <- rbind(
+  data.frame(nl = nlGrid, pDet = pCurve, what = "Spherical spreading"),
+  data.frame(nl = nlGrid, pDet = pPyram, what = "pyRAM, SKP summer, 25 Hz")
+)
+
+anchorP <- pDetGivenNL(90, detector, TLpyram, SL)
+refBoth <- data.frame(nl = nlGrid,
+                      pDet = anchorP * 10^(-(nlGrid - 90) / 10))
+
+ggplot(bothDf, aes(x = nl, y = pDet, colour = what)) +
+  geom_line(data = refBoth, aes(x = nl, y = pDet), inherit.aes = FALSE,
+            linetype = "dashed", colour = "grey50", linewidth = 0.6) +
+  geom_line(linewidth = 0.9) +
+  geom_vline(xintercept = 84, colour = "firebrick", linetype = "dotted") +
+  scale_y_log10() +
+  xlab("Noise level (dB)") +
+  ylab("Fraction of the study area you can hear into") +
+  labs(colour = NULL,
+       caption = "Dashed grey: one decade per 10 dB, anchored on the pyRAM curve") +
+  theme(legend.position = "top")
+
+```
+
+What to look for, and what it means.
+
+**The slope should not be one decade per 10 dB.** At 25 Hz in 2000 m of water
+the sound is in a waveguide, not a free field. Beyond a few water depths it
+spreads more like a cylinder than a sphere, which makes TL climb more slowly
+with range. Slower TL means a decibel of extra noise costs you a wider annulus,
+so the curve should fall *faster* than the dashed line, not slower.
+
+If it does, that is the whole argument in one picture. The number
+$\lambda = \ln(10)/10$ from the spherical derivation is simply wrong here, and
+anything built on it inherits that error.
+
+**The curve should be bumpy.** Convergence zones and bottom interaction add and
+remove audible ocean at particular ranges. Wiggles are physics, not noise.
+
+**The shoulder should be further left, or gone.** Flatter TL means longer
+detection range, so it takes a quieter sea to run out of study area.
+
+## Does the estimator still work?
+
+The point is that none of the above changes anything. `pDetGivenNL` used the
+lookup table. It did not fit a slope to it, it did not assume one, and it never
+noticed that the physics changed.
+
+```{r pyram.check, warning=FALSE}
+
+# What a set of detections at this site would show you, and what the estimator
+# recovers from that.
+truthMean <- 84
+truthSd   <- 4
+
+measured <- predictSampledNL(truthMean, truthSd, detector, TLpyram, SL)
+
+recovered <- uniroot(
+  function(mu) predictSampledNL(mu, truthSd, detector, TLpyram, SL) - measured,
+  interval = c(measured, measured + 25))$root
+
+data.frame(
+  site      = "Kerguelen2015 summer 25 Hz",
+  truth     = truthMean,
+  measured  = round(measured, 3),
+  bias      = round(truthMean - measured, 3),
+  recovered = round(recovered, 3),
+  error     = round(recovered - truthMean, 4)
+)
+
+```
+
+`recovered` should land on 84 to several decimals, because this is the same
+integral run forwards and then backwards. That is a check that `uniroot` is
+bracketing and converging, not evidence that the physics is right.
+
+The interesting column is `bias`. Compare it to the 3 dB or so that spherical
+spreading gives. If the pyRAM curve is steeper, the bias here is larger, and
+`nlFromSnrInfo` would be further wrong at the real site than in the simulation
+it was tuned on.
+
+```{r pyram.seasons, eval=FALSE}
+
+# WORTH DOING, NOT DONE. The bias is a property of the propagation, so it
+# should vary by season as the sound speed profile changes, and by site. Loop
+# the four seasons and the seven AWR sites and tabulate the bias. If it moves
+# by more than a decibel between seasons, that is an argument for estimating NL
+# seasonally, which is what Castro et al. (2024) recommend for f anyway.
 
 ```
 
@@ -391,7 +558,7 @@ Two assumptions run through every plot above and neither is touched by any of
 this.
 
 Calls are assumed spread evenly in two dimensions. The area weight
- in `pDetGivenNL` is that assumption written down. Clustered
+`#r * (r <= td)` in `pDetGivenNL` is that assumption written down. Clustered
 calling, or calls concentrated at particular depths, changes it.
 
 Noise is assumed independent of whether whales are calling. If loud hours are
