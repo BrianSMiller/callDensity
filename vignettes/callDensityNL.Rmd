@@ -1,0 +1,401 @@
+---
+title: "callDensity: Estimating noise levels from detections"
+output: 
+  html_document: default
+  rmarkdown::html_vignette:
+    vignette: >
+      %\VignetteEncoding{UTF-8}
+      %\VignetteIndexEntry{callDensity: Estimating noise levels from detections}
+      %\VignetteEngine{knitr::rmarkdown}
+bibliography: references.bib
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, fig.width = 6, fig.height = 3.5,
+                      comment = "#>")
+```
+
+```{r setup}
+library(callDensity)
+library(ggplot2)
+library(kableExtra)
+```
+
+# The problem in one paragraph
+
+Call density needs a distribution of noise levels. The obvious place to get one
+is the noise measured at each detection, since those measurements are already
+in the capture history table. Those measurements are biased low. A quiet period
+gives you a high SNR, a high SNR gives you a detection, so your detections
+oversample the quiet periods. Measure noise only where you detected something
+and you will conclude the ocean is quieter than it is.
+
+This vignette shows how big that bias is, where it comes from, and how to undo
+it.
+
+# The one idea
+
+`pDetInArea` already answers a question very close to the one we need. It asks:
+given a distribution of noise levels, what fraction of the calls in the study
+area get detected? That fraction is $\hat{p}_a$. It draws noise levels from a
+normal distribution and averages over them.
+
+Ask a slightly different question. **What would $\hat{p}_a$ be if the noise were
+always exactly 84 dB?** Not drawn from a distribution. Fixed.
+
+Same machinery, one line different. Call the answer `pDetGivenNL(84)`. Compute
+it for 70 dB, 71 dB, 72 dB and so on, and you have a curve: probability of
+detection against noise level.
+
+That curve is the whole solution. It is not a new concept. It is $\hat{p}_a$
+with the noise held still.
+
+# Building the curve
+
+`pDetGivenNL` is not in the package yet. Here it is as local code so that this
+section runs today.
+
+```{r pdetgivennl}
+
+#' Probability of detecting a call somewhere in the study area, given a fixed
+#' noise level.
+#'
+#' @param nl      Vector of noise levels (dB) to evaluate.
+#' @param detFun  Either a detFun object, or a plain function of SNR returning
+#'                probability.
+#' @param TL      Transmission loss table. First column is range in m, the
+#'                remaining columns are TL in dB for each radial transect.
+#' @param SL      data.frame with mean and sd of the source level distribution.
+#' @param truncationDistance Scalar, or one value per transect.
+#' @param nSLnodes Number of quadrature nodes for the source level integral.
+#' @return Numeric vector, same length as nl.
+pDetGivenNL <- function(nl, detFun, TL, SL,
+                        truncationDistance = max(TL[, 1]),
+                        nSLnodes = 41) {
+
+  range_m <- TL[, 1]
+  tlMat   <- as.matrix(TL[, -1, drop = FALSE])
+
+  # Area weights. Each range step stands for an annulus, and the area of an
+  # annulus grows with r, so a step at 200 km carries ten times the weight of
+  # a step at 20 km. Cells beyond the truncation distance carry no weight.
+  truncationDistance <- rep_len(truncationDistance, ncol(tlMat))
+  wMat <- outer(range_m, truncationDistance, function(r, td) r * (r <= td))
+  totalWeight <- sum(wMat)
+
+  # Source levels. Calls are not all equally loud, so average over the SL
+  # distribution using a weighted grid.
+  slNodes <- seq(SL$mean - 4 * SL$sd, SL$mean + 4 * SL$sd, length.out = nSLnodes)
+  slWt    <- dnorm(slNodes, SL$mean, SL$sd)
+  slWt    <- slWt / sum(slWt)
+
+  # The detection function depends on one number, SNR. So evaluate it once on a
+  # grid and interpolate, rather than calling predict() millions of times.
+  pLookup <- if (is.function(detFun)) {
+    detFun
+  } else {
+    snrGrid <- seq(-100, 100, by = 0.1)
+    pGrid   <- predictDetFun(detFun, newdata = data.frame(SNR = snrGrid))$fit
+    approxfun(snrGrid, pGrid, rule = 2)
+  }
+
+  vapply(nl, function(thisNL) {
+    acc <- 0
+    for (i in seq_along(slNodes)) {
+      snr <- slNodes[i] - tlMat - thisNL      # sonar equation, every cell
+      acc <- acc + slWt[i] * sum(pLookup(snr) * wMat)
+    }
+    acc / totalWeight
+  }, numeric(1))
+}
+
+```
+
+Now build a curve. The transmission loss table and source levels follow the
+second vignette, and the detector is a plain logistic so this section does not
+depend on anything else.
+
+```{r build.curve}
+
+R  <- 1e6
+SL <- data.frame(mean = 190, sd = 4, sampleSize = 350)
+
+TL <- simTLradials_20logR(maxRange = R, rangeStep = 1000, numTransects = 4)
+TL <- TL[is.finite(rowSums(TL)) & TL[, 1] > 0, ]     # drop r = 0 if present
+
+detector <- function(snr) plogis(snr, location = 1, scale = 2)
+
+nlGrid <- seq(from = 55, to = 135, by = 1)
+pCurve <- pDetGivenNL(nlGrid, detector, TL, SL)
+
+curveDf <- data.frame(nl = nlGrid, pDet = pCurve)
+
+```
+
+## The graph that explains everything
+
+```{r curve.plot, warning=FALSE, fig.height=4}
+
+# A reference line falling exactly one decade per 10 dB, anchored on the curve
+# at 90 dB.
+anchor <- curveDf$pDet[curveDf$nl == 90]
+refDf  <- data.frame(nl = nlGrid, pDet = anchor * 10^(-(nlGrid - 90) / 10))
+
+ggplot(curveDf, aes(x = nl, y = pDet)) +
+  geom_line(data = refDf, linetype = "dashed", colour = "grey50",
+            linewidth = 0.6) +
+  geom_line(linewidth = 0.9, colour = "steelblue") +
+  geom_vline(xintercept = 84, colour = "firebrick", linetype = "dotted") +
+  annotate("text", x = 84.5, y = 1e-4, label = "true mean NL",
+           colour = "firebrick", hjust = 0, size = 3) +
+  scale_y_log10() +
+  xlab("Noise level (dB)") +
+  ylab("Probability of detection in area") +
+  labs(caption = "Dashed grey: one decade per 10 dB")
+
+```
+
+Read this plot slowly, because the rest of the vignette is a consequence of it.
+
+**The straight portion.** Over most of its range the curve falls by exactly one
+decade for every 10 dB of noise, matching the dashed line. That is geometry and
+nothing else. Raise the noise 10 dB and every call needs 10 dB more received
+level to be heard. Spherical spreading means 10 dB of received level is a
+factor of 3.16 in range, which is a factor of 10 in area. Ten times less ocean,
+ten times fewer detections. It does not matter what the detector is: a greedy
+detector and a fussy detector both lose 90% of their calls, because what
+changed is how much ocean is left, not how good the detector is.
+
+This is the picture behind the algebra. On a log axis, "detections fall
+tenfold per 10 dB" is a straight line of slope $-1$ per decade. Nothing more.
+
+**The shoulder on the left.** Below about 65 dB the curve flattens and stops
+falling. There is no more ocean to gain. Every call inside the study area is
+already being detected, so making the sea quieter buys you nothing.
+
+That shoulder is important. It is exactly where the tidy algebra stops working,
+and it is why this vignette computes a curve instead of fitting a slope.
+
+**Where your data sits.** The red line marks the true mean noise level. It sits
+on the straight portion, which is the interesting case: noise variation there
+translates directly into detection variation.
+
+# Why your measurements are biased
+
+Now use the curve. Nature draws a noise level for each call from a normal
+distribution. The detection process then throws most of them away, and it
+throws away loud ones far more eagerly than quiet ones. The curve says exactly
+how much more eagerly.
+
+```{r filter.plot, warning=FALSE, fig.height=4}
+
+nlTrue  <- 84
+nlSd    <- 4
+
+fine  <- seq(nlTrue - 5 * nlSd, nlTrue + 5 * nlSd, length.out = 400)
+fN    <- dnorm(fine, nlTrue, nlSd)
+pd    <- pDetGivenNL(fine, detector, TL, SL)
+wt    <- fN * pd
+
+# Scale each curve to a common height so the shift is visible
+filterDf <- rbind(
+  data.frame(nl = fine, y = fN / max(fN),  what = "1. All calls (the truth)"),
+  data.frame(nl = fine, y = pd / max(pd),  what = "2. Chance of detection"),
+  data.frame(nl = fine, y = wt / max(wt),  what = "3. What you measure")
+)
+
+meanObs <- sum(fine * wt) / sum(wt)
+
+ggplot(filterDf, aes(x = nl, y = y, colour = what)) +
+  geom_line(linewidth = 0.9) +
+  geom_vline(xintercept = nlTrue,  colour = "grey30", linetype = "dotted") +
+  geom_vline(xintercept = meanObs, colour = "grey30", linetype = "dashed") +
+  annotate("segment", x = meanObs, xend = nlTrue, y = 1.05, yend = 1.05,
+           arrow = arrow(length = unit(2, "mm"), ends = "both")) +
+  annotate("text", x = (meanObs + nlTrue) / 2, y = 1.12,
+           label = sprintf("bias = %.2f dB", nlTrue - meanObs), size = 3) +
+  xlab("Noise level (dB)") +
+  ylab("Scaled to a common height") +
+  labs(colour = NULL) +
+  theme(legend.position = "top")
+
+```
+
+Curve 1 is the truth. Curve 2 is the detection curve from the previous plot,
+now drawn on a linear axis over the range the noise actually occupies. Curve 3
+is curve 1 multiplied by curve 2, and it is what your detections show you.
+
+Multiplying by a curve that leans left drags the peak left. That is the entire
+bias. Nothing subtle is happening.
+
+Two things worth noticing, because both get used later.
+
+Curve 3 is narrower than curve 1 by very little. The width survives the
+filtering almost intact, which means the standard deviation of your measured
+noise is close to the truth even though the mean is not. That leaves only one
+unknown to solve for.
+
+The size of the shift depends on how steeply curve 2 leans, and on how wide
+curve 1 is. It does not depend on where the detector sits. Move the detector
+threshold and curve 2 changes height, not slope.
+
+# Undoing it
+
+The previous plot is a prediction machine. Give it a candidate true mean, and
+it tells you what mean you should have measured.
+
+You know what you measured. So run it backwards.
+
+```{r predict.function}
+
+#' Predict the mean noise level you would measure at detections, given a
+#' candidate true noise distribution.
+predictSampledNL <- function(mu, sigma, detFun, TL, SL,
+                             truncationDistance = max(TL[, 1])) {
+  nl <- seq(mu - 6 * sigma, mu + 6 * sigma, length.out = 121)
+  wt <- dnorm(nl, mu, sigma) *
+        pDetGivenNL(nl, detFun, TL, SL, truncationDistance)
+  sum(nl * wt) / sum(wt)
+}
+
+```
+
+```{r rootfind.plot, warning=FALSE, fig.height=3.5}
+
+muTry <- seq(80, 92, by = 1)
+muObs <- vapply(muTry, function(m)
+  predictSampledNL(m, nlSd, detector, TL, SL), numeric(1))
+
+rootDf <- data.frame(muTrue = muTry, muMeasured = muObs)
+
+ggplot(rootDf, aes(x = muTrue, y = muMeasured)) +
+  geom_abline(slope = 1, intercept = 0, colour = "grey70", linetype = "dashed") +
+  geom_line(linewidth = 0.9, colour = "steelblue") +
+  geom_hline(yintercept = meanObs, colour = "firebrick", linetype = "dotted") +
+  geom_vline(xintercept = nlTrue,  colour = "firebrick", linetype = "dotted") +
+  annotate("text", x = 80.2, y = meanObs + 0.3, hjust = 0, size = 3,
+           colour = "firebrick", label = "what you measured") +
+  xlab("Candidate true mean NL (dB)") +
+  ylab("Mean NL you would measure at detections") +
+  labs(caption = "Dashed grey: the 1:1 line you would get with no bias")
+
+```
+
+The blue line sits below the 1:1 line by the size of the bias. It rises
+steadily, so there is exactly one candidate that reproduces your measurement.
+Find it by reading across from the red horizontal line to the blue curve, then
+down. That is what `uniroot` does.
+
+```{r nlfromdetections}
+
+#' Estimate the true noise level distribution from noise measured at detections.
+#'
+#' PLACEHOLDER. This will become nlFromDetections() in the package, replacing
+#' nlFromSnrInfo(). See "What is left to build" below.
+nlFromDetections <- function(snrInfo, detFun, TL, SL,
+                             truncationDistance = max(TL[, 1]),
+                             searchWidth = 25) {
+
+  obsMean <- mean(snrInfo$NoiseRL, na.rm = TRUE)
+  sigma   <- sd(snrInfo$NoiseRL,   na.rm = TRUE)
+
+  # The bias is always positive, so the true mean is above the measured one.
+  gap <- function(mu) {
+    predictSampledNL(mu, sigma, detFun, TL, SL, truncationDistance) - obsMean
+  }
+  mu <- uniroot(gap, interval = c(obsMean, obsMean + searchWidth))$root
+
+  data.frame(mean = mu, sd = sigma,
+             sampleSize = sum(!is.na(snrInfo$NoiseRL)))
+}
+
+```
+
+# Where this leaves the old function
+
+`nlFromSnrInfo` corrects the same bias by adding the SNR at which the detection
+function reaches 0.5. That quantity is a property of the detector. The plots
+above say the bias is a property of the geometry and the noise variance. The
+two happen to be close for the parameters of the second vignette and they part
+company elsewhere.
+
+```{r sweep.placeholder, eval=FALSE}
+
+# PLACEHOLDER - see callDensity3 scratchpad, to be folded in here.
+#
+# Two sweeps, both at Casey2019 scale (214 h subsample, every 8th detection
+# adjudicated):
+#
+#   A. Move the detector threshold from -5 to +10 dB SNR. The bias needed
+#      stays near 3 dB throughout while the old correction tracks the
+#      threshold exactly.
+#
+#   B. Vary sd(NL) from 1 to 10 dB. The bias grows with the square of sd
+#      while the old correction does not move.
+#
+# Add nlFromDetections as a third column to both. Expect it to sit on the
+# bias-needed line in both sweeps.
+
+```
+
+# Does it depend on the transmission loss model?
+
+No, and this is the point of computing a curve rather than fitting a slope.
+`pDetGivenNL` reads transmission loss out of a lookup table. It never writes
+down $20\log_{10}r$. The dashed reference line on the first plot is a
+diagnostic, not an assumption.
+
+```{r tl.placeholder, eval=FALSE}
+
+# PLACEHOLDER.
+#
+# Rebuild the first plot with a transmission loss table that is not spherical
+# spreading. Candidates, in increasing order of realism:
+#
+#   1. Mixed spherical to cylindrical: 20*log10(rt) + 10*log10(r/rt)
+#   2. A pyRAM table from 2026-CopernicusPyRAM, Kerguelen2015 at 26 Hz
+#
+# Expect the straight portion to change slope for (1), and to become bumpy for
+# (2) where convergence zones add and remove area. Expect nlFromDetections to
+# recover the true mean in both cases, because it uses the curve rather than
+# its slope.
+
+```
+
+# What is left to build
+
+Everything above runs, but three of the pieces live in this file rather than in
+the package.
+
+`pDetGivenNL` duplicates work that `pDetInArea` already does. Both thin the
+transmission loss table, broadcast the truncation distance across transects,
+mask cells beyond truncation, and form area weights. That preparation should be
+pulled out of `pDetInArea` into a shared helper and used by both. Doing it any
+other way means the two drift apart.
+
+`nlFromDetections` needs to replace the `is.null(NL)` branch inside `cde`, which
+currently calls `nlFromSnrInfo`. Everything it needs is already an argument to
+`cde`. `nlFromSnrInfo` then becomes a deprecated wrapper, following the same
+pattern as `fitSNRdetectionFunc`.
+
+The standard deviation is taken straight from the detections. The second plot
+shows why that is nearly right and not exactly right: filtering narrows curve 3
+a little. Solving for the mean and the standard deviation together would remove
+that, at the cost of turning a one dimensional root find into a two dimensional
+optimisation. Worth measuring the residual first and only fixing it if it
+matters.
+
+# What this does not fix
+
+Two assumptions run through every plot above and neither is touched by any of
+this.
+
+Calls are assumed spread evenly in two dimensions. The area weight
+ in `pDetGivenNL` is that assumption written down. Clustered
+calling, or calls concentrated at particular depths, changes it.
+
+Noise is assumed independent of whether whales are calling. If loud hours are
+also whale hours, the detection curve is not the only thing shaping curve 3,
+and the correction is solving the wrong problem accurately.
+
+# References
