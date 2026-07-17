@@ -79,8 +79,29 @@
 #'   matrix is provided, then the dimensions should be 1xN with each column
 #'   corresponding to a radial transect and N being the the total number of
 #'   transects.
-#' @param snrTruncationThreshold (Experimental/Unsupported) scalar SNR in dB
-#'   below which the probability of detection will be forcibly set to zero.
+#' @param snrTruncationThreshold (Experimental) scalar SNR in dB below which the
+#'   probability of detection is forcibly set to zero. Use this when the
+#'   detection function is not identified at low SNR, which happens when the two
+#'   observers stop contributing overlapping detections (recaptures) there. Set
+#'   it where the recaptures run out, not where the sample runs out.
+#'
+#'   Truncation must be applied consistently to every term that counts
+#'   detections. \code{c} and the detection function are truncated by cde;
+#'   \code{Nc} cannot be, because cde receives it as a number, so you must
+#'   truncate it yourself and confirm with \code{NcIsTruncated}. \code{A} is
+#'   unchanged, and the noise level is estimated from the untruncated sample,
+#'   because noise is a property of the ocean rather than of the threshold.
+#'
+#'   The returned density is that of all calls, not of above-threshold calls.
+#'   The fraction of calls arriving above the threshold, q(theta), is supplied
+#'   by SL, TL and NL, and cancels between \code{Nc} and \code{p_a}. Truncation
+#'   therefore buys accuracy at the cost of precision: \code{Nc} shrinks.
+#' @param NcIsTruncated Logical confirmation that \code{Nc} counts only
+#'   detections with SNR >= \code{snrTruncationThreshold}. Required (and only
+#'   used) when \code{snrTruncationThreshold} is finite. cde never sees the
+#'   detections \code{Nc} was counted from, so it cannot verify this itself, and
+#'   an untruncated \code{Nc} paired with a truncated \code{p_a} inflates
+#'   \code{Dc} silently.
 #' @param NL (Optional and Experimental/Unsupported) list or data.frame
 #'   containing distribution of noise level parameters. Must contain items
 #'   named: mean, sd, and sampleSize (similar to SL). If not provided, NL will
@@ -142,6 +163,7 @@ cde <- function (Nc,
                  ###
                  truncationDistance=max(TL[,1]),
                  snrTruncationThreshold=-Inf,
+                 NcIsTruncated = FALSE,
                  siteCode='',
                  densityResultsFile=NULL,
                  parallel = FALSE
@@ -150,6 +172,19 @@ cde <- function (Nc,
   # Store all parameters for call-density estimation in data frame called 'p'
   #
   # InputCheck------------------------------------------------------------------
+
+  # Nc is passed in as a number. cde never sees the detections it was counted
+  # from, so it cannot truncate it and cannot check it. It can refuse to guess.
+  # An untruncated Nc with a truncated p_a inflates Dc by roughly 1/q(theta),
+  # silently, and the result still looks entirely plausible.
+  if (is.finite(snrTruncationThreshold) && !isTRUE(NcIsTruncated)) {
+    stop(paste0(
+      "snrTruncationThreshold is set (", snrTruncationThreshold, " dB), so Nc ",
+      "must count only detections with SNR >= that threshold.\n",
+      "Use countDetections(..., snrTruncationThreshold = ",
+      snrTruncationThreshold, ", snrColName = <your SNR column>), then pass ",
+      "NcIsTruncated = TRUE to confirm."))
+  }
 
   # c, CV_c---------------------------------------------------------------------
   fdr <- falseDiscoveryRate(capHistTab, season, snrTruncationThreshold)
@@ -170,6 +205,16 @@ cde <- function (Nc,
     snrDetFun <- fitSNRdetectionFunc(
       subset(SNRinfo,SNR>=snrTruncationThreshold),
       modelType=modelType, numKnots)
+  } else if (is.finite(snrTruncationThreshold)) {
+    # cde cannot refit a model it did not fit. Every capture-recapture analysis
+    # supplies snrDetFun (a vglm cannot be fitted from capHist2snrInfo's
+    # output), so this branch is the common case, not the rare one. Below
+    # theta p is zeroed regardless, so the extrapolated tail cannot reach p_a;
+    # but the curve above theta should still be fitted on the truncated sample
+    # for the fit and Nc to describe the same set of detections.
+    message("cde: snrTruncationThreshold is set and snrDetFun was supplied. ",
+            "cde uses it as given. Fit it on detections with SNR >= ",
+            snrTruncationThreshold, " dB.")
   }
 
   # If user has not specified NL distribution (data.frame with columns mean, sd,
@@ -277,9 +322,15 @@ countDetections <- function(detectionFile,
   }
   if (snrTruncationThreshold != -Inf){ # Only if truncation requested
     if ( snrColName %in% colnames(det) ){
-      det <- subset(det,det$snr>=snrTruncationThreshold)
+      # Use the column the caller named. This previously hardcoded det$snr,
+      # which returned NULL whenever snrColName was anything else (capHistTab
+      # carries 'SNR', raw detections carry 'snr'). subset(det, NULL >= x)
+      # returns zero rows, so Nc came back as 0 with no error.
+      det <- det[!is.na(det[[snrColName]]) &
+                   det[[snrColName]] >= snrTruncationThreshold, , drop = FALSE]
     }  else {
-      stop("Truncation by SNR requires column `snr` in fullYearDetectionCsv.\n\nSNR Truncation not applied\n\n")
+      stop(paste0("Truncation by SNR requires column `", snrColName,
+                  "` in the detections.\n\nSNR Truncation not applied\n\n"))
     }
   }
 

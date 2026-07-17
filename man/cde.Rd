@@ -24,6 +24,7 @@ cde(
   paFile = NULL,
   truncationDistance = max(TL[, 1]),
   snrTruncationThreshold = -Inf,
+  NcIsTruncated = FALSE,
   siteCode = "",
   densityResultsFile = NULL,
   parallel = FALSE
@@ -93,8 +94,30 @@ matrix is provided, then the dimensions should be 1xN with each column
 corresponding to a radial transect and N being the the total number of
 transects.}
 
-\item{snrTruncationThreshold}{(Experimental/Unsupported) scalar SNR in dB
-below which the probability of detection will be forcibly set to zero.}
+\item{snrTruncationThreshold}{(Experimental) scalar SNR in dB below which the
+probability of detection is forcibly set to zero. Use this when the
+detection function is not identified at low SNR, which happens when the two
+observers stop contributing overlapping detections (recaptures) there. Set
+it where the recaptures run out, not where the sample runs out.
+
+Truncation must be applied consistently to every term that counts
+detections. \code{c} and the detection function are truncated by cde;
+\code{Nc} cannot be, because cde receives it as a number, so you must
+truncate it yourself and confirm with \code{NcIsTruncated}. \code{A} is
+unchanged, and the noise level is estimated from the untruncated sample,
+because noise is a property of the ocean rather than of the threshold.
+
+The returned density is that of all calls, not of above-threshold calls.
+The fraction of calls arriving above the threshold, q(theta), is supplied
+by SL, TL and NL, and cancels between \code{Nc} and \code{p_a}. Truncation
+therefore buys accuracy at the cost of precision: \code{Nc} shrinks.}
+
+\item{NcIsTruncated}{Logical confirmation that \code{Nc} counts only
+detections with SNR >= \code{snrTruncationThreshold}. Required (and only
+used) when \code{snrTruncationThreshold} is finite. cde never sees the
+detections \code{Nc} was counted from, so it cannot verify this itself, and
+an untruncated \code{Nc} paired with a truncated \code{p_a} inflates
+\code{Dc} silently.}
 
 \item{siteCode}{(Optional) string containing a code or label associated with
 the site. Default is '' (i.e. blank).}
