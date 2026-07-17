@@ -2,10 +2,7 @@
 % Please edit documentation in R/callDensityEstimate.R
 \name{cdeFromParamFile}
 \alias{cdeFromParamFile}
-\title{Call Density Estimate - Main function that accepts parameter file and season
-title: "Call Density"
-author: "Brian Miller"
-date: "2022-10-12"}
+\title{Call density estimate from a parameter file (deprecated)}
 \usage{
 cdeFromParamFile(
   p,
@@ -18,7 +15,11 @@ cdeFromParamFile(
 }
 \arguments{
 \item{p}{A data.frame containing parameters for call density estimation.
-Usually created by calling function defaultOutputFileNames}
+Usually created by calling function defaultOutputFileNames. Expected to
+contain: detectorParams$fullYearDetectionCsv, detectorParams$fullYearEffortFile,
+capHistFile, slParams$slMean/slStd/slSampleSize, tlParams$tlFile, w, k,
+modelType, numKnots, output.resolution.m, outerloop, transectFile,
+simResultsFile, paFile, siteCode, densityResultsFile.}
 
 \item{season}{TimeCode specifying month, season, or year for outputs}
 
@@ -41,11 +42,20 @@ data.frame must contain the rows mean, sd, and sampleSize (similar to SL).}
 data.frame containing call density inputs, results, and CVs
 }
 \description{
-Density of blue whale D-calls (BmD) in long-term moored recording dataset.
-Apply methods of Castro, Harris, et al (in prep) to obtain call density.
+Deprecated. Use \code{\link{cde}} directly. This was a near-complete
+duplicate of \code{cde}'s body, reading its inputs from a bundled
+parameter object instead of explicit arguments. Being a separate copy, it
+had drifted from \code{cde}: it called \code{pa_CV()} without transect
+area weights (\code{cde} always weights by \code{truncationDistance^2}),
+and it had no equivalent of \code{cde}'s \code{NcIsTruncated} guard. This
+wrapper derives \code{cde}'s arguments from \code{p} and calls \code{cde}
+directly, so it now gets exactly the same area-weighted, truncation-aware
+behaviour as \code{cde} itself, rather than a second, unmaintained
+implementation of the same calculation.
 }
 \details{
 $D_c = \\frac{N_c*(1-c)}{kTP_a{\\pi}w^2}$
+
 where:
 $D_c$ is call density
 $N_c$ is number of calls

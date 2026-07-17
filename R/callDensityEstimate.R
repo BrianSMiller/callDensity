@@ -219,9 +219,21 @@ cde <- function (Nc,
 
   # If user has not specified NL distribution (data.frame with columns mean, sd,
   # samplesize), then extract this information it from SNRinfo.
-  # NB: This needs to occur with untruncated SNRInfo (i.e. prior to truncation).
+  # NB: This needs to occur with untruncated SNRInfo (i.e. prior to truncation) --
+  # NL estimation should see the full empirical noise-at-detections distribution,
+  # not one already thinned by a separate SNR cutoff.
+  #
+  # nlFromDetections replaces nlFromSnrInfo as the default. nlFromSnrInfo
+  # corrects the same detection-biases-toward-quiet-periods effect by adding
+  # back the SNR at which the detection function reaches 0.5 -- a property of
+  # the detector. The bias is a property of the propagation geometry and the
+  # noise variance, and the two coincide only by chance (see the noiseLevels
+  # vignette). nlFromDetections inverts the actual detection-probability
+  # weighting instead, so it generalises across detector shapes rather than
+  # happening to work for the one used to derive it.
   if (is.null(NL)){
-    NL <- nlFromSnrInfo(SNRinfo, snrDetFun)
+    NL <- nlFromDetections(SNRinfo, snrDetFun, SL, TL,
+                           truncationDistance = truncationDistance)
   }
 
   pDetResults <- pDetInArea(snrDetFun, SL, TL,  NL, # Sonar eq. inputs
@@ -761,16 +773,21 @@ Dc_CV<- function(CV.Nc,CV.pa,CV.c){
 
 
 
-#' Call Density Estimate - Main function that accepts parameter file and season
-#' title: "Call Density"
-#' author: "Brian Miller"
-#' date: "2022-10-12"
+#' Call density estimate from a parameter file (deprecated)
 #'
-#' Density of blue whale D-calls (BmD) in long-term moored recording dataset.
-#' Apply methods of Castro, Harris, et al (in prep) to obtain call density.
+#' Deprecated. Use \code{\link{cde}} directly. This was a near-complete
+#' duplicate of \code{cde}'s body, reading its inputs from a bundled
+#' parameter object instead of explicit arguments. Being a separate copy, it
+#' had drifted from \code{cde}: it called \code{pa_CV()} without transect
+#' area weights (\code{cde} always weights by \code{truncationDistance^2}),
+#' and it had no equivalent of \code{cde}'s \code{NcIsTruncated} guard. This
+#' wrapper derives \code{cde}'s arguments from \code{p} and calls \code{cde}
+#' directly, so it now gets exactly the same area-weighted, truncation-aware
+#' behaviour as \code{cde} itself, rather than a second, unmaintained
+#' implementation of the same calculation.
 #'
 #' $D_c = \\frac{N_c*(1-c)}{kTP_a{\\pi}w^2}$
-#
+#'
 #' where:
 #' $D_c$ is call density
 #' $N_c$ is number of calls
@@ -779,8 +796,13 @@ Dc_CV<- function(CV.Nc,CV.pa,CV.c){
 #' $T$ is the duration of data analysed
 #' $P_a$ is the probability of detection in the study area
 #' ${\\pi}w^2$ is the study area (in km\\^2)
+#'
 #' @param p A data.frame containing parameters for call density estimation.
-#'    Usually created by calling function defaultOutputFileNames
+#'    Usually created by calling function defaultOutputFileNames. Expected to
+#'    contain: detectorParams$fullYearDetectionCsv, detectorParams$fullYearEffortFile,
+#'    capHistFile, slParams$slMean/slStd/slSampleSize, tlParams$tlFile, w, k,
+#'    modelType, numKnots, output.resolution.m, outerloop, transectFile,
+#'    simResultsFile, paFile, siteCode, densityResultsFile.
 #' @param season TimeCode specifying month, season, or year for outputs
 #' @param snrDetFun OPTIONAL linear-model like structure (GLM,GAM,SCAM,etc)
 #'    specifying the SNR-detection function to use. If this is not included,
@@ -803,6 +825,8 @@ Dc_CV<- function(CV.Nc,CV.pa,CV.c){
 #'
 cdeFromParamFile <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
                               snrTruncationThreshold=-Inf, NL=NULL){
+  .Deprecated("cde")
+
   # Check inputs and create outputs
   # Store all parameters for call-density estimation in data frame called 'p'
   #
@@ -826,103 +850,40 @@ cdeFromParamFile <- function (p,season, snrDetFun=NULL, truncationDistance=Inf,
   }
 
   # Number of calls
-  # Nc--------------------------------------------------------------------------
   Nc <- countDetections(p$detectorParams$fullYearDetectionCsv,season,
                         snrTruncationThreshold=snrTruncationThreshold)
 
   # Duration of time monitored
-  #T----------------------------------------------------------------------------
   T <- deploymentDurationFromsoundFolderCsv(p$detectorParams$fullYearEffortFile, season)
 
-  #  ### Calculate study area
-  # A---------------------------------------------------------------------------
-  A = studyArea(p$w,truncationDistance)
+  # Study area
+  A <- studyArea(p$w,truncationDistance)
 
-  # c, CV_c---------------------------------------------------------------------
-  ch <- readCapHist(p$capHistFile)
-  fdr <- falseDiscoveryRate(ch, season, snrTruncationThreshold)
+  # Capture history, SL, TL -- everything else (c, SNRinfo, detection function
+  # fitting, NL estimation, pDetInArea, pa_CV, Dc and every CV) is now cde's
+  # job, not this wrapper's, so there is exactly one implementation of each.
+  capHistTab <- readCapHist(p$capHistFile)
 
-  # CV.c and c are packed in a list, so unpack
-  CV.c <- fdr$cv.c
-  c <- fdr$c
-
-
-  #   ### $p_a$ (Overall probability of detection)
-  # This is the most complicated part and takes the longest time
-  # Pa--------------------------------------------------------------------------
-
-  SNRinfo <- capHist2snrInfo(ch,season)
-
-  # Read SL distribution parameters from overall parameters.
   SL <- data.frame(mean=p$slParams$slMean,
                    sd=p$slParams$slStd,
                    sampleSize=p$slParams$slSampleSize)
 
-  TL<-utils::read.csv(p$tlParams$tlFile)
+  TL <- utils::read.csv(p$tlParams$tlFile)
 
-  # Check whether user supplied an snr detection function or estimate from data
-  # NB: This needs to occur AFTER any SNR truncation.
-  if (is.null(snrDetFun)){
-    # Estimate snrDetFun from SNRinfo
-    snrDetFun <- fitSNRdetectionFunc(
-      subset(SNRinfo,SNR>=snrTruncationThreshold),
-      modelType=p$modelType, p$numKnots)
-  }
-
-  # If user has not specified NL distribution (data.frame with columns mean, sd,
-  # samplesize), then extract this information it from SNRinfo.
-  # NB: This needs to occur with untruncated SNRInfo (i.e. prior to truncation).
-  if (is.null(NL)){
-    NL <- nlFromSnrInfo(SNRinfo, snrDetFun)
-  }
-
-  pDetResults <- pDetInArea(snrDetFun, SL, TL,  NL, # Sonar equation inputs
-                            output.resolution.m=p$output.resolution.m,
-                            outerloop=p$outerloop,
-                            truncationDistance=truncationDistance,
-                            snrTruncationThreshold= snrTruncationThreshold,
-                            p$transectFile,  # file output names
-                            p$simResultsFile,
-                            p$paFile)
-
-  # The above function, pDetInArea writes results to a bunch of files
-  # Load the file that we need that has the p_a in them, and ignore the others
-  # pa.all.transects <- read.csv(p$paFile, header = TRUE, sep = ' ');
-  pa.all.transects <- pDetResults$perTransectMeanSD
-  no.transects <- dim(pa.all.transects)[1]-1;
-  pa <- pa.all.transects[no.transects+1,1]
-
-  #CV_Pa------------------------------------------------------------------------
-  # The line below will read the per-transect pa from file.
-  # pa.all.transects <- read.csv(p$paFile, header = TRUE, sep = ' ');
-
-  # Per-transect mean and SD of pa now returned in the list of pDetResults, so
-  # no need to read or write it to a file
-  pa.all.transects <- pDetResults$perTransectMeanSD
-  CV.pa <- pa_CV(pa.all.transects)
-
-  #CV_Nc------------------------------------------------------------------------
-  CV.Nc <- Nc_CV(Nc,pa,c)
-
-  #  ### Finally, estimate Dc (Density of calls) [calls $h^{-1} km^{-2}$]
-  # Dc --------------------------------------------------------------------------
-  Dc <- (Nc * (1-c) )/( p$k * A * pa * T )
-  Dc     # per h per km^2
-  Dc*1e3 # per h per 1000 km^2?
-
-  # CV_Total--------------------------------------------------------------------
-  CV.Dc <- Dc_CV(CV.Nc,CV.pa,CV.c)
-
-  #  ## Collate into data frame and write to csv file
-  # Format output---------------------------------------------------------------
-
-  result <- data.frame(season, p$siteCode,Nc,c,p$k,T,p$w,pa,
-                       SL$mean,SL$sd,NL$mean,NL$sd,p$modelType,
-                       CV.Nc,CV.c,CV.pa,Dc,CV.Dc)
-  names(result) <- c('season','siteCode','Nc','c','k','T','w','pa',
-                     'SLmean','SLsd','NLmean','NLsd','modelType',
-                     'CV.Nc','CV.c','CV.pa','Dc','CV.Dc')
-
-  utils::write.csv(result, file = p$densityResultsFile, row.names=F)
-  return(result)
+  cde(Nc = Nc, capHistTab = capHistTab, SL = SL, TL = TL,
+      T = T, A = A, k = p$k, season = season,
+      snrDetFun = snrDetFun, NL = NL,
+      modelType = p$modelType, numKnots = p$numKnots,
+      output.resolution.m = p$output.resolution.m,
+      outerloop = p$outerloop,
+      transectFile = p$transectFile,
+      simResultsFile = p$simResultsFile,
+      paFile = p$paFile,
+      truncationDistance = truncationDistance,
+      snrTruncationThreshold = snrTruncationThreshold,
+      # Nc above was already computed with this same snrTruncationThreshold,
+      # via countDetections, so it is truncated consistently by construction.
+      NcIsTruncated = is.finite(snrTruncationThreshold),
+      siteCode = p$siteCode,
+      densityResultsFile = p$densityResultsFile)
 }
