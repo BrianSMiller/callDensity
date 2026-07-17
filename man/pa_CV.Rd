@@ -36,15 +36,24 @@ SE_total_Pa = standard error of the overall mean probability of detection
 incorporating all sources of variance
 
 SE_Pa = standard error of the n_t transect-specific mean probabilities
-of detection
+of detection, i.e. sd(Pa_t)/sqrt(n_t): how much the transect means
+disagree with each other. NOT mean(Pa_t)/sqrt(n_t), which is what this
+function computed between 2025-06-27 and 2026-07-17 (see NEWS/commit
+0a9cb2f). That formula divides the estimate by a constant depending only
+on n_t, so CV.pa collapsed to ~1/sqrt(n_t) regardless of how much the
+underlying detection curve actually varied. Verified: across a sweep of
+32 detector configurations with true p_a bias from 0\% to 68\%, the old
+formula reported CV.pa = 0.50-0.51 throughout (test-pa_CV.R).
 SD_Pa_t = standard deviation of each transect-specific mean probability of
-detection
+detection, driven by pDetInArea's outerloop bootstrap of the detection
+curve's coefficients and of SL/NL. This term was correct throughout.
 t = transect (1 - n_t)
 n_t = total number of transects (8 in Harris's thesis, but adjustable here)
 
 Note: to allow the lengths of transects to vary requires additional weighting
 beyond that described by Harris (2012). We account for this with the wt
 parameter, which should contain the area for each transect. We adapt Eqn.6.19
-So that SE_Pa is derived from the use the weighted mean, and the right-most
-term (mean of standard deviations) is also a weighted mean.
+so that both SE_Pa and the mean of standard deviations are weighted means,
+using \code{Hmisc::wtd.var} for a weighted variance of the transect means
+that reduces exactly to \code{var()} when weights are equal.
 }

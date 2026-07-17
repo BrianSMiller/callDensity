@@ -665,17 +665,26 @@ c_CV <- function(n,c){
 #'   incorporating all sources of variance
 #'
 #' SE_Pa = standard error of the n_t transect-specific mean probabilities
-#'   of detection
+#'   of detection, i.e. sd(Pa_t)/sqrt(n_t): how much the transect means
+#'   disagree with each other. NOT mean(Pa_t)/sqrt(n_t), which is what this
+#'   function computed between 2025-06-27 and 2026-07-17 (see NEWS/commit
+#'   0a9cb2f). That formula divides the estimate by a constant depending only
+#'   on n_t, so CV.pa collapsed to ~1/sqrt(n_t) regardless of how much the
+#'   underlying detection curve actually varied. Verified: across a sweep of
+#'   32 detector configurations with true p_a bias from 0% to 68%, the old
+#'   formula reported CV.pa = 0.50-0.51 throughout (test-pa_CV.R).
 #' SD_Pa_t = standard deviation of each transect-specific mean probability of
-#'   detection
+#'   detection, driven by pDetInArea's outerloop bootstrap of the detection
+#'   curve's coefficients and of SL/NL. This term was correct throughout.
 #' t = transect (1 - n_t)
 #' n_t = total number of transects (8 in Harris's thesis, but adjustable here)
 #'
 #' Note: to allow the lengths of transects to vary requires additional weighting
 #' beyond that described by Harris (2012). We account for this with the wt
 #' parameter, which should contain the area for each transect. We adapt Eqn.6.19
-#' So that SE_Pa is derived from the use the weighted mean, and the right-most
-#' term (mean of standard deviations) is also a weighted mean.
+#' so that both SE_Pa and the mean of standard deviations are weighted means,
+#' using \code{Hmisc::wtd.var} for a weighted variance of the transect means
+#' that reduces exactly to \code{var()} when weights are equal.
 #'
 #'@param pa.all.transects - matrix containing two columns and same number of
 #'  rows as number of transects. The first column contains the mean pa and the
@@ -705,7 +714,16 @@ pa_CV <- function(pa.all.transects, wt=rep(1,dim(pa.all.transects)[1]-1) ){
 
   overall_weighted_mean_pa = weighted.mean(x = pa_t, w = wt)
 
-  se_pa = overall_weighted_mean_pa/sqrt(no.transects)
+  # SE_Pa: standard error of the transect-specific MEANS, i.e. how much the
+  # transects disagree with each other about pa. A weighted variance of pa_t
+  # around its weighted mean, generalising sd(y$Mean) to unequal transect
+  # weights. Reduces exactly to sd(pa_t)/sqrt(no.transects) when wt is uniform.
+  if (no.transects > 1) {
+    weighted_var_pa_t <- Hmisc::wtd.var(pa_t, weights = wt, normwt = TRUE)
+  } else {
+    weighted_var_pa_t <- 0
+  }
+  se_pa = sqrt(weighted_var_pa_t)/sqrt(no.transects)
 
   # furthest right term in Eqn.6.19, but now weighted by area of each transect
   overall_weighted_mean_SD <- weighted.mean(sd_pa_t,wt)
