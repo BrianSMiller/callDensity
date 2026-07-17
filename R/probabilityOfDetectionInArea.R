@@ -285,22 +285,8 @@ pDetInArea <-
           predmatrix <- predict(detFun.newcoeff, newd, type = "response")
         }
 
-        # The two truncations are not alike, and must not be applied alike.
-        #
-        # Distance truncation removes area from the estimand: A is redefined as
-        # pi*w^2 to match. Those cells are not part of the question, so they are
-        # NA and drop out of both numerator and denominator of the weighted mean
-        # below (see STEP 5), which renormalises over the retained area.
-        #
-        # SNR truncation does not remove area. The calls below the threshold are
-        # still there and still part of the estimand; we have simply declared
-        # them undetectable. So they are 0, not NA: they keep their range weight
-        # in the denominator and contribute nothing to the numerator. This makes
-        # p_a = E[p * 1(SNR >= theta)] rather than E[p | SNR >= theta], so the
-        # q(theta) factor cancels against a truncated Nc and cde returns the
-        # density of all calls, not of above-threshold calls.
-        predmatrix[which(newd$SNR < snrTruncationThreshold)] <- 0
-        predmatrix[which(is.na(allTrunc[, j]))] <- NA
+        # SNR truncation and per-radial distance truncation
+        predmatrix[which(newd$SNR < snrTruncationThreshold | is.na(allTrunc[, j]))] <- NA
 
         # Clamp probabilities to [0, 1]
         if (any(predmatrix < 0, na.rm = TRUE)) {
@@ -498,10 +484,10 @@ pDetInArea <-
   #So now have a results matrix with no.profilesx1000 average weighted p(dets)
   #*****************************************************************************
   # STEP 6 - Final p(det) calculations ####
-  ## STEP 6(a) Calculate a transect-specific mean p(det) for each transect ####
+  ## STEP 6(a) Transect-specific mean p(det) for each transect ####
   transectavgweightpdets<-rowMeans(alltransectspdetsweight1000, na.rm = T)
 
-  ## STEP 6(b) Calculate an overall p(det) for the whole simulation ###########
+  ## STEP 6(b) Overall p(det) for the whole simulation ###########
 
   # Shouldn't be any NA's here now, but we set na.rm=T anyway (maybe a whole transect is NA)
   # now that transects might be different lengths, we need to weight by length
@@ -510,20 +496,19 @@ pDetInArea <-
   overallpdet<-weighted.mean(transectavgweightpdets, w=truncationDistance^2,
                              na.rm=T)
 
-  ## STEP 6(c) Create a results matrix to hold p(det) values and ##############
-  # st.error/st.dev values
+  ## STEP 6(c) Results matrix to hold p(det) and st.error/st.dev values #######
 
   pdetsandvar<-matrix(NA,no.profiles+1,2)
   pdetsandvar[1:no.profiles,1]<-transectavgweightpdets
   pdetsandvar[no.profiles+1,1]<-overallpdet
+
   #*****************************************************************************
-  # STEP 7 - Variance calculations
-  # STEP 7(a) Need to calculate the standard error of the transect-specific
-  #    p(det) values
+  # STEP 7 - Variance calculations ############################################
+  ## STEP 7(a) Standard error of transect-specific p(det) values ####
+
   st.errorPt<-sd(transectavgweightpdets,na.rm = T)/sqrt(no.profiles)
 
-  # STEP 7(b) Need to calculate the standard deviation of the transect-specific
-  #   p(det) values
+  ## STEP 7(b) Standard deviation of transect-specific p(det) values ####
   st.devPt<-c()
   for (i in 1:no.profiles){
     st.devPt[i]<-sd(alltransectspdetsweight1000[i,],na.rm = T)

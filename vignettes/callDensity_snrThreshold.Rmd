@@ -165,7 +165,7 @@ dist1 <- plotDetectionDistribution(simDet1)
 dist2 <- plotDetectionDistribution(simDet2)
 dist1t<- plotDetectionDistribution(simDet1t)+ylab("Truncated count")
 dist2t<- plotDetectionDistribution(simDet2t)+ylab("Truncated count")
-gridExtra::grid.arrange(dist1,dist2,dist1t,dist2t,nrow=1)
+gridExtra::grid.arrange(dist1,dist2,dist1t,dist2t,nrow=2)
 
 ```
 
@@ -269,8 +269,8 @@ snrDetFun.glmt$r.sq<- with(summary(snrDetFun.glmt), 1 - deviance/null.deviance)
 # Estimate of NL distribution. NOTE: Noise levels estimated from mean NL of
 # non-truncated detections plus intercept of SNR detection function (truncated
 # or not).
-NLind <- nlFromSnrInfo(SNRinfo,  snrDetFun.glm)
-NLindt<- nlFromSnrInfo(SNRinfo, snrDetFun.glmt)
+NLind <- nlFromDetections(SNRinfo,  snrDetFun.glm, SL = SL, TL = TL)
+NLindt<- nlFromDetections(SNRinfo, snrDetFun.glmt, SL = SL, TL = TL)
 
 Pa.glm <- callDensity::pDetInArea(snrDetFun.glm, SL=SL, TLlookup = TL, NL=NLind,
            output.resolution.m=100, outerloop = 100, truncationDistance=R, # m
