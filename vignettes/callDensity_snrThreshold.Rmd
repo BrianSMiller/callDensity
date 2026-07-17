@@ -333,19 +333,36 @@ Alternatively, we can apply SNR truncation for every parameter that goes into th
 
 This means applying SNR truncation when tabulating the number of calls, Nc; when estimating the density of calls within the area, pa; as well as applying SNR truncation when estimating the false discovery rate, c. 
 
-Applying SNR truncation in this way will create a result that is not comparable to the above results. This is because we are now estimating the density only of calls above our SNR threshold, whereas previously we were estimating the density of all calls.  
+Applying SNR truncation in this way returns the density of **all** calls, not the density of above-threshold calls, provided the truncation is applied consistently to every term that counts detections. This is not obvious, and it is worth being explicit about why.
+
+Let $q(\theta)$ be the fraction of calls that arrive at the sensor with an SNR above the threshold $\theta$. Truncation shrinks $N_c$ by a factor of roughly $q(\theta)$, because we are counting fewer detections. It shrinks $p_a$ by the same factor, because `pDetInArea` sets the probability of detection to zero below $\theta$ rather than discarding those parts of the area. The two factors appear on opposite sides of the density equation, so they cancel, and $D_c$ is unchanged.
+
+The cancellation only happens if $p_a$ is the *unconditional* mean $E[p \cdot 1(SNR \ge \theta)]$ rather than the conditional mean $E[p \mid SNR \ge \theta]$. That is the difference between setting below-threshold cells to zero and dropping them. Zeroing keeps them in the average and they contribute nothing; dropping them renormalises the average over the survivors, which would give the density of above-threshold calls instead. `pDetInArea` zeroes them.
+
+Distance truncation is not treated the same way, and must not be. Beyond the truncation distance $w$ the study area is redefined as $A = \pi w^2$, so that area genuinely leaves the question and those cells are dropped. Calls below $\theta$ have not left the question. They are still in the water and still in $A$. We have only declared that we cannot hear them.
 
 ```{r}
 
 # True value of false discovery rate for truncated sim
 c_truncated_actual = sum(simDet2t$groundTruth==FALSE)/sum(simDet2t$detect_table)
 
-# True density of calls that are above threshold
-resultsTruncated = data.frame(Dc = Dct, SampleSize=nAboveThreshold,
+# The truncated estimate targets the density of ALL calls, so that is the
+# truth to compare it against. Dct, the density of above-threshold calls, is
+# reported alongside only to show the size of q(theta).
+#
+# Pa here is the UNCONDITIONAL mean of p over every call, with
+# below-threshold calls contributing zero. This is what a zeroed pDetInArea
+# targets. Pat, the conditional mean over surviving calls, is the quantity
+# the old NA behaviour returned, and is much larger.
+PaTruncUnconditional <- mean(simDet2$p_det * (simDet2$snr >= snrTruncationThreshold),
+                             na.rm = TRUE)
+qTheta <- nAboveThreshold / n
+
+resultsTruncated = data.frame(Dc = TrueCallDensity, SampleSize=nAboveThreshold,
                       A = A, NLmean = NL$mean, NLsd = NL$sd,            # Noise
                       model=det2params$func, 
-                      c = c_truncated_actual, Pa = mean(simDet2t$p_det,na.rm=TRUE), 
-                      row.names=paste('Truth (>',snrTruncationThreshold,'dB)') ) 
+                      c = c_truncated_actual, Pa = PaTruncUnconditional, 
+                      row.names='Truth (all calls)' ) 
 
 # Probability of detection in teh area of calls that are above threshold (NOT all calls)
 Pa.allt <- callDensity::pDetInArea(snrDetFun.glmt, SL=SL, TLlookup = TL, NL=NLindt,
@@ -368,13 +385,15 @@ kableExtra::kbl(resultst, digits = c(4,3,0,1, 2, NA,  3, 4),
 
 ```
 
-Applying truncation throughout all the terms of the call density equation seems to produce a correct estimate of call density. 
+Applying truncation throughout all the terms of the call density equation produces a correct estimate of the density of all calls. The estimate is not of a different quantity from the untruncated one; it is the same quantity, reached by discarding the part of the detection function that the data could never support.
 
-However, interpretation of these densities is less satisfying because they are potentially only meaningfully comparable to densities of calls measured using the same thresholds. 
+The earlier concern that these densities would only be comparable across sites using identical thresholds does not apply once $q(\theta)$ cancels. Two sites truncated at different thresholds both return all-call density, and are directly comparable. What they do not share is precision: the site with the higher threshold has a smaller $N_c$.
 
-It is not obvious whether these densities of calls above an SNR threshold are still comparable across sites that have different SL, NL, or TL profiles. While I suspect they are comparable, but  will depend on the accuracy of per-site estimates of SL, NL, and TL. Non-truncated call densities also depend on the accuracy of acoustic parameters, but estimates that utilize SNR truncation may be more sensitive to mismatch between parameter and reality due to smaller sample sizes. The exploration of this topic is beyond the scope of this vignette (left as an exercise for an interested party or as an item to add to the TODO list). 
+What truncation does do is move an assumption from one place to another. Without truncation, $p_a$ depends on the shape of the detection function at SNRs where no observer ever contributed a detection. That shape is not measurable, even in principle. With truncation, $p_a$ depends instead on $q(\theta)$, which comes from SL, TL and NL. That is the sonar equation, which is already the backbone of the method, and which can be checked against independent measurements. Truncation creates no information about faint calls. It relocates the assumption onto ground that can be inspected.
 
-Additionally, it might be possible to alter the Monte-Carlo simulation to keep track of the proportion of calls that were excluded due to SNR truncation. Then, the density of above-threshold calls could be scaled by this proportion to convert the answer back into a non-truncated call density. Implementation of this idea is again beyond the scope of this vignette. 
+The cost is precision, and it is not small. $N_c$ shrinks with $q(\theta)$, and the truncated estimate is more sensitive to error in SL, NL and TL than the untruncated one, because $q(\theta)$ now carries weight that the detection function used to carry. Sensitivity to acoustic parameter mismatch is left as an open question and remains on the TODO list.
+
+An earlier draft of this vignette proposed tracking the proportion of calls excluded by truncation, and scaling the above-threshold density back up to recover all-call density. That proportion is $q(\theta)$, and zeroing obtains it for free. No bookkeeping is required, and none was added.
 
 ## VGLM and truncation
 
@@ -445,6 +464,76 @@ kableExtra::kbl(resultst, digits = c(4,3,0,1, 2, NA,  3, 4),
 ```
 The adjudicated capture-recapture model seems to produce a correct estimate of density of above-threshold calls. But something might not be quite right since the values for c seem a bit off. Further investigation of the code is warranted. 
 
+
+## Choosing the threshold
+
+The threshold is not a free parameter to be tuned until the answer looks right. It has a meaning, and the meaning tells you where to put it.
+
+A capture-recapture model identifies detection probability from disagreement between observers. It needs both observers to contribute detections across the SNR range that matters. Where only one observer ever contributes, there are no recaptures, and the model is not estimating anything there. It is extrapolating.
+
+The temptation is to set the threshold where the *sample* runs out. That is the wrong diagnostic. A shallow partner can reach a long way down on its own and fill the sample with low-SNR detections, none of which are recaptures. The sample looks well covered and the model is still extrapolating.
+
+The requirement is a property of the partner's **slope**, not its recall. A partner with a steep detection function behaves like a step function: above its threshold it hears everything, below it nothing, and the faint region has no recaptures at any recall. A mediocre partner that degrades gradually is more useful for capture-recapture than a sharp one, however good the sharp one is. An SNR-insensitive CNN is close to an ideal partner. A hard energy threshold is close to a worst case.
+
+So set $\theta$ where the recaptures run out. That is measurable directly from the capture history table, before any call density is estimated:
+
+```{r recapture.coverage, warning=FALSE, message=FALSE}
+
+# Recapture coverage: the SNR range over which BOTH observers contribute
+# detections. Not where the sample reaches; where the agreement reaches.
+recaptureCoverage <- function(ch, breaks = seq(-20, 20, by = 2),
+                              obs1 = "detect_table1", obs2 = "detect_table2",
+                              snrCol = "SNR") {
+  # Only calls somebody flagged are in the capture-recapture sample.
+  ch  <- ch[ch[[obs1]] | ch[[obs2]], ]
+  bin <- cut(ch[[snrCol]], breaks = breaks)
+  mid <- head(breaks, -1) + diff(breaks) / 2
+
+  data.frame(
+    snr        = mid,
+    det1only   = as.vector(tapply(ch[[obs1]] & !ch[[obs2]], bin, sum, default = 0)),
+    det2only   = as.vector(tapply(!ch[[obs1]] & ch[[obs2]], bin, sum, default = 0)),
+    recaptures = as.vector(tapply(ch[[obs1]] & ch[[obs2]], bin, sum, default = 0))
+  )
+}
+
+coverage <- recaptureCoverage(capHistTab)
+print(subset(coverage, det1only + det2only + recaptures > 0), row.names = FALSE)
+
+```
+
+Read down the `recaptures` column. Where it reaches zero while `det2only` is still large, detector 1 has stopped contributing, and the model has nothing to work with below that point. That is where $\theta$ belongs.
+
+For the steep partner used below, recaptures are zero in every bin below about $-1$ dB, while detector 2 alone contributes hundreds of detections per bin. The sample is well populated down to $-15$ dB and none of it is informative. Recaptures only become substantial at $+1$ dB.
+
+That is worth dwelling on, because it is the argument for the diagnostic. The threshold it points at, near 0 dB, is the same threshold the sweep in the next section shows to remove the bias. The diagnostic reaches it from the capture history table alone, without knowing the true call density and without fitting anything. In a real analysis the truth is not available and the sweep cannot be run, so this is the only version of the question that can actually be asked.
+
+### Does it work?
+
+The failure that motivates truncation is a steep partner. With detector 1 at `scale = 0.5` and detector 2 at `scale = 4`, capture-recapture overestimates $p_a$ by about 60% and therefore underestimates $D_c$ by the reciprocal. Truncating removes the extrapolated region and the bias goes away, while $D_c$ remains the density of all calls:
+
+| partner | $\theta$ | $N_c$ | $p_a$ / true $p_a$ | $D_c$ / true $D_c$ |
+|---|---|---|---|---|
+| steep (`scale = 0.5`) | none | 6055 | 1.62 | **0.62** |
+| steep | 0 dB | 2735 | 1.02 | 0.99 |
+| steep | 3 dB | 1741 | 1.00 | 1.01 |
+| steep | 6 dB | 994 | 1.02 | 0.99 |
+| shallow (`scale = 8`) | none | 6051 | 0.99 | 1.01 |
+| shallow | 0 dB | 2699 | 1.00 | 1.00 |
+| shallow | 3 dB | 1735 | 1.01 | 1.00 |
+| shallow | 6 dB | 1001 | 1.03 | 0.99 |
+
+Mean of three seeds per cell, 50,000 calls, false discovery rate zero, noise supplied. Produced by `notes/truncationSweep.R`.
+
+Three things in that table are worth stating plainly.
+
+$D_c$ stays at the true all-call density while $N_c$ falls six-fold from 6055 to 994. That is the $q(\theta)$ cancellation working. If $p_a$ were renormalised instead of zeroed, $D_c$ would fall with $N_c$.
+
+Truncation does not damage the case that already worked. The shallow partner is unbiased with or without it, so the threshold costs precision and buys nothing there.
+
+The threshold does not need to be tuned. Anywhere from 0 to 6 dB fixes the steep partner. The bias is caused by a region of the curve that carries no data, and any threshold that excludes that region works. This matters in practice, because it means $\theta$ can be chosen from the recapture diagnostic above without reference to the answer it produces.
+
+One practical note. Fitting the untruncated VGLM in the steep-partner case emits convergence warnings from `posbernoulli.t` about working weights and half-step sizes. Those warnings are the symptom, not a separate problem: the model is being asked to fit a region where it has no information. They disappear under truncation.
 
 ## Inspect detection functions for insights
 
