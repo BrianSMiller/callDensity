@@ -1,0 +1,375 @@
+---
+title: "Where capture-recapture estimates of p_a break down (parallel)"
+author: "Brian Miller"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.width = 9, fig.height = 5)
+library(callDensity)
+library(ggplot2)
+```
+
+# The question
+
+Call density depends on $p_a$: the mean probability of hearing a call anywhere
+in the study area. Nearly every call is far away and faint, so $p_a$ is decided
+almost entirely by how well the detector hears faint calls.
+
+But a detector can only be measured on calls somebody heard, and those are the
+loud ones. Calls that every observer missed leave no trace. So the detection
+function is fitted where the loud calls are, and then used to answer a question
+about faint ones. The region that decides the answer is extrapolated.
+
+These notes ask how far that extrapolation can be pushed before $p_a$ stops
+being usable, and what property of the partner observer decides it.
+
+Two things are compared.
+
+**Capture-recapture (CR).** Both observers' detections are modelled jointly
+with a positive-Bernoulli model (VGAM `posbernoulli.t`), conditioning on a call
+having been detected by at least one observer. The sample is calls somebody
+heard.
+
+**Oracle.** Detector 2's own detections over *every call that was made*,
+including the ones nobody heard. Not a method: this sample cannot exist. It is
+the control. It differs from CR in exactly one respect, SNR coverage, so any
+difference between them is attributable to coverage alone.
+
+The hypothesis is that a **shallow** partner keeps contributing detections
+further down into the faint region, so it constrains the curve where $p_a$
+lives. A steep partner is a step function: above its threshold it hears
+everything, below it nothing, so the faint region has no recaptures and the
+curve is free to go where it likes.
+
+Note this is about the partner's **slope**, not its recall. Those come apart.
+
+# Setup
+
+```{r simulate-fn}
+#' Simulate two detectors listening to the same calls.
+#'
+#' The random number generator kind is forced, not just seeded. Otherwise a
+#' parallel backend that switches to L'Ecuyer-CMRG would silently produce a
+#' different realisation from the same seed, and cde's internal draws would
+#' differ too. With the kind forced, every cell is fully deterministic and the
+#' serial and parallel versions of this document must agree exactly.
+#'
+#' @param det1scale,det2scale Logistic scale. Small means a steep, nearly
+#'   step-like detector. Large means a shallow one that degrades gradually.
+#' @param det1location,det2location SNR at which the detector hears half of
+#'   calls. Held at 0 here: earlier sweeps showed location has little effect.
+#' @param fdr False discovery rate of both detectors. Held at 0: CR recovers
+#'   the false discovery rate exactly, so it is not the subject here.
+#' @param n Number of calls.
+#' @param seed Random seed. A grid dimension, not a constant: one realisation
+#'   is one ticket in a lottery.
+simulatePair <- function(det1scale = 2, det2scale = 4,
+                         det1location = 0, det2location = 0,
+                         fdr = 0, n = 5e4, seed = 1) {
+
+  RNGkind("Mersenne-Twister")
+  set.seed(seed)
+
+  R       <- 1e6                                  # study radius, m
+  minDate <- as.POSIXct("2025-01-01")
+  maxDate <- as.POSIXct("2026-01-01")
+  Time    <- as.numeric(difftime(maxDate, minDate, unit = "days")) / 365
+  A       <- studyArea(R / 1e3)
+
+  SL <- data.frame(mean = 190, sd = 4, sampleSize = 350)
+  NL <- data.frame(mean = 84,  sd = 4, sampleSize = n)
+
+  det1 <- data.frame(location = det1location, scale = det1scale,
+                     func = "plogis", c = fdr, fpMean = 0, fpSD = 2)
+  det2 <- data.frame(location = det2location, scale = det2scale,
+                     func = "plogis", c = fdr, fpMean = 0, fpSD = 2)
+
+  sim     <- simCallLocation(n = n, R = R, minDate = minDate, maxDate = maxDate)
+  sim     <- simCallAcoustics(sim, SL, NL, TL = function(r) 20 * log10(r))
+  simDet1 <- simulateDetector(det1, sim)
+  simDet2 <- simulateDetector(det2, sim)
+
+  capHistTab <- simsTocaptureHistoryTable(simDet1, simDet2)
+
+  # The adjudicated verdict is truth. Restricted to calls at least one detector
+  # flagged, which is the sample a positive-Bernoulli model is defined on.
+  chCR <- capHistTab[capHistTab$detect_table1 == 1 |
+                     capHistTab$detect_table2 == 1, ]
+  chCR$detect_observer1 <- as.integer(chCR$detect_table1)
+  chCR$detect_observer2 <- as.integer(chCR$detect_table2)
+  chCR$detect_table1    <- as.integer(chCR$groundTruth1)
+
+  real <- simDet2$groundTruth == 1
+
+  list(
+    chCR   = chCR,
+    SL     = SL,
+    NL     = NL,
+    TL     = simTLradials_20logR(maxRange = R, rangeStep = 1000,
+                                 numTransects = 4),
+    A      = A,
+    Time   = Time,
+    Nc     = sum(simDet2$detect_table),
+
+    # The oracle sample. Every call that was made, whether anyone heard it or
+    # not. Same quantity as the CR sample, but with full SNR coverage.
+    oracleSnr = data.frame(Detected = simDet2$detect_table[real],
+                           SNR      = simDet2$snr[real]),
+
+    # The truth.
+    trueDc       = n / (A * Time),
+    truePa       = mean(simDet2$p_det, na.rm = TRUE),
+    trueC        = fdr,
+    det2location = det2location,
+    det2scale    = det2scale
+  )
+}
+
+#' The CR sample: adjudicated real calls, both observers' verdicts retained.
+#' capHist2snrInfo drops the per-observer columns a VGLM needs, so build it here.
+snrInfoCR <- function(s) {
+  g   <- s$chCR[s$chCR$detect_table1 == 1, ]
+  out <- data.frame(
+    detect_observer1 = g$detect_observer1,
+    detect_observer2 = g$detect_observer2,
+    Detected         = g$detect_observer2,
+    CallRL           = as.numeric(g$signalRMSdB),
+    NoiseRL          = as.numeric(g$noiseRMSdB),
+    SNR              = as.numeric(g$signalRMSdB - g$noiseRMSdB),
+    t                = g$t,
+    month            = g$month,
+    season           = g$season
+  )
+  out[is.finite(out$SNR), ]
+}
+
+fitCR <- function(snrCR) {
+  fitDetFun(snrCR, modelType = "vglm",
+            yColNames     = c("detect_observer1", "detect_observer2"),
+            whichObserver = "detect_observer2")
+}
+
+#' Probability at least one observer detects, as a plain function of SNR. This
+#' is the filter that selected the CR sample, so it is what the noise
+#' correction has to undo. VGAM computes it as type.fitted "onempall0".
+pUnionFromVglm <- function(model, snrGrid = seq(-100, 100, by = 0.1)) {
+  pu <- VGAM::predictvglm(model, newdata = data.frame(SNR = snrGrid),
+                          type = "response", type.fitted = "onempall0")
+  stats::approxfun(snrGrid, as.vector(pu), rule = 2)
+}
+
+runOne <- function(label, s, detFun, nl, modelType) {
+  r <- cde(Nc = s$Nc, capHistTab = s$chCR, snrDetFun = detFun,
+           SL = s$SL, TL = s$TL, A = s$A, T = s$Time, NL = nl,
+           modelType = modelType)
+  data.frame(row        = label,
+             truePa     = s$truePa, pa = r$pa,
+             paFraction = r$pa / s$truePa,
+             Dc         = r$Dc,
+             DcFraction = r$Dc / s$trueDc,
+             CV.pa      = r$CV.pa,
+             stringsAsFactors = FALSE)
+}
+```
+
+# The sweep
+
+`det1scale` runs from 0.5 (a hard threshold) to 8 (a detector that degrades
+very gradually). `det2scale` takes two values so the target detector is once
+steep and once shallow. Ten seeds per cell, because a single realisation says
+nothing about the spread.
+
+```{r sweep-fn}
+sweepCell <- function(det1scale, det2scale, seed) {
+
+  s     <- simulatePair(det1scale = det1scale, det2scale = det2scale,
+                        seed = seed)
+  snrCR <- snrInfoCR(s)
+
+  funCR     <- fitCR(snrCR)
+  funOracle <- fitDetFun(s$oracleSnr, modelType = "glm")
+
+  nlCR <- nlFromDetections(snrCR, pUnionFromVglm(funCR), s$SL, s$TL)
+
+  out <- rbind(
+    runOne("CR",     s, funCR,     nlCR,  "vglm"),
+    runOne("oracle", s, funOracle, s$NL,  "glm")
+  )
+
+  cbind(data.frame(row = out$row, det1scale = det1scale,
+                   det2scale = det2scale, seed = seed,
+                   nCR = nrow(snrCR),
+                   snrP05 = as.numeric(stats::quantile(snrCR$SNR, 0.05)),
+                   stringsAsFactors = FALSE),
+        out[, setdiff(names(out), "row")])
+}
+
+detGrid <- expand.grid(det1scale = c(0.5, 1, 2, 4, 8),
+                       det2scale = c(0.5, 1, 2, 4, 8),
+                       seed      = 1:10,
+                       KEEP.OUT.ATTRS = FALSE)
+```
+
+```{r sweep-run}
+library(future.apply)
+future::plan(future::multisession, workers = 16)
+
+sweep <- do.call(rbind, future_lapply(seq_len(nrow(detGrid)), function(i) {
+  g <- detGrid[i, ]
+  tryCatch(sweepCell(g$det1scale, g$det2scale, g$seed),
+           error = function(e) {
+             message(sprintf("cell %d failed: %s", i, conditionMessage(e)))
+             NULL
+           })
+}, future.seed = TRUE, future.packages = "callDensity"))
+
+future::plan(future::sequential)
+```
+
+# Does the partner's slope decide it?
+
+`paFraction` is the estimated probability of detection divided by the true one.
+A usable method sits on the dashed line in every cell and every realisation.
+Each point is one seed.
+
+```{r plot-pafraction}
+sweep$method <- factor(sweep$row, levels = c("oracle", "CR"))
+
+ggplot(sweep, aes(x = factor(det1scale), y = paFraction, colour = method)) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_boxplot(outlier.shape = NA, alpha = 0.3) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.15,
+                                             dodge.width = 0.75),
+             alpha = 0.7, size = 1.5) +
+  facet_wrap(~ det2scale, labeller = label_both) +
+  scale_colour_manual(values = c(oracle = "steelblue", CR = "firebrick")) +
+  labs(x = "detector 1 scale (small = steep threshold, large = gradual)",
+       y = expression(hat(p)[a] / p[a]),
+       title = "Estimated over true probability of detection",
+       subtitle = "10 realisations per cell. The oracle sees every call; CR sees only calls somebody heard.") +
+  theme_bw()
+```
+
+The oracle is the control. It uses the same `cde`, the same calls and the same
+detector 2. It differs from CR only in that its sample covers the whole SNR
+range. If the oracle sits on the line while CR scatters, the scatter is
+coverage.
+
+```{r plot-dcfraction}
+ggplot(sweep, aes(x = factor(det1scale), y = DcFraction, colour = method)) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_boxplot(outlier.shape = NA, alpha = 0.3) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.15,
+                                             dodge.width = 0.75),
+             alpha = 0.7, size = 1.5) +
+  facet_wrap(~ det2scale, labeller = label_both) +
+  scale_colour_manual(values = c(oracle = "steelblue", CR = "firebrick")) +
+  labs(x = "detector 1 scale (small = steep threshold, large = gradual)",
+       y = expression(hat(D)[c] / D[c]),
+       title = "Estimated over true call density") +
+  theme_bw()
+```
+
+## Does the model know when it is wrong?
+
+`CV.pa` is the coefficient of variation `cde` reports for $p_a$. It measures how
+well the curve is pinned down *where the data is*. It cannot know about the
+extrapolation. If the red points sit low while `paFraction` scatters widely,
+the confidence intervals are confidently wrong.
+
+```{r plot-cv}
+sweep$absErr <- abs(sweep$paFraction - 1)
+
+ggplot(sweep, aes(x = CV.pa, y = absErr, colour = method)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  geom_point(alpha = 0.7) +
+  scale_colour_manual(values = c(oracle = "steelblue", CR = "firebrick")) +
+  labs(x = "CV of p_a reported by cde",
+       y = "actual |relative error| in p_a",
+       title = "Reported uncertainty against actual error",
+       subtitle = "Points above the dashed line are errors the model did not see coming") +
+  theme_bw()
+```
+
+# The mechanism, drawn
+
+The curves themselves, for one realisation. Black is detector 2's true
+detection function, which we know exactly because we simulated it. The vertical
+line marks the 5th percentile of the CR sample: almost no data exists to the
+left of it.
+
+```{r curves-fn}
+curvesFor <- function(det1scale, det2scale, seed = 1) {
+  s       <- simulatePair(det1scale = det1scale, det2scale = det2scale,
+                          seed = seed)
+  snrCR   <- snrInfoCR(s)
+  snrGrid <- seq(-25, 30, by = 0.25)
+
+  funCR     <- fitCR(snrCR)
+  funOracle <- fitDetFun(s$oracleSnr, modelType = "glm")
+
+  rbind(
+    data.frame(SNR = snrGrid, curve = "true",
+               p = stats::plogis(snrGrid, s$det2location, s$det2scale)),
+    data.frame(SNR = snrGrid, curve = "CR",
+               p = predictDetFun(funCR,
+                                 newdata = data.frame(SNR = snrGrid))$fit),
+    data.frame(SNR = snrGrid, curve = "oracle",
+               p = predictDetFun(funOracle,
+                                 newdata = data.frame(SNR = snrGrid))$fit)
+  ) |>
+    transform(det1scale = det1scale, det2scale = det2scale,
+              snrP05 = as.numeric(stats::quantile(snrCR$SNR, 0.05)))
+}
+
+curves <- do.call(rbind, lapply(c(0.5, 1, 2, 4, 8), curvesFor,
+                                det2scale = 4, seed = 1))
+```
+
+```{r plot-curves, fig.height = 4}
+ggplot(curves, aes(x = SNR, y = p, colour = curve)) +
+  geom_vline(aes(xintercept = snrP05), linetype = "dotted", colour = "grey40") +
+  geom_line(linewidth = 0.8) +
+  facet_wrap(~ det1scale, nrow = 1, labeller = label_both) +
+  scale_colour_manual(values = c(true = "black", CR = "firebrick",
+                                 oracle = "steelblue")) +
+  labs(y = "P(detection by detector 2)",
+       title = "Detector 2's detection function, det2scale = 4",
+       subtitle = "Dotted line: 5th percentile of the CR sample. Left of it, CR is extrapolating.") +
+  theme_bw()
+```
+
+The curves can look close and still give a badly wrong $p_a$, because the plot
+gives every dB equal weight and $p_a$ does not: nearly all calls sit in the
+faint tail.
+
+# Summary
+
+```{r summary-table}
+summ <- do.call(rbind, lapply(
+  split(sweep, list(sweep$row, sweep$det1scale, sweep$det2scale)),
+  function(x) data.frame(
+    method    = x$row[1],
+    det1scale = x$det1scale[1],
+    det2scale = x$det2scale[1],
+    nCR       = round(mean(x$nCR)),
+    snrP05    = round(mean(x$snrP05), 1),
+    paFrac_mean = mean(x$paFraction),
+    paFrac_min  = min(x$paFraction),
+    paFrac_max  = max(x$paFraction),
+    CV.pa       = mean(x$CV.pa)
+  )))
+summ <- summ[order(summ$det2scale, summ$det1scale, summ$method), ]
+
+knitr::kable(summ, digits = 3, row.names = FALSE)
+```
+
+`nCR` is the size of the CR sample and `snrP05` is its 5th percentile: the point
+below which the curve is extrapolating. If the hypothesis holds, `snrP05`
+should fall as `det1scale` rises, and `paFraction` should tighten as it does.
