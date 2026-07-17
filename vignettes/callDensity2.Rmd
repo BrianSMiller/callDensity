@@ -377,22 +377,22 @@ Additionally, the estimates of false discovery rate also appear biased. This ari
 
 Addressing the bias in our NL should improve our estimates of call density. This bias arises because our NL distribution came from the NL around our detections. However, detections with low NL will be over-represented because they are more likely to have high SNR, thus are more likely to be detected. 
 
-To account for the over-representation of detections with lower NL in our sample, we can use our fitted detection function (the GLM from above). Specifically, we can add to our estimated mean NL, the SNR at which the probability of detection is 50%. [NOTE: I can't fully explain how I arrived at this, other than it intuitively made sense to me to 'add back in the difference between detected NL and average SNR,' and it seems to work reasonably well. There is possibly some well-known principle or statistical relationship here that might be recognizable to those more knowledgeable about such things. If so, would be good to update this with that better more mathematical explanation.]
+Here, we correct for the over-representation of detections with lower NL in our sample. We assume that NL are normally distributed, and only the mean NL is biased (i.e. the measured standard deviation is close enough to the truth that we don't need to estimate it). Then we can estimate the bias in mean NL using the measured NL from detections, detection function, SL, and TL. 
 
 ```{r GLM p.det with independently estimated NL, warning=FALSE, message=FALSE}
 
 
 # 'Independent' estimate of NL 
-NLind <- callDensity::nlFromSnrInfo(SNRinfo, snrDetFun.glm)
+NLind <- callDensity::nlFromDetections(SNRinfo, snrDetFun.glm, SL, TL)
 
 results.NLind <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
                    SL = SL, TL = TL, NL=NLind, A = A, modelType = 'glm')
 
 ```
 
-CallDensity package code for correcting NL distribution by adding back in the SNR for 50% probability of detection:
+CallDensity package code for correcting NL distribution bias that occurs due to higher probability of detecting calls when NL is low.
 `nlFromSnrInfo <- `
-```{r, code=nlFromSnrInfo, eval=FALSE}
+```{r, code=nlFromDetections, eval=FALSE}
 ```
 
 
@@ -511,7 +511,7 @@ Adjudicated capture-recapture along with independently estimated NL yields more 
 
 ## Inspect detection functions for insights
 
-```{r compare snr detection functions, warning=FALSE}
+```{r compare snr detection functions, warning=FALSE, fig.height=4}
 
 # Clone vglm and swap whichObserver for second observer curve
 snrDetFun.vglm2 <- snrDetFun.vglm
@@ -544,50 +544,7 @@ showDetFun(models) +
   scale_linetype_manual(values = c("Observer 2" = "dashed",
                                    "Observer 1" = "dotted") )+
   ggplot2::xlim(-20,20)+
-  ggplot2::theme(legend.position="top")+labs(color="Model",linetype="Truth")
-```
-
-
-```{r deprecated compare snr detection functions, warning=FALSE}
-snrs <- data.frame(SNR=seq(-20,20,0.5))
-
-cols = colorRampPalette(c('#EDB120','#D95319','#0072BD','#7E2F8E','#77AC30',
-                        '#4DBEEE','#A2142F'))
-preds.glm= predict(snrDetFun.glm, type='response',newdata=snrs)
-preds.vglm=predict(snrDetFun.vglm,type='response',newdata=snrs)
-preds.vglm0=predict(snrDetFun.vglm,type='response',newdata=snrs,
-                    type.fitted='onempall0')# One minus probability of all zeros
-pr1 =apply(cbind(preds.vglm[,1],preds.vglm0),1,prod)
-pr2 =apply(cbind(preds.vglm[,2],preds.vglm0),1,prod)
-
-
-
-par(cex=0.8,mar=c(3.1,3.1,0.25,0),mgp=c(2.1,1,0))
-plot(snrs$SNR, xlim= c(-20,20),  ylim= c(0,1),
-     xlab="SNR", ylab = "P(Detection)", type='n')
-grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
-lines(snrs$SNR,preds.glm,col=cols(7)[4],lwd=2)
-# lines(snrs$SNR,preds.vglm0,col=cols(7)[2],lwd=2) # 1-
-lines(snrs$SNR,pr2,col=cols(7)[1],lwd=2)    # vglm 1-p(all zero)
-points(simDet2$snr,simDet2$p_det,pch='.')     # Actual probability of detection
-lines(snrs$SNR,pr1,col=cols(7)[3],lwd=2)    # vglm 1-p(all zero)
-points(capHistTab$snr1,capHistTab$p_det1,pch='.')
-# lines(snrs$SNR,preds.vglm[,1],col=cols(7)[5],lwd=2) # Response vglm detector1
-# lines(snrs$SNR,preds.vglm[,2],col=cols(7)[6],lwd=2) # Response vglm detector2
-
-legend( "bottomright", 
-        legend =c("Detection function TRUE",
-                  "Detection function GLM",
-                  "Detection function VGLM2",
-                  "Response VGLM 1",
-                  "Response VGLM 2",
-                  "Detection function vglm1"
-                  ),
-        col=c('black', cols(7)[4], cols(7)[1], cols(7)[5], cols(7)[6],cols(7)[3]),
-              #, cols(7)[2]), 
-        lty=rep('solid',6),
-        lwd=rep(2,6)
-)
+  ggplot2::theme(legend.position="right")+labs(color="Model",linetype="Truth")
 ```
 
 # References

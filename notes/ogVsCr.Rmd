@@ -1,0 +1,470 @@
+---
+title: "Observer ground truth and capture-recapture compared on simulated data"
+author: "Brian Miller"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(callDensity)
+```
+
+# The question
+
+Call density estimation needs three things the data do not give you directly:
+the probability of detecting a call somewhere in the study area, $p_a$, the
+false discovery rate, $c$, and the distribution of noise levels. The first two
+are estimated by comparing two observers.
+
+There are two ways to do that comparison.
+
+**Observer ground truth (OG).** One observer is assumed to be correct. The
+second observer's detection function is fitted to the first observer's
+detections with an ordinary binomial model. Anything the second observer finds
+that the first did not is counted as a false positive.
+
+**Capture-recapture (CR).** Neither observer is assumed correct. Both
+observers' detections are modelled jointly with a positive-Bernoulli model
+(VGAM `posbernoulli.t`), which conditions on a call having been detected by at
+least one observer. Calls are adjudicated against common ground truth, so a
+false positive is a false positive.
+
+These notes ask whether CR recovers the true call density where OG does not,
+using simulated data where the truth is known exactly.
+
+`cde` always treats `detect_table1` as truth. The methods differ in what goes
+there, and in which model is fitted. Nothing else changes.
+
+- OG puts detector 1's raw detections in `detect_table1`.
+- CR puts the adjudicated verdict there.
+
+An **oracle** is included throughout. It is not a method. It fits the detection
+function to detector 2's own detections over *every call that was made*, not
+only the ones an observer happened to notice, and it is given the true noise.
+That is a sample you need and can never have. It is here for one purpose: to
+separate errors in the estimator from errors in the fit. If the oracle returns
+the right density, the machinery works and any error is in the detection
+function.
+
+# Setup
+
+```{r simulate-fn}
+#' Simulate two detectors listening to the same calls.
+#'
+#' @param det1location,det1scale,det2location,det2scale Logistic detector
+#'   parameters. Location is the SNR at which the detector hears half of calls;
+#'   scale controls how sharply it falls off. Small scale means a steep,
+#'   nearly step-like detector.
+#' @param fdr False discovery rate of both detectors. The proportion of each
+#'   detector's detections that are not calls at all.
+#' @param n Number of calls.
+#' @param seed Random seed. Fixed across the sweep, so every cell sees the same
+#'   calls and differences are attributable to the detectors.
+#' @return A list holding everything the methods need, plus the truth.
+simulatePair <- function(det1location = 1, det1scale = 2,
+                         det2location = 2, det2scale = 4,
+                         fdr = 0, n = 5e4, seed = 42) {
+
+  set.seed(seed)
+
+  R       <- 1e6                                  # study radius, m
+  minDate <- as.POSIXct("2025-01-01")
+  maxDate <- as.POSIXct("2026-01-01")
+  Time    <- as.numeric(difftime(maxDate, minDate, unit = "days")) / 365
+  A       <- studyArea(R / 1e3)
+
+  SL <- data.frame(mean = 190, sd = 4, sampleSize = 350)
+  NL <- data.frame(mean = 84,  sd = 4, sampleSize = n)
+
+  det1 <- data.frame(location = det1location, scale = det1scale,
+                     func = "plogis", c = fdr, fpMean = 0, fpSD = 2)
+  det2 <- data.frame(location = det2location, scale = det2scale,
+                     func = "plogis", c = fdr, fpMean = 0, fpSD = 2)
+
+  sim     <- simCallLocation(n = n, R = R, minDate = minDate, maxDate = maxDate)
+  sim     <- simCallAcoustics(sim, SL, NL, TL = function(r) 20 * log10(r))
+  simDet1 <- simulateDetector(det1, sim)
+  simDet2 <- simulateDetector(det2, sim)
+
+  capHistTab <- simsTocaptureHistoryTable(simDet1, simDet2)
+
+  # OG: detector 1's raw detections are asserted to be truth.
+  chOG <- capHistTab
+
+  # CR: the adjudicated verdict is truth. Here the verdict is groundTruth,
+  # which is what adjudicating against common ground truth recovers. Restricted
+  # to calls at least one detector flagged, which is the sample a
+  # positive-Bernoulli model is defined on.
+  chCR <- capHistTab[capHistTab$detect_table1 == 1 |
+                     capHistTab$detect_table2 == 1, ]
+  chCR$detect_observer1 <- as.integer(chCR$detect_table1)
+  chCR$detect_observer2 <- as.integer(chCR$detect_table2)
+  chCR$detect_table1    <- as.integer(chCR$groundTruth1)
+
+  real <- simDet2$groundTruth == 1
+
+  list(
+    chOG   = chOG,
+    chCR   = chCR,
+    SL     = SL,
+    NL     = NL,
+    TL     = simTLradials_20logR(maxRange = R, rangeStep = 1000,
+                                 numTransects = 4),
+    A      = A,
+    Time   = Time,
+    Nc     = sum(simDet2$detect_table),
+
+    # The oracle sample. Detector 2's own detections over every call that was
+    # made, not only the ones an observer noticed. Not achievable in practice.
+    oracleSnr = data.frame(Detected = simDet2$detect_table[real],
+                           SNR      = simDet2$snr[real]),
+
+    # The truth. truePa is a property of detector 2 alone: the mean probability
+    # that detector 2 hears a call, over the calls that were made. It cannot
+    # depend on detector 1.
+    trueDc = n / (A * Time),
+    truePa = mean(simDet2$p_det, na.rm = TRUE),
+    trueC  = fdr
+  )
+}
+```
+
+The detection functions are fitted to three different samples.
+
+```{r samples-fn}
+#' Detector 1's detections, scored by detector 2. The OG sample.
+snrInfoOG <- function(s) capHist2snrInfo(s$chOG, "year")
+
+#' Adjudicated real calls, with both detectors' verdicts retained. The CR
+#' sample. `capHist2snrInfo` drops the per-observer columns a VGLM needs, so
+#' this builds the sample directly.
+snrInfoCR <- function(s) {
+  g   <- s$chCR[s$chCR$detect_table1 == 1, ]
+  out <- data.frame(
+    detect_observer1 = g$detect_observer1,
+    detect_observer2 = g$detect_observer2,
+    Detected         = g$detect_observer2,
+    CallRL           = as.numeric(g$signalRMSdB),
+    NoiseRL          = as.numeric(g$noiseRMSdB),
+    SNR              = as.numeric(g$signalRMSdB - g$noiseRMSdB),
+    t                = g$t,
+    month            = g$month,
+    season           = g$season
+  )
+  out[is.finite(out$SNR), ]
+}
+```
+
+Noise measured at detections is biased low: a quiet period gives a high SNR,
+and a high SNR gives a detection. Undoing that bias needs the detection
+function of the process that *selected the sample*. Under CR that is the
+probability at least one detector heard the call, which VGAM computes already
+as `type.fitted = "onempall0"`.
+
+```{r punion-fn}
+#' Probability at least one observer detects, as a plain function of SNR.
+pUnionFromVglm <- function(model, snrGrid = seq(-100, 100, by = 0.1)) {
+  pu <- VGAM::predictvglm(model,
+                          newdata     = data.frame(SNR = snrGrid),
+                          type        = "response",
+                          type.fitted = "onempall0")
+  stats::approxfun(snrGrid, as.vector(pu), rule = 2)
+}
+```
+
+```{r runone-fn}
+runOne <- function(label, s, ch, detFun, nl, modelType) {
+  r <- cde(Nc = s$Nc, capHistTab = ch, snrDetFun = detFun,
+           SL = s$SL, TL = s$TL, A = s$A, T = s$Time, NL = nl,
+           modelType = modelType)
+  data.frame(row        = label,
+             trueC      = s$trueC,     c      = r$c,
+             trueNlMean = s$NL$mean,   nlMean = nl$mean,
+             truePa     = s$truePa,    pa     = r$pa,
+             Dc         = r$Dc,
+             DcFraction = r$Dc / s$trueDc,
+             stringsAsFactors = FALSE)
+}
+```
+
+# Test 1: no false positives
+
+Two imperfect detectors listen to the same calls. Neither ever produces a false
+positive, so the true false discovery rate is exactly zero. If a method reports
+a non-zero $c$, that number is an artefact of the method.
+
+The table changes one thing per row, so each row attributes one error.
+
+Row three is **not a method**. It is an ablation: OG's ordinary binomial model,
+handed the correct verdict. It answers a question that would otherwise go
+unanswered — is CR better simply because it has the right verdict, or does the
+VGLM do real work?
+
+```{r ladder-fn}
+ladder <- function(fdr) {
+
+  s <- simulatePair(fdr = fdr)
+
+  snrOG <- snrInfoOG(s)
+  snrCR <- snrInfoCR(s)
+
+  funOG       <- fitDetFun(snrOG, modelType = "glm")
+  funAblation <- fitDetFun(snrCR, modelType = "glm")      # ablation only
+  funOracle   <- fitDetFun(s$oracleSnr, modelType = "glm")  # oracle only
+  funCR       <- fitDetFun(snrCR, modelType = "vglm",
+                           yColNames     = c("detect_observer1",
+                                             "detect_observer2"),
+                           whichObserver = "detect_observer2")
+
+  nlCR <- nlFromDetections(snrCR, pUnionFromVglm(funCR), s$SL, s$TL)
+
+  rbind(
+    data.frame(row = "truth", trueC = s$trueC, c = s$trueC,
+               trueNlMean = s$NL$mean, nlMean = s$NL$mean,
+               truePa = s$truePa, pa = s$truePa,
+               Dc = s$trueDc, DcFraction = 1),
+    runOne("OG",                     s, s$chOG, funOG,       s$NL, "glm"),
+    runOne("ablation: verdict, glm", s, s$chCR, funAblation, s$NL, "glm"),
+    runOne("CR",                     s, s$chCR, funCR,       s$NL, "vglm"),
+    runOne("CR, noise estimated",    s, s$chCR, funCR,       nlCR, "vglm"),
+    runOne("oracle: true curve",     s, s$chCR, funOracle,   s$NL, "glm")
+  )
+}
+```
+
+`trueC` and `c` are the true and estimated false discovery rate. `trueNlMean`
+and `nlMean` are the true and assumed mean noise level in dB. `truePa` and `pa`
+are the true and estimated probability of detecting a call somewhere in the
+study area. `DcFraction` is estimated density as a fraction of the truth.
+
+```{r test1}
+knitr::kable(ladder(fdr = 0), digits = c(0, 3, 4, 2, 2, 4, 4, 5, 3),
+             row.names = FALSE)
+```
+
+**OG fails on $c$, not on the detection function.** Detector 1 is assumed
+correct and is not, so every real call detector 2 finds and detector 1 misses
+is recorded as a false positive. $p_a$ is close to right, because given SNR the
+two detectors are independent and fitting detector 2's curve on detector 1's
+detections is unbiased. The whole error is the spurious $c$, which scales
+density by $(1-c)$.
+
+**Fixing the verdict alone makes things worse.** The ablation's sample holds
+only calls someone heard, so at low SNR it contains detector 2's successes and
+none of the calls both detectors missed. An ordinary binomial model fitted to
+it sees roughly $p_2/(p_1+p_2)$ rather than $p_2$, and concludes detector 2
+hears almost everything.
+
+**The oracle shows the estimator is sound.** Given the right curve and the
+right noise, `cde` returns the right density.
+
+# Test 2: false discovery rate of 0.1
+
+Reporting $c = 0$ when the truth is zero is necessary but not sufficient. This
+test gives both detectors a real false discovery rate of 0.1, and asks whether
+each method *recovers* it.
+
+```{r test2}
+knitr::kable(ladder(fdr = 0.1), digits = c(0, 3, 4, 2, 2, 4, 4, 5, 3),
+             row.names = FALSE)
+```
+
+# Does it hold generally?
+
+The tests above use one detector pair. This sweep varies the location and scale
+of both detectors independently, at both false discovery rates. All cells share
+one call realisation, so differences are attributable to the detectors rather
+than to the calls.
+
+Each cell runs the two methods as you would actually use them, plus the oracle:
+
+- **OG** with `nlFromSnrInfo`, which is current practice.
+- **CR** with `nlFromDetections`, using the union as the selecting curve.
+- **oracle** with the true curve and the true noise.
+
+Neither method is given the true noise. The oracle is given everything.
+
+The key comparison is `truePa` against `pa`. **`truePa` is a property of
+detector 2 alone.** Within a fixed detector 2 it does not change, so any
+movement in `pa` across detector 1 configurations is estimation error.
+
+```{r sweep-fn}
+sweepCell <- function(det1location, det1scale, det2location, det2scale, fdr) {
+
+  s <- simulatePair(det1location = det1location, det1scale = det1scale,
+                    det2location = det2location, det2scale = det2scale,
+                    fdr = fdr)
+
+  snrOG <- snrInfoOG(s)
+  snrCR <- snrInfoCR(s)
+
+  funOG     <- fitDetFun(snrOG, modelType = "glm")
+  funOracle <- fitDetFun(s$oracleSnr, modelType = "glm")
+  funCR     <- fitDetFun(snrCR, modelType = "vglm",
+                         yColNames     = c("detect_observer1",
+                                           "detect_observer2"),
+                         whichObserver = "detect_observer2")
+
+  nlOG <- nlFromSnrInfo(snrOG, funOG)
+  nlCR <- nlFromDetections(snrCR, pUnionFromVglm(funCR), s$SL, s$TL)
+
+  out <- rbind(
+    runOne("OG",     s, s$chOG, funOG,     nlOG, "glm"),
+    runOne("CR",     s, s$chCR, funCR,     nlCR, "vglm"),
+    runOne("oracle", s, s$chCR, funOracle, s$NL, "glm")
+  )
+
+  cbind(
+    data.frame(row = out$row, fdr = fdr,
+               det1location = det1location, det1scale = det1scale,
+               det2location = det2location, det2scale = det2scale,
+               stringsAsFactors = FALSE),
+    out[, setdiff(names(out), "row")]
+  )
+}
+
+grid <- expand.grid(
+  det1location = c(0, 4),
+  det1scale    = c(1, 4),
+  det2location = c(0, 4),
+  det2scale    = c(1, 4),
+  fdr          = c(0, 0.1),
+  KEEP.OUT.ATTRS = FALSE
+)
+```
+
+```{r sweep-run}
+# sweep <- do.call(rbind, lapply(seq_len(nrow(grid)), function(i) {
+#   g <- grid[i, ]
+#   tryCatch(
+#     sweepCell(g$det1location, g$det1scale,
+#               g$det2location, g$det2scale, g$fdr),
+#     error = function(e) {
+#       message(sprintf("cell %d failed: %s", i, conditionMessage(e)))
+#       NULL
+#     }
+#   )
+# }))
+# 
+# sweep$paFraction <- sweep$pa / sweep$truePa
+# sweep$nlResidual <- sweep$nlMean - sweep$trueNlMean
+library(future.apply)
+future::plan(future::multisession, workers = 16)
+
+sweep <- do.call(rbind, future_lapply(seq_len(nrow(grid)), function(i) {
+  g <- grid[i, ]
+  tryCatch(
+    sweepCell(g$det1location, g$det1scale,
+              g$det2location, g$det2scale, g$fdr),
+    error = function(e) {
+      message(sprintf("cell %d failed: %s", i, conditionMessage(e)))
+      NULL
+    }
+  )
+}, future.seed = TRUE, future.packages = "callDensity"))
+
+future::plan(future::sequential)
+
+sweep$paFraction <- sweep$pa / sweep$truePa
+sweep$nlResidual <- sweep$nlMean - sweep$trueNlMean
+```
+
+```{r summarise-fn}
+#' Mean, min and max of one column, by method and false discovery rate.
+summariseBy <- function(d, what) {
+  s <- do.call(rbind, lapply(split(d, list(d$row, d$fdr)), function(x) {
+    data.frame(row  = x$row[1], fdr = x$fdr[1],
+               mean = mean(x[[what]]),
+               min  = min(x[[what]]),
+               max  = max(x[[what]]))
+  }))
+  s[order(s$fdr, s$row), ]
+}
+
+#' Mean, min and max of one column for one method, split by detector 1's scale.
+summariseByDet1 <- function(d, what, method = "CR") {
+  x <- d[d$row == method, ]
+  s <- do.call(rbind, lapply(split(x, list(x$det1scale, x$fdr)), function(z) {
+    data.frame(det1scale = z$det1scale[1], fdr = z$fdr[1],
+               mean = mean(z[[what]]), min = min(z[[what]]),
+               max = max(z[[what]]))
+  }))
+  s[order(s$fdr, s$det1scale), ]
+}
+
+```
+
+## Density
+
+`DcFraction` is call density as a fraction of its true value. A correct method
+sits at 1 in every cell, whatever the detectors are. The spread matters more
+than the mean: a method that is right on average and 50% out in individual
+cells is not usable.
+
+```{r sweep-dc}
+knitr::kable(summariseBy(sweep, "DcFraction"), digits = 3, row.names = FALSE)
+```
+
+## False discovery rate
+
+`c` should equal `trueC` in every cell.
+
+```{r sweep-c}
+knitr::kable(summariseBy(sweep, "c"), digits = 4, row.names = FALSE)
+```
+
+## Probability of detection
+
+`pa` should equal `truePa` in every cell, so `paFraction` should be 1.
+
+```{r sweep-pa}
+knitr::kable(summariseBy(sweep, "paFraction"), digits = 3, row.names = FALSE)
+```
+
+## Noise level
+
+`nlResidual` is the assumed mean noise level minus the true one, in dB. It
+should be 0. The oracle is given the true noise, so its residual is 0 by
+construction and is shown only as a check.
+
+```{r sweep-nl}
+knitr::kable(summariseBy(sweep, "nlResidual"), digits = 2, row.names = FALSE)
+```
+
+```{r sweep-summarise-by-det1-scale-location}
+
+knitr::kable(summariseByDet1(sweep, "DcFraction"), digits = 3, row.names = FALSE)
+knitr::kable(summariseByDet1(sweep, "paFraction"), digits = 3, row.names = FALSE)
+
+```
+
+
+## Every cell
+
+`trueDc` is the same in every cell, at `r round(simulatePair()$trueDc, 5)`
+calls per km^2^ per year, so it is omitted; `DcFraction` carries it.
+
+```{r sweep-all}
+knitr::kable(sweep[order(sweep$fdr, sweep$row,
+                         sweep$det2location, sweep$det2scale,
+                         sweep$det1scale, sweep$det1location), ],
+             digits = 3, row.names = FALSE)
+```
+
+# Open questions
+
+**The noise measured at detections is doing two jobs.** It is a covariate in
+fitting $p(\mathrm{SNR})$, and it parameterises the noise distribution that
+`pDetInArea` draws from. Those are different quantities with different biases,
+and tying them together is the only reason `nlFromDetections` needs the
+selecting curve at all. `noiseLevelDistribution` reads an independent noise
+table, measured on a fixed schedule regardless of whether anything was calling.
+Where such a table exists, nothing needs correcting. Whether an independently
+derived noise distribution can be made commensurate with the SNRs the detection
+function was fitted on is a separate question, and probably the more important
+one: SNR = RL − NL only holds if NL is measured the same way RL was, in the
+same band, over the same averaging duration.

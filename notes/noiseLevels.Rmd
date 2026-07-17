@@ -7,7 +7,6 @@ output:
       %\VignetteEncoding{UTF-8}
       %\VignetteIndexEntry{callDensity: Estimating noise levels from detections}
       %\VignetteEngine{knitr::rmarkdown}
-bibliography: references.bib
 ---
 
 ```{r, include = FALSE}
