@@ -285,8 +285,15 @@ pDetInArea <-
           predmatrix <- predict(detFun.newcoeff, newd, type = "response")
         }
 
-        # SNR truncation and per-radial distance truncation
-        predmatrix[which(newd$SNR < snrTruncationThreshold | is.na(allTrunc[, j]))] <- NA
+        # SNR truncation does not remove area. The calls below the threshold are
+        # still there and still part of the estimand; we have simply declared
+        # them undetectable. So they are 0, not NA: they keep their range weight
+        # in the denominator and contribute nothing to the numerator. This makes
+        # p_a = E[p * 1(SNR >= theta)] rather than E[p | SNR >= theta], so the
+        # q(theta) factor cancels against a truncated Nc and cde returns the
+        # density of all calls, not of above-threshold calls.
+        predmatrix[which(newd$SNR < snrTruncationThreshold)] <- 0
+        predmatrix[which(is.na(allTrunc[, j]))] <- NA
 
         # Clamp probabilities to [0, 1]
         if (any(predmatrix < 0, na.rm = TRUE)) {
