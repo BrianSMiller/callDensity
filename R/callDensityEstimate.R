@@ -201,10 +201,14 @@ cde <- function (Nc,
   # Check whether user supplied an snr detection function or estimate from data
   # NB: This needs to occur AFTER any SNR truncation.
   if (is.null(snrDetFun)){
-    # Estimate snrDetFun from SNRinfo
-    snrDetFun <- fitSNRdetectionFunc(
+    # Estimate snrDetFun from SNRinfo. Calls fitDetFun directly rather than the
+    # deprecated fitSNRdetectionFunc -- that wrapper only ever delegated to
+    # fitDetFun with identical arguments, so calling it here meant every user
+    # who let cde() fit its own curve got a confusing "fitSNRdetectionFunc is
+    # deprecated" warning for a function they never called themselves.
+    snrDetFun <- fitDetFun(
       subset(SNRinfo,SNR>=snrTruncationThreshold),
-      modelType=modelType, numKnots)
+      modelType=modelType, numKnots=numKnots)
   } else if (is.finite(snrTruncationThreshold)) {
     # cde cannot refit a model it did not fit. Every capture-recapture analysis
     # supplies snrDetFun (a vglm cannot be fitted from capHist2snrInfo's
