@@ -104,13 +104,26 @@ test_that("pDetInArea pDet is NA beyond truncation distance", {
 # SNR truncation threshold
 # ---------------------------------------------------------------------------
 
-test_that("snrTruncationThreshold sets pDet to NA where SNR is below threshold", {
+test_that("snrTruncationThreshold sets pDet to zero where SNR is below threshold", {
+  # Updated 2026-07: this previously asserted NA, which was the bug rather than
+  # the specification. NA renormalises the weighted mean over the surviving
+  # cells, so p_a came back as E[p | SNR >= theta] and cde returned the density
+  # of above-threshold calls. Zero keeps the cell in the denominator and gives
+  # E[p * 1(SNR >= theta)], which cancels a truncated Nc and returns all-call
+  # density. See test-snrTruncation.R for the brute force check of that claim.
+  #
+  # Below-threshold calls are undetectable, not outside the estimand. NA is
+  # reserved for distance truncation, where the area really does leave the
+  # question.
   d   <- make_snr_data()
   fit <- fitDetFun(d, modelType = "glm")
   # Use a very high threshold so it bites across the full TL range
   res <- run_pdet(fit, outerloop = 20, snrTruncationThreshold = 1e6)
-  # With threshold = 1e6 dB, no real SNR can exceed it, so all pDet should be NA
-  expect_true(all(is.na(res$meanOfAllTransects$pDet)))
+  # With threshold = 1e6 dB no real SNR can exceed it, so nothing is ever
+  # detected: pDet is 0 everywhere, and p_a is exactly 0.
+  expect_true(all(res$meanOfAllTransects$pDet == 0))
+  expect_false(any(is.na(res$meanOfAllTransects$pDet)))
+  expect_equal(res$perTransectMeanSD[nrow(res$perTransectMeanSD), 1], 0)
 })
 
 # ---------------------------------------------------------------------------
