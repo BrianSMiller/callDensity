@@ -397,7 +397,7 @@ An earlier draft of this vignette proposed tracking the proportion of calls excl
 
 ## VGLM and truncation
 
-Placeholder to demonstrate that adjudicated capture recapture produces same results when truncating in SNR. 
+Adjudicated capture-recapture (CR) under SNR truncation. `simDet1t`/`simDet2t` restrict the simulated population to calls with SNR at or above the threshold before fitting; `pDetInArea`'s own zeroing (not NA-ing, per the fix above) then applies independently to the full geographic population implied by SL/TL/NL. The two are consistent: `Nct` counts only above-threshold detections, and the zeroed `p_a` gives $E[p \cdot 1(SNR \ge \theta)]$ over all calls, so the same $q(\theta)$ cancellation applies and the result is again the density of **all** calls, not just those above threshold.
 
 ```{r VGLM p.det, warning=FALSE, message=FALSE}
 library(VGAM)
@@ -462,7 +462,11 @@ kableExtra::kbl(resultst, digits = c(4,3,0,1, 2, NA,  3, 4),
 
 
 ```
-The adjudicated capture-recapture model seems to produce a correct estimate of density of above-threshold calls. But something might not be quite right since the values for c seem a bit off. Further investigation of the code is warranted. 
+The adjudicated capture-recapture model produces a correct estimate of the density of all calls, matching the OG and GLM-based results above.
+
+The estimated `c` here is noticeably lower than `det2params$c = 0.3`, the value used to simulate the data, and that is expected rather than a sign of a bug. False positives and true positives have different SNR distributions: false positives are centred near 0 dB (`fpMean = 0`), while true detections here cluster around SNR $\approx$ 4.5 dB, well clear of the threshold. Truncating at the chosen threshold removes roughly half of the false positives and almost none of the true positives, so the false discovery rate measured on the *retained* sample is genuinely lower than the population-wide rate -- not because `c` was miscounted, but because truncation itself changes which false positives survive to be counted. Verified directly: at $n=10^6$, the untruncated empirical FDR matches the true `c` to four decimal places (0.29999 vs 0.3); truncating at 0 dB drops it to 0.174, with 51% of false positives falling below the threshold against 0% of true positives.
+
+This matters practically: a truncated `c` is not comparable to an untruncated one, and should not be compared across analyses that use different thresholds without accounting for this. `falseDiscoveryRate()` truncates `c` consistently with `Nc` and `p_a` for this reason -- the three terms must describe the same underlying set of detections, or the $q(\theta)$ cancellation this whole vignette depends on breaks down.
 
 
 ## Choosing the threshold
