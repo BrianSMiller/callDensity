@@ -1,53 +1,52 @@
 # notes/nlSweep.R
 #
-# Four-parameter sweep over detector 1 and detector 2, independently.
+# Four-parameter sweep over detector 1 and detector 2, independently, under two
+# methods.
 #
-# Question: does nlFromDetections recover the true noise level, and does that
-# recovery improve p_a and Dc, regardless of the location and scale of either
-# detector.
+# Two questions:
+#   1. Does nlFromDetections recover the true noise level regardless of the
+#      location and scale of either detector.
+#   2. Does adjudicated capture-recapture do better than observer ground truth.
 #
-# The previous sweep (test-nlSweep.R) moved both detectors together with a
-# fixed 1 dB offset and never varied scale. That is the one configuration
-# blind to the two things that could break the method: detector scale, and
-# mismatch between the filter that selected the noise sample and the curve
-# fitted to it. This sweep opens both gaps deliberately.
+# OG and CR are not two code paths in cde. They are two things you can put in
+# detect_table1, which cde always treats as truth:
 #
-# The mismatch, stated plainly: capHist2snrInfo returns detector 1's
-# detections. So detector 1 is the filter that skewed the noise sample. But
-# detector 1 is assumed to be ground truth, so its misses are never seen and
-# its curve cannot be fitted. The only curve available is detector 2's. Every
-# NL correction here uses a det2-derived curve to undo a det1-shaped bias.
+#   OG: detect_table1 is detector 1's raw detections. Detector 1 misses real
+#       calls, falseDiscoveryRate counts those misses as detector 2's false
+#       positives, and c inflates. The noise sample is filtered by detector 1's
+#       curve, which is unfittable because detector 1 is assumed perfect. So
+#       the NL correction has to use detector 2's curve to undo a
+#       detector-1-shaped bias. That mismatch is structural.
 #
-# False positives are off. With c = 0 the (1-c) term in the density equation
-# is 1, so any error in Dc is an error in p_a, which is an error in NL.
-# Nothing else can contribute.
+#   CR: detect_table1 is the adjudicated verdict, exactly as mchToCR builds it.
+#       A false positive is then a real false positive. The sample is calls
+#       flagged by at least one observer, so the selecting filter is the union,
+#       and the VGLM gives every component of it. The curve that did the
+#       filtering is computable, so the correction can be right.
 #
-# All cells share one call realisation via a fixed seed, so the design is
-# paired: differences across the grid are the detectors, not the calls. It
-# also means the whole grid rests on one draw. A second seed is a later check.
+# All cells share one call realisation via a fixed seed, so the grid is paired:
+# differences are the detectors, not the calls.
 #
-# Output: notes/nlSweep_results.csv, one row per (cell, NL variant).
-# Resumable. Analysis lives elsewhere. This script only makes the table.
+# FDR is zero. Under OG, c still comes out large, which is the point. A second
+# sweep at FDR > 0 is the obvious next one, and tests whether CR recovers a
+# non-zero c rather than merely reporting zero.
 #
-# Requires helper-fixtures.R to return truePa.
+# Output: notes/nlSweep_results.csv, one row per (cell, method, NL variant).
+# No resume. Analysis lives elsewhere. This script only makes the table.
 #
 # B. Miller / Claude, 2026-07-16
 
-library(callDensity)
-
-# make_capture_history and make_tl_lookup live with the tests. Run this script
-# from the package root.
+devtools::load_all()
 source("tests/testthat/helper-fixtures.R")
 
 # --------------------------------------------------------------------------
 # Configuration
 # --------------------------------------------------------------------------
 
-OUT_CSV   <- "notes/nlSweep_results.csv"
-MODELTYPE <- "glm"
-SEED      <- 42
+OUT_CSV <- "notes/nlSweep_results.csv"
+SEED    <- 42
+FDR     <- 0
 
-# Grid. Start small, widen once the cost per cell is known.
 grid <- expand.grid(
   det1location = c(0, 4),
   det1scale    = c(1, 4),
@@ -56,7 +55,7 @@ grid <- expand.grid(
   KEEP.OUT.ATTRS = FALSE
 )
 
-# Full grid, for when the cost is known. Uncomment to use.
+# Full grid, once the cost per cell is known.
 # grid <- expand.grid(
 #   det1location = c(-4, 0, 4, 8),
 #   det1scale    = c(0.5, 1, 2, 4),
@@ -66,68 +65,135 @@ grid <- expand.grid(
 # )
 
 # --------------------------------------------------------------------------
-# One cell
+# Union detection function from a fitted VGLM
 # --------------------------------------------------------------------------
 
-#' Run one cell of the sweep.
+#' Probability that at least one observer detects, as a plain function of SNR.
 #'
-#' Builds a capture history for the given detector pair, fits detector 2's
-#' curve treating detector 1 as ground truth (observer ground truth), derives
-#' four candidate NL distributions, and runs cde with each.
+#' This is the filter that selected an adjudicated sample: a call is in the
+#' sample if anyone flagged it. VGAM computes it already, as type.fitted
+#' "onempall0" (one minus the probability all observers scored zero).
+#' predictDetFun.vglm uses it internally to unconditional-ise the per-observer
+#' probability, but does not return it.
 #'
-#' @param det1location,det1scale Logistic parameters for detector 1.
-#' @param det2location,det2scale Logistic parameters for detector 2.
-#' @param TL        TL lookup table.
-#' @param modelType Passed to fitDetFun and cde.
-#' @param seed      Passed to make_capture_history. Fixed across cells.
-#' @return Data frame, one row per NL variant.
-nlSweepCell <- function(det1location, det1scale,
-                        det2location, det2scale,
-                        TL, modelType = MODELTYPE, seed = SEED) {
+#' Returned as a closure so it can be handed to nlFromDetections, which passes
+#' it to pDetGivenNL, which has an is.function() branch.
+#'
+#' @param model A vglm fitted by fitDetFun(modelType = "vglm").
+#' @param snrGrid SNR values at which to evaluate before interpolating.
+#' @return function(snr) giving p_union. Flat extrapolation outside snrGrid.
+pUnionFromVglm <- function(model, snrGrid = seq(-100, 100, by = 0.1)) {
+  pu <- VGAM::predictvglm(model,
+                          newdata     = data.frame(SNR = snrGrid),
+                          type        = "response",
+                          type.fitted = "onempall0")
+  stats::approxfun(snrGrid, as.vector(pu), rule = 2)
+}
 
-  h <- make_capture_history(det1location = det1location,
-                            det1scale    = det1scale,
-                            det2location = det2location,
-                            det2scale    = det2scale,
-                            fdr          = 0,
-                            seed         = seed)
+# --------------------------------------------------------------------------
+# Method preparation
+#
+# Each returns: ch (what cde sees), detFun (detector 2's curve, for p_a),
+# selFun (the curve that selected the noise sample, for nlFromDetections),
+# snrInfo (the noise sample), and modelType (for the cde result row).
+# --------------------------------------------------------------------------
 
-  # SNRinfo is detector 1's detections; detFun is detector 2's curve.
-  SNRinfo <- capHist2snrInfo(h$capHistTab, "year")
-  detFun  <- fitDetFun(SNRinfo, modelType = modelType)
+#' Observer ground truth. Detector 1 is asserted to be truth.
+prepOG <- function(h, modelType = "glm") {
+  ch      <- h$capHistTab
+  snrInfo <- capHist2snrInfo(ch, "year")
+  detFun  <- fitDetFun(snrInfo, modelType = modelType)
 
-  obsNlMean <- mean(SNRinfo$NoiseRL, na.rm = TRUE)
+  # Detector 1 filtered the sample, but detector 1's curve cannot be fitted,
+  # because its misses are never observed. Detector 2's curve is all there is.
+  # This substitution is the structural limitation of OG, not a shortcut.
+  list(ch = ch, snrInfo = snrInfo, detFun = detFun, selFun = detFun,
+       modelType = modelType)
+}
+
+#' Adjudicated capture-recapture. The verdict is truth.
+#'
+#' Mirrors what mchToCR does with real data: subset to the rows anyone flagged,
+#' then put the verdict in detect_table1. In the simulation the verdict is
+#' groundTruth, which is what adjudication would recover.
+prepCR <- function(h) {
+  ch <- h$capHistTab
+
+  # Adjudication only ever sees what someone flagged.
+  ch <- ch[ch$detect_table1 == 1 | ch$detect_table2 == 1, ]
+
+  # Keep both observers' raw detections; the VGLM needs them.
+  ch$detect_observer1 <- as.integer(ch$detect_table1)
+  ch$detect_observer2 <- as.integer(ch$detect_table2)
+
+  # The verdict becomes truth, exactly as in mchToCR.
+  ch$detect_table1 <- as.integer(ch$groundTruth1)
+
+  # capHist2snrInfo drops the per-observer columns, so it cannot feed a VGLM.
+  # Build the sample directly instead. Same filter, same quantities.
+  g       <- ch[ch$detect_table1 == 1, ]
+  snrInfo <- data.frame(
+    detect_observer1 = g$detect_observer1,
+    detect_observer2 = g$detect_observer2,
+    Detected         = g$detect_observer2,
+    CallRL           = as.numeric(g$signalRMSdB),
+    NoiseRL          = as.numeric(g$noiseRMSdB),
+    SNR              = as.numeric(g$signalRMSdB - g$noiseRMSdB),
+    t                = g$t,
+    month            = g$month,
+    season           = g$season
+  )
+  snrInfo <- snrInfo[is.finite(snrInfo$SNR), ]
+
+  # posbernoulli.t conditions on being seen by at least one observer, which is
+  # exactly how the sample was drawn. A plain glm on this sample would flatter
+  # detector 2, because a call both observers missed is not in it.
+  detFun <- fitDetFun(snrInfo, modelType = "vglm",
+                      yColNames     = c("detect_observer1", "detect_observer2"),
+                      whichObserver = "detect_observer2")
+
+  list(ch = ch, snrInfo = snrInfo, detFun = detFun,
+       selFun = pUnionFromVglm(detFun), modelType = "vglm")
+}
+
+# --------------------------------------------------------------------------
+# One cell, one method
+# --------------------------------------------------------------------------
+
+runVariants <- function(prep, h, TL, method, cell) {
+
+  obsNlMean <- mean(prep$snrInfo$NoiseRL, na.rm = TRUE)
 
   nlVariants <- list(
-    # Reference. Isolates NL error from everything else cde does.
+    # Reference. Isolates the NL contribution from everything else.
     true  = h$NL,
-    # Do nothing. The noise as measured at detector 1's detections, biased low
-    # because quiet periods give high SNR which gives detections.
+    # Do nothing. Biased low: quiet gives high SNR gives detection.
     naive = data.frame(mean = obsNlMean,
-                       sd   = stats::sd(SNRinfo$NoiseRL, na.rm = TRUE),
-                       sampleSize = sum(!is.na(SNRinfo$NoiseRL))),
-    # The incumbent. Adds the SNR at which detFun reaches 0.5. That quantity
-    # is a property of the detector. The bias is not.
-    old   = suppressWarnings(nlFromSnrInfo(SNRinfo, detFun)),
-    # The candidate. Inverts the pDetGivenNL weighting.
-    new   = nlFromDetections(SNRinfo, detFun, h$SL, TL)
+                       sd   = stats::sd(prep$snrInfo$NoiseRL, na.rm = TRUE),
+                       sampleSize = sum(!is.na(prep$snrInfo$NoiseRL))),
+    # Incumbent. Adds the detector's 50% SNR, which is a property of the
+    # detector, not of the bias.
+    old   = nlFromSnrInfo(prep$snrInfo, prep$detFun),
+    # Candidate. Inverts the pDetGivenNL weighting, using the curve that
+    # actually selected the sample.
+    new   = nlFromDetections(prep$snrInfo, prep$selFun, h$SL, TL)
   )
 
   rows <- lapply(names(nlVariants), function(v) {
     nl <- nlVariants[[v]]
     r  <- cde(Nc         = h$Nc,
-              capHistTab = h$capHistTab,
-              snrDetFun  = detFun,
+              capHistTab = prep$ch,
+              snrDetFun  = prep$detFun,
               SL         = h$SL,
               TL         = TL,
               A          = h$A,
               NL         = nl,
-              modelType  = modelType)
+              modelType  = prep$modelType)
     data.frame(
-      det1location = det1location, det1scale = det1scale,
-      det2location = det2location, det2scale = det2scale,
+      cell,
+      method       = method,
       variant      = v,
-      nDet         = nrow(SNRinfo),
+      nDet         = nrow(prep$snrInfo),
       obsNlMean    = obsNlMean,
       nlMean       = nl$mean,
       nlSd         = nl$sd,
@@ -145,39 +211,48 @@ nlSweepCell <- function(det1location, det1scale,
   do.call(rbind, rows)
 }
 
+#' Run one cell of the sweep under both methods.
+nlSweepCell <- function(det1location, det1scale, det2location, det2scale,
+                        TL, seed = SEED, fdr = FDR) {
+
+  h <- make_capture_history(det1location = det1location,
+                            det1scale    = det1scale,
+                            det2location = det2location,
+                            det2scale    = det2scale,
+                            fdr          = fdr,
+                            seed         = seed)
+
+  cell <- data.frame(det1location = det1location, det1scale = det1scale,
+                     det2location = det2location, det2scale = det2scale)
+
+  rbind(
+    runVariants(prepOG(h), h, TL, "OG", cell),
+    runVariants(prepCR(h), h, TL, "CR", cell)
+  )
+}
+
 # --------------------------------------------------------------------------
 # Driver
 # --------------------------------------------------------------------------
-
-cellKey <- function(d) {
-  sprintf("%g_%g_%g_%g", d$det1location, d$det1scale,
-          d$det2location, d$det2scale)
-}
 
 runSweep <- function(grid, out_csv = OUT_CSV) {
 
   dir.create(dirname(out_csv), showWarnings = FALSE, recursive = TRUE)
 
+  # No resume. The cell key knows nothing about which code produced the row, so
+  # a stale CSV silently survives exactly the changes that invalidate it.
+  if (file.exists(out_csv)) file.remove(out_csv)
+
   TL <- make_tl_lookup(rangeStep = 1000)
 
-  done <- character(0)
-  if (file.exists(out_csv)) {
-    prev <- utils::read.csv(out_csv, stringsAsFactors = FALSE)
-    done <- unique(cellKey(prev))
-    message(sprintf("Resuming: %d of %d cells already done.",
-                    length(done), nrow(grid)))
-  }
-
   for (i in seq_len(nrow(grid))) {
-    g   <- grid[i, ]
-    key <- cellKey(g)
-    if (key %in% done) next
+    g <- grid[i, ]
 
     message(sprintf("[%d/%d] det1(loc=%g, scale=%g)  det2(loc=%g, scale=%g)",
                     i, nrow(grid), g$det1location, g$det1scale,
                     g$det2location, g$det2scale))
 
-    t0 <- Sys.time()
+    t0  <- Sys.time()
     res <- tryCatch(
       nlSweepCell(g$det1location, g$det1scale,
                   g$det2location, g$det2scale, TL = TL),
@@ -200,33 +275,8 @@ runSweep <- function(grid, out_csv = OUT_CSV) {
 }
 
 # --------------------------------------------------------------------------
-# Monte Carlo noise check. Run this before trusting the grid.
-#
-# cde estimates p_a by Monte Carlo integration. If that noise is comparable to
-# the differences between NL variants, the grid measures the integrator rather
-# than the method.
-# --------------------------------------------------------------------------
-
-mcNoiseCheck <- function(reps = 5, TL = make_tl_lookup(rangeStep = 1000)) {
-  h <- make_capture_history(det1location = 1, det1scale = 2,
-                            det2location = 2, det2scale = 4,
-                            fdr = 0, seed = SEED)
-  SNRinfo <- capHist2snrInfo(h$capHistTab, "year")
-  detFun  <- fitDetFun(SNRinfo, modelType = MODELTYPE)
-
-  pa <- vapply(seq_len(reps), function(i) {
-    cde(Nc = h$Nc, capHistTab = h$capHistTab, snrDetFun = detFun,
-        SL = h$SL, TL = TL, A = h$A, NL = h$NL, modelType = MODELTYPE)$pa
-  }, numeric(1))
-
-  message(sprintf("p_a over %d identical calls: mean %.5f, sd %.5f, range %.5f",
-                  reps, mean(pa), stats::sd(pa), diff(range(pa))))
-  pa
-}
-
-# --------------------------------------------------------------------------
 
 if (sys.nframe() == 0L) {
   s <- runSweep(grid)
-  print(head(s))
+  print(utils::head(s))
 }

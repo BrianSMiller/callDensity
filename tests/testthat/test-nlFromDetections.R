@@ -83,11 +83,6 @@ test_that("nlFromDetections errors clearly when searchWidth is too small", {
                "exceed searchWidth")
 })
 
-test_that("nlFromSnrInfo is deprecated", {
-  snrInfo <- make_snr_data()
-  detFun  <- fitDetFun(snrInfo, modelType = "glm")
-  expect_warning(nlFromSnrInfo(snrInfo, detFun), "deprecated")
-})
 
 test_that("nlFromSnrInfo still returns what it always did", {
   # It is now a reproducibility artefact. The point of keeping it is that

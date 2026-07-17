@@ -29,8 +29,8 @@ predictSampledNL <- function(mu, sigma, detFun, SL, TL,
 
   nl <- seq(mu - 6 * sigma, mu + 6 * sigma, length.out = nNodes)
   wt <- dnorm(nl, mu, sigma) *
-    pDetGivenNL(nl, detFun, SL, TL, truncationDistance, ...)
-
+    pDetGivenNL(nl, detFun, TL = TL, SL = SL,
+                truncationDistance = truncationDistance, ...)
   if (sum(wt) <= 0) {
     stop("Nothing is detectable anywhere near this noise level. ",
          "Check that SL, TL and NL are in consistent units.")
