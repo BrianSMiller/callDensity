@@ -10,7 +10,16 @@ capHist2snrInfo(snr, season = "year")
 \item{snr}{A capture history data.frame containing detections and SNR info.
 Must have columns \code{detect_table1}, \code{detect_table2},
 \code{signalRMSdB}, \code{noiseRMSdB}, \code{t}, \code{month}, and
-\code{season}. Passing a file path here is deprecated and will error.}
+\code{season}. Passing a file path here is deprecated and will error.
+
+\code{detect_table1} is always read as ground truth: rows are filtered to
+\code{detect_table1 == 1} before anything else happens. For an
+observer-ground (OG) analysis this is the trusted observer's own column.
+For an adjudicated capture-recapture (CR) analysis, where neither raw
+observer is ground truth, \code{detect_table1} must be overwritten with
+the adjudicator's verdict before calling this function -- see
+\code{\link{cde}}'s \code{capHistTab} documentation for the same
+requirement and a pointer to a worked example.}
 
 \item{season}{A timeCode corresponding to months, seasons, or 'year'
 (the default, which returns all rows).}
