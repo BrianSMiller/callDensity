@@ -11,6 +11,13 @@
 # paFraction should return towards 1. Dc should remain the density of ALL calls,
 # because q(theta) cancels between a truncated Nc and a zeroed p_a.
 #
+# Calls cde() directly rather than pDetInArea + a hand-rolled Dc formula, to
+# match what an end user actually does and what the vignette now does too.
+# fdr = 0 in the simulation means cde()'s own c (via falseDiscoveryRate) should
+# come back at exactly 0, so this is expected to reproduce the original
+# pDetInArea-based numbers exactly, not merely approximately -- verified below
+# rather than assumed.
+#
 # Run with Rscript. Do not library(callDensity).
 
 suppressMessages(pkgload::load_all(".", quiet = TRUE))
@@ -44,17 +51,35 @@ runCell <- function(theta, det1scale, seed, n = 5e4, outerloop = 10) {
   fit <- fitSNRvglm(adj, c("detect_table1", "detect_table2"),
                     whichObserver = "detect_table2")
 
-  # Nc must be truncated in step with p_a.
+  # Nc must be truncated in step with p_a. cde() cannot do this itself -- it
+  # receives Nc as a number and never sees the detections -- so it must be
+  # confirmed via NcIsTruncated.
   Nc <- sum(ch$detect_table2 & (if (is.finite(theta)) ch$SNR >= theta else TRUE),
             na.rm = TRUE)
 
-  pa <- pDetInArea(fit, SL = d$SL, TLlookup = TL, NL = d$NL,
-                   output.resolution.m = 100,
-                   outerloop = outerloop,
-                   truncationDistance = d$R,
-                   snrTruncationThreshold = theta)$overall
+  # cde()'s internal falseDiscoveryRate()/capHist2snrInfo() calls always read
+  # capHistTab$detect_table1 as ground truth and detect_table2 as the detector
+  # under test -- this is not documented anywhere cde() itself is visible, only
+  # inside falseDiscoveryRate()'s own roxygen, and neither raw observer in a
+  # genuine two-observer capture-recapture setup IS ground truth. The real
+  # Common Ground manuscript's mchToCR() handles this by overwriting
+  # detect_table1 with the adjudicator's verdict before calling cde(); do the
+  # same here with the simulated ground truth (groundTruth2), which is the
+  # synthetic equivalent of a judge's adjudication.
+  chForCde <- ch
+  chForCde$detect_table1 <- chForCde$groundTruth2
 
-  Dc <- Nc / (1 * d$A * pa * d$Time)
+  result <- suppressWarnings(suppressMessages(
+    cde(Nc = Nc, capHistTab = chForCde, snrDetFun = fit,
+        SL = d$SL, TL = TL, NL = d$NL, T = d$Time, A = d$A, k = 1,
+        outerloop = outerloop,
+        truncationDistance = d$R,
+        snrTruncationThreshold = theta,
+        NcIsTruncated = is.finite(theta))
+  ))
+
+  pa <- result$pa
+  Dc <- result$Dc
 
   data.frame(theta = theta, det1scale = det1scale, seed = seed,
              Nc = Nc,
