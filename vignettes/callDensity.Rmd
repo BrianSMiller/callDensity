@@ -1,10 +1,10 @@
 ---
-title: "Call denisty with a simulated dataset"
+title: "Call density with a simulated dataset"
 output: 
   html_document: default
   rmarkdown::html_vignette:
     vignette: >
-      %\VignetteIndexEntry{Call denisty with a simulated dataset}
+      %\VignetteIndexEntry{Call density with a simulated dataset}
       %\VignetteEncoding{UTF-8}
       %\VignetteEngine{knitr::rmarkdown}
   pdf_document: default

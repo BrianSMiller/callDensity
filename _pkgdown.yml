@@ -1,0 +1,160 @@
+url: https://briansmiller.github.io/callDensity
+
+template:
+  bootstrap: 5
+
+home:
+  title: "callDensity: bioacoustic call density estimation"
+  description: >
+    Estimating the density of animal calls from single-hydrophone detections,
+    using auxiliary information from the sonar equation, with capture-recapture
+    correction for imperfect and inconsistent detectors.
+
+navbar:
+  structure:
+    left: [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    articles:
+      text: Articles
+      menu:
+      - text: "Call density with a simulated dataset"
+        href: articles/callDensity.html
+      - text: "Imperfect ground truth: capture-recapture (Common Ground) as the fix"
+        href: articles/callDensity_CommonGround.html
+      - text: "SNR truncation: fixing capture-recapture's blind spot"
+        href: articles/callDensity_snrThreshold.html
+      - text: "Non-uniform study areas: distance truncation and coastlines"
+        href: articles/callDensity_coast.html
+      - text: "-------"
+      - text: "Parallel performance benchmarking"
+        href: articles/parallel_benchmarks.html
+
+articles:
+- title: Working through the method
+  navbar: ~
+  contents:
+  - callDensity
+  - callDensity_CommonGround
+  - callDensity_snrThreshold
+  - callDensity_coast
+- title: Reference
+  navbar: ~
+  contents:
+  - parallel_benchmarks
+
+reference:
+- title: Call density estimation
+  desc: The main entry points -- the functions most users will call directly.
+  contents:
+  - cde
+  - cdeFromParamFile
+  - callDensity-package
+
+- title: Uncertainty and coefficients of variation
+  desc: Propagating and combining error terms into CV.Nc, CV.c, CV.pa, CV.Dc.
+  contents:
+  - Dc_CV
+  - Nc_CV
+  - c_CV
+  - pa_CV
+  - ciFromCV
+  - falseDiscoveryCV
+  - var.wtd.mean.cochran
+
+- title: Detection functions
+  desc: Fitting, predicting, and displaying SNR-based detection curves --
+    glm/gam/scam for observer-ground designs, vglm for adjudicated
+    capture-recapture.
+  contents:
+  - fitDetFun
+  - predictDetFun
+  - predictDetFunList
+  - predict.detFun
+  - showDetFun
+  - fitSNRdetectionFunc
+  - fitSNRvgam
+  - fitSNRvglm
+  - fitSNRbySeason
+  - predVglmPDet
+  - showSNRdetectionFunc
+
+- title: Probability of detection and the sonar equation
+  contents:
+  - pDetInArea
+  - pDetGivenNL
+  - studyArea
+
+- title: Noise level estimation
+  contents:
+  - nlFromDetections
+  - nlFromSnrInfo
+  - noiseLevelDistribution
+  - predictSampledNL
+
+- title: Capture history construction
+  desc: Building and reshaping the tables cde() and the detection-function
+    functions expect, including the adjudicated-verdict convention CR
+    analyses require.
+  contents:
+  - capHist2snrInfo
+  - capHistTosnrInfo
+  - readCapHist
+  - simsTocaptureHistoryTable
+  - mchToCR
+  - resolveColumns
+  - pivotSNR
+  - addObserverMeans
+  - multiObserverDetectionCount
+
+- title: False discovery rate
+  contents:
+  - falseDiscoveryRate
+  - falseDiscoveryRateFromNth
+
+- title: Simulation
+  desc: Generating synthetic calls, detectors, and detections -- used
+    throughout the vignettes and test suite.
+  contents:
+  - simCallLocation
+  - simCallAcoustics
+  - simulateDetector
+  - simTLradials_20logR
+  - subsampleSimInTime
+
+- title: Time and season utilities
+  contents:
+  - capHistTimeSeason
+  - capHistTimeSeason2
+  - mat2Rdate
+  - time2monthCode
+  - time2season
+  - subsetByTimeCode
+  - deploymentDuration
+  - deploymentDurationFromsoundFolderCsv
+
+- title: Workflow and file helpers
+  contents:
+  - defaultOutputFileNames
+  - listTLFiles
+  - updateDetectionFolder
+  - countDetections
+  - densityInputTable
+  - densityResultsTable
+  - collectDensityResults
+
+- title: Plotting
+  contents:
+  - densityPlot
+  - detectionRateCorrectedPlot
+  - detectionRatePlot
+  - plotDetectionDistribution
+  - plotSNRHistogram
+  - plotSNRTimeSeries
+  - plotSpatialDetections
+  - computeSNRLims
+
+- title: Internal utilities
+  contents:
+  - tidyeval
+

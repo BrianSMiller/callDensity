@@ -1,12 +1,12 @@
 ---
-title: "callDensity_snrThreshold"
+title: "SNR truncation: fixing capture-recapture's blind spot"
 output: 
   html_document: default
   pdf_document: default
   rmarkdown::html_vignette:
     vignette: >
       %\VignetteEncoding{UTF-8}
-      %\VignetteIndexEntry{callDensity_snrThreshold}
+      %\VignetteIndexEntry{SNR truncation: fixing capture-recapture's blind spot}
       %\VignetteEngine{knitr::rmarkdown}
 bibliography: references.bib
 ---
@@ -265,7 +265,7 @@ Nct <- sum(simDet2t$detect_table)
 
 ## Calculate call densities
 
-This vignette assumes adjudicated capture-recapture (CR) as the working method throughout, and does not cover the observer-ground (OG) design at all. OG requires a single, essentially false-positive-free ground-truth observer -- `callDensity2` shows directly why that assumption is fragile in practice, and why CR is generally the more robust choice once ground truth is imperfect. Given that, this vignette jumps straight to CR and its own particular failure mode: certain combinations of detector shape and propagation geometry create SNR ranges with no recapture coverage, biasing `p_a` and `Dc` in ways that are not obvious from the data alone. SNR truncation is the fix.
+This vignette assumes adjudicated capture-recapture (CR) as the working method throughout, and does not cover the observer-ground (OG) design at all. OG requires a single, essentially false-positive-free ground-truth observer -- `callDensity_CommonGround` shows directly why that assumption is fragile in practice, and why CR is generally the more robust choice once ground truth is imperfect. Given that, this vignette jumps straight to CR and its own particular failure mode: certain combinations of detector shape and propagation geometry create SNR ranges with no recapture coverage, biasing `p_a` and `Dc` in ways that are not obvious from the data alone. SNR truncation is the fix.
 
 Density is calculated via `cde()` directly here -- the same interface an end user would call -- rather than by combining `pDetInArea()` with a hand-rolled density formula. Two things follow from that. First, `cde()` computes `CV.pa`, `CV.c`, `CV.Nc` and `CV.Dc` as a matter of course, so every result below carries its own uncertainty rather than a bare point estimate -- worth checking against before judging whether any gap from the true value is a concern or expected Monte Carlo noise. Second, `cde()` always truncates `c` and zeroes `p_a` together whenever `snrTruncationThreshold` is set, and refuses to run with a threshold set unless `Nc` is confirmed truncated to match (`NcIsTruncated = TRUE`) -- truncating the detection function alone, without truncating `c`, `Nc` and `p_a` consistently, is no longer something `cde()` will let happen by accident.
 

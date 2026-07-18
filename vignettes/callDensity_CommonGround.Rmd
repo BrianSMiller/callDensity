@@ -1,12 +1,12 @@
 ---
-title: "callDensity: Two detector simulation"
+title: "Imperfect ground truth: capture-recapture (Common Ground) as the fix"
 output: 
   html_document: default
   pdf_document: default
   rmarkdown::html_vignette:
     vignette: >
       %\VignetteEncoding{UTF-8}
-      %\VignetteIndexEntry{callDensity: Two detector simulation}
+      %\VignetteIndexEntry{Imperfect ground truth: capture-recapture (Common Ground) as the fix}
       %\VignetteEngine{knitr::rmarkdown}
 bibliography: references.bib
 ---

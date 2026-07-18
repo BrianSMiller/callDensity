@@ -1,4 +1,16 @@
-# callDensity 1.1.0
+# callDensity 1.1.1
+
+Reworks the callDensity\_snrThreshold vignette around the actual failing  
+scenario the truncation feature addresses, rather than an arbitrary  
+example. Drops the observer-ground (OG) design from that vignette  
+entirely (covered elsewhere, in callDensity_CommonGround); fixes a detection-function  
+plot that was showing the truncated fit extrapolating past its own  
+support while hiding true ground truth in the same region; and adjusts  
+the false-positive simulation parameters to match the qualitative pattern  
+in Miller et al. (2026) Figure 3, with an explicit note that the  
+resulting truncation-lowers-c effect is not a general result.
+
+# callDensity 1.1.0 (unreleased)
 
 ## Bug fixes
 

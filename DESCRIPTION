@@ -2,7 +2,7 @@ Package: callDensity
 Type: Package
 Title: Analysis for bioacoustic call density estimation (ABCDE)
 Version: 1.1.1
-URL: https://github.com/BrianSMiller/callDensity
+URL: https://github.com/BrianSMiller/callDensity, https://briansmiller.github.io/callDensity/
 Author: Brian S Miller, Danielle Harris, Franciele R Castro, and Nat Kelly
 Maintainer: Brian S Miller <Brian.Miller@aad.gov.au>
 Description: Software for estimating the density of animal vocalisations (calls)
