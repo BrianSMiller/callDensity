@@ -4,7 +4,10 @@ pkgdown_sha: ~
 articles:
   callDensity: callDensity.html
   callDensity_coast: callDensity_coast.html
+  callDensity_CommonGround: callDensity_CommonGround.html
   callDensity_snrThreshold: callDensity_snrThreshold.html
-  callDensity2: callDensity2.html
   parallel_benchmarks: parallel_benchmarks.html
-last_built: 2026-07-18T11:32Z
+last_built: 2026-07-18T12:18Z
+urls:
+  reference: https://briansmiller.github.io/callDensity/reference
+  article: https://briansmiller.github.io/callDensity/articles

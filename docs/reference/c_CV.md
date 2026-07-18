@@ -1,0 +1,38 @@
+# c_CV: Coefficient of Variation (CV) of false discovery rate (c).
+
+CV.c is calculated from the variance of c, which depends on the
+probability of false alarm (c), a proportion.
+
+## Usage
+
+``` r
+c_CV(n, c)
+```
+
+## Arguments
+
+- n:
+
+  - Number of trials used to estimate c
+
+- c:
+
+  - false discovery rate (proportion of false positive detections
+    divided by the total number predicted positive)
+
+## Value
+
+cv.c - coefficient of variation of the false discovery rate
+
+## Details
+
+Rationale for this calculation Variance of a proportion, c derived from
+a binomial process. Zar 2010 Eqn. 24.17 indicates sigma^2 = pq/(n-1)
+here p = c, q = (1-c), and n is the number of detections inspected when
+estimating c, so:
+
+1.  var(c)= c \* (1-c)/(n-1)
+
+And required inputs are n, the number of trials conducted (i.e. how many
+detections were inspected when estimating c) and the estimate of c (as a
+proportion between 0 and 1 inclusive).

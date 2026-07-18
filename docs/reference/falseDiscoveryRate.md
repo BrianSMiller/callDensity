@@ -1,0 +1,74 @@
+# Estimate \$c\$ (False discovery rate)
+
+False discovery rate, c, is defined as: FP/(FP+TP), where FP is the
+number of false-positives and TP is the number of true positives
+(https://en.wikipedia.org/wiki/Precision_and_recall; TODO: find a
+primary literature citation to use instead of citing wikipedia).
+
+## Usage
+
+``` r
+falseDiscoveryRate(
+  ch,
+  season = "year",
+  snrTruncationThreshold = NULL,
+  gtColName = "detect_table1",
+  testColName = "detect_table2",
+  snrColName = "SNR"
+)
+```
+
+## Arguments
+
+- ch:
+
+  data.frame with capture history table
+
+- season:
+
+  a character indicating the season or month for which to estimate call
+  density
+
+- snrTruncationThreshold:
+
+  - Exclude rows with SNR below this threshold (in dB)
+
+- gtColName:
+
+  - Column name that contains the ground truth detections (0 for false
+    positive and 1 for true positive) Default='detect_table1'. For an
+    adjudicated capture-recapture analysis with two fallible observers,
+    neither raw observer is ground truth: construct this column from the
+    adjudicator's verdict instead, as
+    [`cde()`](https://briansmiller.github.io/callDensity/reference/cde.md)'s
+    own documentation for `capHistTab` describes.
+
+- testColName:
+
+  - Column name of the detections under investigation (i.e. that
+    contains the detections from which to calculate false positives).
+    Default='detect_table2')
+
+- snrColName:
+
+  - Name of column that contains SNR estimates (only used if
+    thresholding by SNR)
+
+## Value
+
+fdr, list containing false disovery rate, c, and it's CV. The false
+discovery rate c, is equal to (1-precision) for detector2 assuming
+detector1 is ground truth for detections within the specified season
+
+## Details
+
+Here we estimate false-positive rate of the automated detector from the
+manually annotated dataset. The data-file for this is the
+capture-history table that contains reconciled annotated, and automated
+detections.
+
+First, we count the number of FP that the detector produced from the
+capture history table. These are the sum of the rows where
+detect_table2==T & detect_table1==F. Then we calculate the number of
+true positives, the sum of the rows where detect_table2==T &
+detect_table1==T.

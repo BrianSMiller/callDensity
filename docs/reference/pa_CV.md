@@ -1,0 +1,62 @@
+# pa_CV: Coefficient of Variation (CV) of the probability of detection (pa).
+
+CV.pa is calculated using the standard deviation of the means and the
+sum of the standard deviations of the transects. This approach assumes
+independence between transects and homogeneity of error. The summation
+of SDs assumes a conservative model.
+
+## Usage
+
+``` r
+pa_CV(pa.all.transects, wt = rep(1, dim(pa.all.transects)[1] - 1))
+```
+
+## Arguments
+
+- pa.all.transects:
+
+  - matrix containing two columns and same number of rows as number of
+    transects. The first column contains the mean pa and the second
+    column contains the standard deviation of pa for each transect. The
+    final column contains the overall mean and sd.
+
+## Value
+
+CV.pa - CV of the probability of deteciton in the area
+
+## Details
+
+Follows from Eqn. 6.19 and 6.20 from Harris (2012) PhD Thesis Chapter 6
+var_total_Pa = SE_Pa^2 + (sum(SD_Pa_t)/n_t)^2 Eqn.6.19 SE_total_Pa =
+sqrt(var_total_Pa) Eqn.6.20
+
+where:
+
+var_total_Pa = variance of the overall mean probability of detection
+incorporating all sources of variance SE_total_Pa = standard error of
+the overall mean probability of detection incorporating all sources of
+variance
+
+SE_Pa = standard error of the n_t transect-specific mean probabilities
+of detection, i.e. sd(Pa_t)/sqrt(n_t): how much the transect means
+disagree with each other. NOT mean(Pa_t)/sqrt(n_t), which is what this
+function computed between 2025-06-27 and 2026-07-17 (see NEWS/commit
+0a9cb2f). That formula divides the estimate by a constant depending only
+on n_t, so CV.pa collapsed to ~1/sqrt(n_t) regardless of how much the
+underlying detection curve actually varied. Verified: across a sweep of
+32 detector configurations with true p_a bias from 0% to 68%, the old
+formula reported CV.pa = 0.50-0.51 throughout (test-pa_CV.R). SD_Pa_t =
+standard deviation of each transect-specific mean probability of
+detection, driven by pDetInArea's outerloop bootstrap of the detection
+curve's coefficients and of SL/NL. This term was correct throughout. t =
+transect (1 - n_t) n_t = total number of transects (8 in Harris's
+thesis, but adjustable here)
+
+Note: to allow the lengths of transects to vary requires additional
+weighting beyond that described by Harris (2012). We account for this
+with the wt parameter, which should contain the area for each transect.
+We adapt Eqn.6.19 so that both SE_Pa and the mean of standard deviations
+are weighted means, using
+[`Hmisc::wtd.var`](https://rdrr.io/pkg/Hmisc/man/wtd.stats.html) for a
+weighted variance of the transect means that reduces exactly to
+[`var()`](https://rdrr.io/r/stats/cor.html) when weights are equal.

@@ -1,0 +1,117 @@
+# Monte-Carlo simulation to predict average probability of detection in area
+
+The simulation has several steps: (1) SNR regression and TL data now
+passed in via function call (a)Thin original TL data so have a 100m
+range step, not 20m The resolution given in the propagation model output
+may be too fine a resolution, and will increase the code run time. (2)
+GAM for the SNR regression passed in via function call - initial model
+does not need to be in the loop
+
+## Usage
+
+``` r
+pDetInArea(
+  detFun,
+  SL,
+  TLlookup,
+  NL,
+  transectFile = NULL,
+  simResultsFile = NULL,
+  paFile = NULL,
+  output.resolution.m = 100,
+  outerloop = 1000,
+  truncationDistance = max(TLlookup[, 1]),
+  snrTruncationThreshold = -Inf,
+  parallel = FALSE
+)
+```
+
+## Arguments
+
+- detFun:
+
+  SNR-Detection function from fitSNRdetectionFunc. Must be an object of
+  class GLM, GAM, SCAM, or VGLM that can be passed to functions coef()
+  and vcov()
+
+- SL:
+
+  Distribution of source levels (data.frame with columns mean,sd)
+
+- TLlookup:
+
+  Transmission loss lookup table with range in the first column and TL
+  in dB along an azimuth for columns 2-n
+
+- NL:
+
+  Noise level distribution (data.frame with columns mean,sd)
+
+- transectFile:
+
+  File name base for writing transect outputs
+
+- simResultsFile:
+
+  File name base for writing simulation results
+
+- paFile:
+
+  File name for writing probability of detection in the area, pa
+
+- output.resolution.m:
+
+  Spatial resolution of density/transect output in m
+
+- outerloop:
+
+  Number of iterations in outerloop (default 1000)
+
+- truncationDistance:
+
+  scalar or matrix of truncation distances. If a matrix is provided,
+  then the dimensions should be 1xN with N being the number of transects
+
+- snrTruncationThreshold:
+
+  scalar SNR in dB below which the probability of detection will be
+  forcibly set to zero.
+
+- parallel:
+
+  Logical. If TRUE, the Monte Carlo outer loop runs in parallel via
+  future.apply::future_lapply, using whatever future plan is currently
+  active (set via future::plan() before calling). If FALSE (default),
+  runs serially - identical behaviour to the original implementation.
+  Requires the future.apply package to be installed when TRUE; falls
+  back to serial with a warning if not available.
+
+## Details
+
+\(3\) The outer loop (to be run 1000 times): (a) Generate a possible
+mean and standard deviations for source level using a parametric
+bootstrap approach (b) Generate a possible mean and standard deviations
+for noise level using a parametric bootstrap approach (c) Generate a set
+of coefficients for the detector characterisation curve
+
+\(4\) For each combination of outer loop parameters: For each column of
+TL lookup table : (a) draw ~10000 source level values from a
+distribution generated in outer loop and apply to all of the virtual
+calls along the transect (b) draw ~10000 noise level values from a
+distribution generated in outer loop and apply to all of the range steps
+along the transect (c) using the TL values, calculate the RL given the
+SL for each virtual call (d) calculate the SNR of each virtual call,
+given the assigned noise levels (e) predict prob(detect) given the SNR
+for all SNR values (~10000 per profile)
+
+\(5\) for all p(det), calculate a weighted average (weighting by
+distance) Weight each prob(detect) by the range (i.e. multiply the
+p(det) by the range) Then divide all weighted p(dets) for a transect by
+the sum of ALL ranges across each transect. Having run the outer loop
+1000 times, have 1000 weighted-average p(det) per transect (6) Final
+p(det) calculations (a) Calculate a transect-specific mean p(det) for
+each transect (b) Calculate an overall p(det) for the whole simulation
+(c) Save results in a results table (7) Variance calculations (a)
+Calculate the standard error of transect-specific p(det) values (b)
+Calculate the standard deviation of transect-specific p(det) values (c)
+Save results in a table and print the table for future calculations
