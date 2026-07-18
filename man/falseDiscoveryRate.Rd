@@ -27,6 +27,10 @@ estimate call density}
 \item{gtColName}{\itemize{
 \item Column name that contains the ground truth detections (0
 for false positive and 1 for true positive) Default='detect_table1'.
+For an adjudicated capture-recapture analysis with two fallible
+observers, neither raw observer is ground truth: construct this column
+from the adjudicator's verdict instead, as \code{cde()}'s own
+documentation for \code{capHistTab} describes.
 }}
 
 \item{testColName}{\itemize{

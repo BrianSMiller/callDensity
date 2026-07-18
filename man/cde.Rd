@@ -35,7 +35,30 @@ cde(
 
 \item{capHistTab}{Capture history table used to derive false positive rate.
 Can also be used to derive probability of detection as a function of SNR
-for estimating \eqn{p_a} if snrDetFun is not specified.}
+for estimating \eqn{p_a} if snrDetFun is not specified.
+
+Must contain columns \code{detect_table1} and \code{detect_table2}.
+\strong{\code{detect_table1} is always read as ground truth} (0 = false
+positive, 1 = true positive) and \code{detect_table2} as the detector
+under investigation -- this is inherited unconditionally from
+\code{falseDiscoveryRate()} and \code{capHist2snrInfo()}, which cde calls
+internally and which do not expose a way to override these column names
+from here.
+
+For an observer-ground (OG) analysis, where one trusted observer stands
+in for ground truth, \code{detect_table1} is that observer's own
+detections, and this holds without any extra work.
+
+For an adjudicated capture-recapture (CR) analysis, where two observers
+are both fallible and neither is ground truth, this requires a deliberate
+construction step: \code{detect_table1} must be overwritten with the
+adjudicator's verdict (true call vs false positive) before the table is
+passed to cde, \emph{not} left as one of the two raw observers being
+compared. Getting this wrong does not error -- it silently computes a
+false discovery rate for one observer against the other, which is not a
+meaningful quantity and will not match the true rate. See
+\code{vignette("callDensity_snrThreshold")}, section "Calculate call
+densities", for a worked example of this construction.}
 
 \item{SL}{List containing distribution of source level parameters.
 SL must contain named elements named: mean, sd, and sampleSize.}
