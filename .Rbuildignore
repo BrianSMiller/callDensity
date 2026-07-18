@@ -1,8 +1,9 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
-^readme.md
+^README\.md$
 ^LICENSE\.md$
 ^doc$
+^docs$
 ^Meta$
 ^\.positai$
 ^\.claude$

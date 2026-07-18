@@ -186,14 +186,21 @@ cat("Available cores:", n_cores, "\n")
 
 # Test a range from serial through ~75% of cores.
 # Going beyond ~50% of cores may cause resource exhaustion on Windows.
+#
+# All candidates scale with n_cores -- no hardcoded floor. This previously
+# still forced at least 4 workers regardless of n_cores, via a literal 4 in
+# the candidate list that the >= 4 filter below then kept while discarding
+# every properly n_cores-scaled, smaller candidate. On a low-core machine
+# that meant real oversubscription regardless of what the scaling logic
+# intended.
 worker_counts <- unique(sort(c(
-  4,
+  min(4, n_cores - 1),
   min(8, n_cores - 1),
   min(16, n_cores - 1),
   min(round(n_cores / 2), n_cores - 1),
   min(round(n_cores * 0.75), n_cores - 1)
 )))
-worker_counts <- worker_counts[worker_counts >= 4]
+worker_counts <- worker_counts[worker_counts >= 1]
 
 cat("Worker counts to test:", worker_counts, "\n")
 ```

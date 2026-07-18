@@ -45,7 +45,8 @@ Suggests:
     testthat (>= 3.0.0),
     parallelly,
     future,
-    future.apply
+    future.apply,
+    future.callr
 VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE)
 Config/testthat/edition: 3

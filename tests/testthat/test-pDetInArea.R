@@ -152,12 +152,25 @@ test_that("pDetInArea parallel = FALSE produces a valid result", {
 # processes. When fixed, change expect_error() to expect_no_error().
 # ---------------------------------------------------------------------------
 
+# All three tests below use future.callr::callr rather than
+# future::multisession. multisession's socket-based worker IPC is already
+# documented elsewhere in this package (parallel_benchmarks.Rmd) as fragile
+# in non-standard environments -- specifically flagged there as able to
+# serialise or misbehave under RStudio's knit button. A CI runner is another
+# kind of non-standard environment where the same class of fragility is
+# plausible, and unlike a hang on a developer's own machine, a hang inside
+# the test suite during R CMD check blocks the whole check with no
+# indication of where it got stuck. callr spawns fresh, one-shot processes
+# rather than persistent socket-connected workers, matching the backend
+# already used (and preferred) throughout the rest of this package.
+
 test_that("pDetInArea parallel = TRUE with glm [known bug: slimming]", {
   skip_if_not_installed("future.apply")
   skip_if_not_installed("future")
+  skip_if_not_installed("future.callr")
   d   <- make_snr_data()
   fit <- fitDetFun(d, modelType = "glm")
-  future::plan(future::multisession, workers = 2)
+  future::plan(future.callr::callr, workers = 2)
   on.exit(future::plan(future::sequential), add = TRUE)
   expect_error(
     suppressWarnings(suppressMessages(run_pdet(fit, outerloop = 10, parallel = TRUE)))
@@ -167,9 +180,10 @@ test_that("pDetInArea parallel = TRUE with glm [known bug: slimming]", {
 test_that("pDetInArea parallel = TRUE with scam", {
   skip_if_not_installed("future.apply")
   skip_if_not_installed("future")
+  skip_if_not_installed("future.callr")
   d   <- make_snr_data()
   fit <- fitDetFun(d, modelType = "scam", numKnots = 5)
-  future::plan(future::multisession, workers = 2)
+  future::plan(future.callr::callr, workers = 2)
   on.exit(future::plan(future::sequential), add = TRUE)
   res <- suppressWarnings(suppressMessages(run_pdet(fit, outerloop = 10, parallel = TRUE)))
   expect_true(is.finite(res$overall))
@@ -180,9 +194,10 @@ test_that("pDetInArea parallel = TRUE with scam", {
 test_that("pDetInArea emits a message for parallel non-vglm models", {
   skip_if_not_installed("future.apply")
   skip_if_not_installed("future")
+  skip_if_not_installed("future.callr")
   d   <- make_snr_data()
   fit <- fitDetFun(d, modelType = "glm")
-  future::plan(future::multisession, workers = 2)
+  future::plan(future.callr::callr, workers = 2)
   on.exit(future::plan(future::sequential), add = TRUE)
   expect_message(
     try(suppressWarnings(run_pdet(fit, outerloop = 10, parallel = TRUE)),
