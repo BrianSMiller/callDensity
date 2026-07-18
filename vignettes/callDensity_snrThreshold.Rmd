@@ -98,24 +98,36 @@ TL <- simTLradials_20logR(maxRange=R, rangeStep=100, numTransects=8)
 ```{r parameterise.detectors, warning=FALSE, message=FALSE}
 
 #Specify parameters for detector 1
-# Good detector with low threshold (location) and low false positive rate.
+# This is the "steep partner" scenario from the truncation sweep further
+# below: a narrow transition (small scale) means detector 1 behaves almost
+# like a hard threshold, contributing no recaptures across a wide low-SNR
+# range. That absence of recaptures is exactly what breaks capture-recapture
+# without truncation, and what this vignette now uses as its running example.
+#
+# fpMean is set below the detector's own true-detection SNR, and fpSD
+# narrower than the true-detection spread, matching the qualitative pattern
+# in Miller et al. (2026) Figure 3: false positives concentrate at lower SNR
+# than true positives, in a visibly narrower band. Not fitted to that data --
+# these values are chosen to capture the shape, not the exact distribution.
 det1params = data.frame( 
   location=1,    # AKA intercept?
-  scale=1,       # AKA slope?
+  scale=0.5,     # AKA slope? -- steep partner
   func='plogis', # logistic function
   c=0.1,         # False discovery rate
-  fpMean=0,      # Mean of distribution of false positives (in dB SNR)
+  fpMean=-3,     # Mean of distribution of false positives (in dB SNR)
   fpSD = 2      # Standard deviation false positive distribution (in dB SNR)
 )
 
-# Detector 2 has a higher threshold (location), scale, and false positive rate
-# than detector 1.
+# Detector 2 is the detector actually being characterised. A wide, gradual
+# transition (large scale) means it degrades smoothly across a broad SNR
+# range -- an easy detector to estimate on its own, but one whose curve is
+# only correctly identifiable where detector 1 also contributes recaptures.
 det2params = data.frame( 
-  location=3,    # AKA intercept?
-  scale=0.5,       # AKA slope?
+  location=2,    # AKA intercept?
+  scale=4,       # AKA slope?
   func='plogis', # logistic function
   c=0.3,         # False discovery rate
-  fpMean=0,      # Mean of distribution of false positives (in dB SNR)
+  fpMean=-3,     # Mean of distribution of false positives (in dB SNR)
   fpSD = 2      # Standard deviation false positive distribution (in dB SNR)
 )
 ```
@@ -252,138 +264,99 @@ Nct <- sum(simDet2t$detect_table)
 ```
 
 ## Calculate call densities
-### SNR Truncation ONLY for SNR Detection Function
 
-First we calculate call density using the original subset (without SNR truncation). These results are given the suffix .glm. 
+This vignette assumes adjudicated capture-recapture (CR) as the working method throughout, and does not cover the observer-ground (OG) design at all. OG requires a single, essentially false-positive-free ground-truth observer -- `callDensity2` shows directly why that assumption is fragile in practice, and why CR is generally the more robust choice once ground truth is imperfect. Given that, this vignette jumps straight to CR and its own particular failure mode: certain combinations of detector shape and propagation geometry create SNR ranges with no recapture coverage, biasing `p_a` and `Dc` in ways that are not obvious from the data alone. SNR truncation is the fix.
 
-We compare the call density and probability of detection in the area of original subset to those derived using SNR truncatiot but only truncating in SNR to derive the SNR-detection function, and NOT applying SNR truncation to the Monte-Carlo model nor to derivation of false positive rate, c.  
+Density is calculated via `cde()` directly here -- the same interface an end user would call -- rather than by combining `pDetInArea()` with a hand-rolled density formula. Two things follow from that. First, `cde()` computes `CV.pa`, `CV.c`, `CV.Nc` and `CV.Dc` as a matter of course, so every result below carries its own uncertainty rather than a bare point estimate -- worth checking against before judging whether any gap from the true value is a concern or expected Monte Carlo noise. Second, `cde()` always truncates `c` and zeroes `p_a` together whenever `snrTruncationThreshold` is set, and refuses to run with a threshold set unless `Nc` is confirmed truncated to match (`NcIsTruncated = TRUE`) -- truncating the detection function alone, without truncating `c`, `Nc` and `p_a` consistently, is no longer something `cde()` will let happen by accident.
 
-```{r GLM p.det with independently estimated NL, warning=FALSE, message=FALSE}
+### Detection function via VGLM (adjudicated capture-recapture)
 
-snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,  modelType = "glm")
-snrDetFun.glmt<- callDensity::fitSNRdetectionFunc(SNRinfot, modelType = "glm")
+Capture-recapture with two fallible observers means neither `detect_table1` nor `detect_table2` is ground truth on its own. `cde()`'s internal `falseDiscoveryRate()`/`capHist2snrInfo()` calls always read `detect_table1` as ground truth regardless -- this is not something `cde()` lets a caller override -- so that assumption has to be satisfied by construction before the table reaches `cde()`. The fix is the same one the actual Common Ground manuscript's own analysis script uses (`mchToCR()`): overwrite `detect_table1` with the adjudicator's verdict. Skipping this does not error -- it silently computes a false discovery rate for one observer against the other, which is not a meaningful quantity and will not match the truth.
 
-snrDetFun.glm$r.sq <- with(summary(snrDetFun.glm),  1 - deviance/null.deviance)
-snrDetFun.glmt$r.sq<- with(summary(snrDetFun.glmt), 1 - deviance/null.deviance)
+```{r cde.vglm, warning=FALSE, message=FALSE}
+library(VGAM)
 
-# Estimate of NL distribution. NOTE: Noise levels estimated from mean NL of
-# non-truncated detections plus intercept of SNR detection function (truncated
-# or not).
-NLind <- nlFromDetections(SNRinfo,  snrDetFun.glm, SL = SL, TL = TL)
-NLindt<- nlFromDetections(SNRinfo, snrDetFun.glmt, SL = SL, TL = TL)
+adjudicated <- subset(capHistTab,
+                (capHistTab$groundTruth1 | capHistTab$groundTruth2) &
+                (capHistTab$detect_table1 | capHistTab$detect_table2))
+adjudicatedt <- subset(capHistTabt,
+                (capHistTabt$groundTruth1 | capHistTabt$groundTruth2) &
+                (capHistTabt$detect_table1 | capHistTabt$detect_table2))
+adjudicatedt$SNR <- rowMeans(
+  subset(adjudicatedt, select = c("snr1", "snr2")), na.rm = TRUE)
 
-Pa.glm <- callDensity::pDetInArea(snrDetFun.glm, SL=SL, TLlookup = TL, NL=NLind,
-           output.resolution.m=100, outerloop = 100, truncationDistance=R, # m
-           snrTruncationThreshold =-Inf)
-pa.glm <- Pa.glm$overall
+observerNames  <- c("detect_table1", "detect_table2")
 
-Pa.glmt <- callDensity::pDetInArea(snrDetFun.glmt, SL=SL, TLlookup = TL, NL=NLindt,
-           output.resolution.m=100, outerloop = 100, truncationDistance=R, # m
-           snrTruncationThreshold =-Inf)
-pa.glmt <- Pa.glmt$overall
+# Fit on the sample matching each analysis's own threshold, so the curve and
+# the rest of the calculation describe the same set of detections -- the
+# untruncated fit is exactly the one that extrapolates into the low-SNR
+# desert with no recaptures, and the truncated fit is exactly the one that
+# does not.
+snrDetFun.vglmNone  <- fitSNRvglm(adjudicated,  observerNames,
+                                  whichObserver = "detect_table2")
+snrDetFun.vglmt <- fitSNRvglm(adjudicatedt, observerNames,
+                              whichObserver = "detect_table2")
 
+# detect_table1 overwritten with the true simulated status -- the synthetic
+# equivalent of a judge's adjudication -- so cde()'s ground-truth assumption
+# is satisfied. Only affects the copy handed to cde(); the vglm fits above
+# already used the genuine two-observer columns.
+capHistTabForCde  <- capHistTab
+capHistTabForCde$detect_table1  <- capHistTabForCde$groundTruth2
+capHistTabtForCde <- capHistTabt
+capHistTabtForCde$detect_table1 <- capHistTabtForCde$groundTruth2
 
-# Density estimation equation
-Dc.glm <- (Nc * (1 - c_subsample) )/( k * A * pa.glm * Time )
-Dc.glmt <- (Nc * (1 - c_subsample) )/( k * A * pa.glmt * Time )
+cr.none <- cde(Nc = Nc, capHistTab = capHistTabForCde, snrDetFun = snrDetFun.vglmNone,
+               SL = SL, TL = TL, NL = NL, T = Time, A = A, k = k,
+               outerloop = 10, truncationDistance = R,
+               snrTruncationThreshold = -Inf)
 
+cr.trunc <- cde(Nc = Nct, capHistTab = capHistTabtForCde, snrDetFun = snrDetFun.vglmt,
+                SL = SL, TL = TL, NL = NL, T = Time, A = A, k = k,
+                outerloop = 10, truncationDistance = R,
+                snrTruncationThreshold = snrTruncationThreshold,
+                NcIsTruncated = TRUE)
 
-results.glm <- data.frame(Dc=Dc.glm, SampleSize=n_subsample, A = A,
-                      NLmean = NLind$mean, NLsd = NLind$sd, 
-                      model='glm', c=c_subsample, Pa=pa.glm,  
-                      row.names = 'All SNR')
-results.glmt <- data.frame(Dc=Dc.glmt, SampleSize=n_subsamplet, A = A,# Environment
-                      NLmean = NLind$mean, NLsd = NLind$sd,      # Noise
-                      model='glm', c=c_subsample, Pa=pa.glmt,  
-                      row.names = paste('Truncated',snrTruncationThreshold,'dB'))
+resultsTrue <- data.frame(Dc = TrueCallDensity, Nc = n,
+                          pa = mean(simDet2$p_det, na.rm = TRUE),
+                          c = det2params$c, CV.pa = NA, CV.Dc = NA,
+                          row.names = "Truth")
+
+resultsAll <- rbind(
+  resultsTrue,
+  data.frame(Dc = cr.none$Dc,  Nc = cr.none$Nc,  pa = cr.none$pa,
+             c = cr.none$c,  CV.pa = cr.none$CV.pa,  CV.Dc = cr.none$CV.Dc,
+             row.names = "All SNR"),
+  data.frame(Dc = cr.trunc$Dc, Nc = cr.trunc$Nc, pa = cr.trunc$pa,
+             c = cr.trunc$c, CV.pa = cr.trunc$CV.pa, CV.Dc = cr.trunc$CV.Dc,
+             row.names = paste("Truncated", snrTruncationThreshold, "dB"))
+)
+
+kableExtra::kbl(resultsAll, digits = c(4, 0, 4, 3, 3, 3),
+                col.names = c("Dc", "Nc", "P_a", "c", "CV.pa", "CV.Dc")) %>%
+  kableExtra::kable_classic(full_width = FALSE)
 
 ```
 
+Without truncation, capture-recapture badly overestimates `p_a` and underestimates `Dc` -- detector 1's steep, narrow curve leaves no recaptures across a wide low-SNR range, so the fitted curve is extrapolating into territory the data never covered. Truncating removes that extrapolated region and the bias should largely resolve, landing `Dc` close to truth with the residual gap sitting inside that row's own `CV.Dc`.
 
-Compare with the true results
+The estimated `c` under truncation is noticeably lower than the untruncated estimate, and that is expected rather than a sign of a bug here -- but it is not a general truth about truncation, and it is worth being precise about why. False positives and true positives have different SNR distributions in this simulation: false positives are centred lower (`fpMean = -3`) and more tightly (`fpSD = 2`) than true detections, which sit higher on average and spread much wider (mean $\approx$ -0.5, sd $\approx$ 7, driven by detector 2's own gradual curve). Truncating at the chosen threshold removes a large share of the false positives and comparatively few of the true positives, so the false discovery rate measured on the *retained* sample is genuinely lower than the untruncated rate -- not because `c` was miscounted, but because truncation changes which false positives survive to be counted, given *this* relationship between the two distributions.
 
-```{r Call.Density.Results, echo=TRUE, warning=FALSE}
+That relationship is doing real work, and it will not hold in general. There are two dimensions to it: whether false positives sit at lower or higher SNR than true positives on average, and whether their spread is narrower or wider. This example is one of four combinations -- FP lower and narrower -- and it is the combination that makes truncation look unambiguously good for `c`. Swap either dimension and the effect on `c` could shrink, vanish, or reverse: false positives sitting higher than true positives, or spread wider than true positives, are both plausible for a real detector and would not behave the same way under truncation. Which combination actually holds is an empirical question about the detector and the noise environment, not something truncation can be assumed to fix by default. The other three combinations are left unexplored here.
 
-resultsTrue = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
-                      NLmean = NL$mean, NLsd = NL$sd,            # Noise
-                        # Detector params
-                        model=det2params$func, c = det2params$c, 
-                        Pa = mean(simDet2$p_det,na.rm=TRUE), 
-                      row.names='Truth')
+This matters practically: a truncated `c` is not comparable to an untruncated one, and should not be compared across analyses that use different thresholds without accounting for this. `falseDiscoveryRate()` truncates `c` consistently with `Nc` and `p_a` for this reason -- the three terms must describe the same underlying set of detections, or the $q(\theta)$ cancellation below breaks down.
 
-# True density and PA of calls above threshold
-Dct <- nAboveThreshold/(A*Time) 
-Pat <- mean(simDet2$p_det[simDet2$snr > snrTruncationThreshold ],na.rm=T)
+### Why this works: the $q(\theta)$ cancellation
 
-results<-rbind( resultsTrue, results.glm, results.glmt)
+This means applying SNR truncation when tabulating the number of calls, Nc; when estimating the density of calls within the area, pa; as well as applying SNR truncation when estimating the false discovery rate, c.
 
-kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 4), 
-                col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
-                             'Model','c','P_a')) %>% 
-  kableExtra::kable_classic(full_width=FALSE)
-
-
-```
-
-In this example, the estimate of call density with SNR truncation is further from the true value than the estimate without. 
-
-## SNR Truncation everywhere (snrDetFun, pDetInArea, c, Nc)
-
-Alternatively, we can apply SNR truncation for every parameter that goes into the call density equation. 
-
-This means applying SNR truncation when tabulating the number of calls, Nc; when estimating the density of calls within the area, pa; as well as applying SNR truncation when estimating the false discovery rate, c. 
-
-Applying SNR truncation in this way returns the density of **all** calls, not the density of above-threshold calls, provided the truncation is applied consistently to every term that counts detections. This is not obvious, and it is worth being explicit about why.
+Applying SNR truncation in this way returns the density of **all** calls, not the density of above-threshold calls, provided the truncation is applied consistently to every term that counts detections -- exactly what `cde()` now enforces via the `NcIsTruncated` guard and its own internal handling of `c` and `p_a`. This is not obvious, and it is worth being explicit about why.
 
 Let $q(\theta)$ be the fraction of calls that arrive at the sensor with an SNR above the threshold $\theta$. Truncation shrinks $N_c$ by a factor of roughly $q(\theta)$, because we are counting fewer detections. It shrinks $p_a$ by the same factor, because `pDetInArea` sets the probability of detection to zero below $\theta$ rather than discarding those parts of the area. The two factors appear on opposite sides of the density equation, so they cancel, and $D_c$ is unchanged.
 
 The cancellation only happens if $p_a$ is the *unconditional* mean $E[p \cdot 1(SNR \ge \theta)]$ rather than the conditional mean $E[p \mid SNR \ge \theta]$. That is the difference between setting below-threshold cells to zero and dropping them. Zeroing keeps them in the average and they contribute nothing; dropping them renormalises the average over the survivors, which would give the density of above-threshold calls instead. `pDetInArea` zeroes them.
 
 Distance truncation is not treated the same way, and must not be. Beyond the truncation distance $w$ the study area is redefined as $A = \pi w^2$, so that area genuinely leaves the question and those cells are dropped. Calls below $\theta$ have not left the question. They are still in the water and still in $A$. We have only declared that we cannot hear them.
-
-```{r}
-
-# True value of false discovery rate for truncated sim
-c_truncated_actual = sum(simDet2t$groundTruth==FALSE)/sum(simDet2t$detect_table)
-
-# The truncated estimate targets the density of ALL calls, so that is the
-# truth to compare it against. Dct, the density of above-threshold calls, is
-# reported alongside only to show the size of q(theta).
-#
-# Pa here is the UNCONDITIONAL mean of p over every call, with
-# below-threshold calls contributing zero. This is what a zeroed pDetInArea
-# targets. Pat, the conditional mean over surviving calls, is the quantity
-# the old NA behaviour returned, and is much larger.
-PaTruncUnconditional <- mean(simDet2$p_det * (simDet2$snr >= snrTruncationThreshold),
-                             na.rm = TRUE)
-qTheta <- nAboveThreshold / n
-
-resultsTruncated = data.frame(Dc = TrueCallDensity, SampleSize=nAboveThreshold,
-                      A = A, NLmean = NL$mean, NLsd = NL$sd,            # Noise
-                      model=det2params$func, 
-                      c = c_truncated_actual, Pa = PaTruncUnconditional, 
-                      row.names='Truth (all calls)' ) 
-
-# Probability of detection in teh area of calls that are above threshold (NOT all calls)
-Pa.allt <- callDensity::pDetInArea(snrDetFun.glmt, SL=SL, TLlookup = TL, NL=NLindt,
-           output.resolution.m=100, outerloop = 100, truncationDistance=R, # m
-           snrTruncationThreshold =snrTruncationThreshold)
-pa.allt <- Pa.allt$overall
-Dc.allt <- (Nct * (1 - c_subsamplet) )/( k * A * pa.allt * Time )
-
-results.allt <- data.frame(Dc=Dc.allt, SampleSize=n_subsamplet, A = A,# Environment
-                      NLmean = NLindt$mean, NLsd = NLindt$sd,      # Noise
-                      model='glm', c=c_subsamplet, Pa=pa.allt,  
-                      row.names = paste('Truncated',snrTruncationThreshold,'dB'))
-
-resultst<-rbind( resultsTruncated, results.allt)
-
-kableExtra::kbl(resultst, digits = c(4,3,0,1, 2, NA,  3, 4), 
-                col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
-                             'Model','c','P_a')) %>% 
-  kableExtra::kable_classic(full_width=FALSE)
-
-```
 
 Applying truncation throughout all the terms of the call density equation produces a correct estimate of the density of all calls. The estimate is not of a different quantity from the untruncated one; it is the same quantity, reached by discarding the part of the detection function that the data could never support.
 
@@ -394,80 +367,6 @@ What truncation does do is move an assumption from one place to another. Without
 The cost is precision, and it is not small. $N_c$ shrinks with $q(\theta)$, and the truncated estimate is more sensitive to error in SL, NL and TL than the untruncated one, because $q(\theta)$ now carries weight that the detection function used to carry. Sensitivity to acoustic parameter mismatch is left as an open question and remains on the TODO list.
 
 An earlier draft of this vignette proposed tracking the proportion of calls excluded by truncation, and scaling the above-threshold density back up to recover all-call density. That proportion is $q(\theta)$, and zeroing obtains it for free. No bookkeeping is required, and none was added.
-
-## VGLM and truncation
-
-Adjudicated capture-recapture (CR) under SNR truncation. `simDet1t`/`simDet2t` restrict the simulated population to calls with SNR at or above the threshold before fitting; `pDetInArea`'s own zeroing (not NA-ing, per the fix above) then applies independently to the full geographic population implied by SL/TL/NL. The two are consistent: `Nct` counts only above-threshold detections, and the zeroed `p_a` gives $E[p \cdot 1(SNR \ge \theta)]$ over all calls, so the same $q(\theta)$ cancellation applies and the result is again the density of **all** calls, not just those above threshold.
-
-```{r VGLM p.det, warning=FALSE, message=FALSE}
-library(VGAM)
-### Adjudicated capture recapture (capture history table with false positives
-### removed by judge)
-adjudicated <- subset(capHistTab,
-                (capHistTab$groundTruth1 | capHistTab$groundTruth2) &
-                (capHistTab$detect_table1 | capHistTab$detect_table2))
-adjudicatedt <- subset(capHistTabt,
-                (capHistTabt$groundTruth1 | capHistTabt$groundTruth2) &
-                (capHistTabt$detect_table1 | capHistTabt$detect_table2))
-
-# Number of adjudicated positive detections
-n_adj <- dim(adjudicatedt)[1]
-
-adjudicatedt$SNR <-   rowMeans(
-  subset(adjudicatedt,select=c('snr1','snr2')) ,na.rm=T) #dB
-
-#False discovery rate of truncated
-tp <- sum(with(capHistTabt,(detect_table2 & groundTruth2) ))
-fp <- sum(with(capHistTabt,(detect_table2 & !groundTruth2) ))
-# precision <- sum(tp)/length(tp)
-adj_c <- fp/(fp+tp)
-
-observerNames = c("detect_table1", "detect_table2")
-snrDetFun.vglm <- fitSNRvglm(adjudicatedt, observerNames,
-                             whichObserver = "detect_table2")
-
-# Estimate of NL distribution
-noiseTab <- capHistTab[capHistTab$detect_table2 | capHistTab$detect_table1,]
-noiseTab$NoiseRL <- rowMeans(
-  subset(noiseTab,select=c('noiseRMSdB1','noiseRMSdB2')) ,na.rm=T) #dB
-NLadj<- nlFromSnrInfo(noiseTab, snrDetFun.vglm)
-
-Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
-           output.resolution.m=100,
-           outerloop = 10,
-           truncationDistance=R, # in m
-           snrTruncationThreshold = snrTruncationThreshold)
-pa.vglm <- Pa.vglm$overall
-
-
-# Density estimation equation
-Dc.vglm <- (Nct * (1 - adj_c) )/( k * A * pa.vglm * Time )
-
-results.vglm <- data.frame(Dc=Dc.vglm, SampleSize=n_adj, A = A,# Environment
-                      NLmean = NLadj$mean, NLsd = NLadj$sd,# Noise
-                      model='vglm',  c=adj_c, Pa=pa.vglm,  
-                      row.names = 'ACR')
-
-```
-
-
-```{r}
-
-resultst<-rbind( resultsTruncated, results.allt, results.vglm)
-
-kableExtra::kbl(resultst, digits = c(4,3,0,1, 2, NA,  3, 4), 
-                col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
-                             'Model','c','P_a')) %>% 
-  kableExtra::kable_classic(full_width=FALSE)
-
-
-```
-The adjudicated capture-recapture model produces a correct estimate of the density of all calls, matching the OG and GLM-based results above.
-
-The estimated `c` here is noticeably lower than `det2params$c = 0.3`, the value used to simulate the data, and that is expected rather than a sign of a bug. False positives and true positives have different SNR distributions: false positives are centred near 0 dB (`fpMean = 0`), while true detections here cluster around SNR $\approx$ 4.5 dB, well clear of the threshold. Truncating at the chosen threshold removes roughly half of the false positives and almost none of the true positives, so the false discovery rate measured on the *retained* sample is genuinely lower than the population-wide rate -- not because `c` was miscounted, but because truncation itself changes which false positives survive to be counted. Verified directly: at $n=10^6$, the untruncated empirical FDR matches the true `c` to four decimal places (0.29999 vs 0.3); truncating at 0 dB drops it to 0.174, with 51% of false positives falling below the threshold against 0% of true positives.
-
-This matters practically: a truncated `c` is not comparable to an untruncated one, and should not be compared across analyses that use different thresholds without accounting for this. `falseDiscoveryRate()` truncates `c` consistently with `Nc` and `p_a` for this reason -- the three terms must describe the same underlying set of detections, or the $q(\theta)$ cancellation this whole vignette depends on breaks down.
-
 
 ## Choosing the threshold
 
@@ -516,18 +415,134 @@ That is worth dwelling on, because it is the argument for the diagnostic. The th
 
 The failure that motivates truncation is a steep partner. With detector 1 at `scale = 0.5` and detector 2 at `scale = 4`, capture-recapture overestimates $p_a$ by about 60% and therefore underestimates $D_c$ by the reciprocal. Truncating removes the extrapolated region and the bias goes away, while $D_c$ remains the density of all calls:
 
-| partner | $\theta$ | $N_c$ | $p_a$ / true $p_a$ | $D_c$ / true $D_c$ |
-|---|---|---|---|---|
-| steep (`scale = 0.5`) | none | 6055 | 1.62 | **0.62** |
-| steep | 0 dB | 2735 | 1.02 | 0.99 |
-| steep | 3 dB | 1741 | 1.00 | 1.01 |
-| steep | 6 dB | 994 | 1.02 | 0.99 |
-| shallow (`scale = 8`) | none | 6051 | 0.99 | 1.01 |
-| shallow | 0 dB | 2699 | 1.00 | 1.00 |
-| shallow | 3 dB | 1735 | 1.01 | 1.00 |
-| shallow | 6 dB | 1001 | 1.03 | 0.99 |
+```{r truncation.sweep, warning=FALSE, message=FALSE}
+library(VGAM)
 
-Mean of three seeds per cell, 50,000 calls, false discovery rate zero, noise supplied. Produced by `notes/truncationSweep.R`.
+#' Simulate two detectors on the same calls, return everything needed for one
+#' sweep cell. Self-contained -- built only from exported callDensity
+#' functions, not the tests/testthat/helper-fixtures.R fixture of the same
+#' name, since a vignette must knit against the installed package alone.
+simulateTwoDetectors <- function(seed, det1scale, n = 5e4,
+                                 det1location = 1, det2location = 2,
+                                 det2scale = 4, fdr = 0,
+                                 nlMean = 84, nlSd = 4) {
+  set.seed(seed)
+
+  R       <- 1e6
+  minDate <- as.POSIXct("2025-01-01")
+  maxDate <- as.POSIXct("2026-01-01")
+  simTime <- as.numeric(difftime(maxDate, minDate, unit = "days")) / 365
+
+  simSL <- data.frame(mean = 190, sd = 4, sampleSize = 350)
+  simNL <- data.frame(mean = nlMean, sd = nlSd, sampleSize = n)
+
+  det1params <- data.frame(location = det1location, scale = det1scale,
+                           func = "plogis", c = fdr, fpMean = 0, fpSD = 2)
+  det2params <- data.frame(location = det2location, scale = det2scale,
+                           func = "plogis", c = fdr, fpMean = 0, fpSD = 2)
+
+  tlFunc <- function(r) 20 * log10(r)
+
+  simPop  <- simCallLocation(n = n, R = R, minDate = minDate, maxDate = maxDate)
+  simPop  <- simCallAcoustics(simPop, simSL, simNL, TL = tlFunc)
+  simDet1 <- simulateDetector(det1params, simPop)
+  simDet2 <- simulateDetector(det2params, simPop)
+
+  list(capHistTab = simsTocaptureHistoryTable(simDet1, simDet2),
+       SL = simSL, NL = simNL, R = R, A = studyArea(R / 1e3), Time = simTime,
+       Nc = sum(simDet2$detect_table),
+       truePa = mean(simDet2$p_det, na.rm = TRUE),
+       trueDc = n / (studyArea(R / 1e3) * simTime))
+}
+
+runCell <- function(theta, det1scale, seed, n = 5e4, outerloop = 10) {
+  RNGkind("Mersenne-Twister")
+  set.seed(seed)
+
+  d  <- simulateTwoDetectors(seed = seed, det1scale = det1scale, n = n,
+                             det1location = 1, det2location = 2,
+                             det2scale = 4, fdr = 0)
+  ch <- d$capHistTab
+  # Spherical-spreading TL table, r = 0 and non-finite rows removed.
+  TL <- simTLradials_20logR(maxRange = 1e6, rangeStep = 2000, numTransects = 4)
+  TL <- TL[is.finite(rowSums(TL)) & TL[[1]] > 0, ]
+
+  # Truth for all calls. truePa is E[p2] over every call made.
+  truePa <- d$truePa
+  trueDc <- d$trueDc
+
+  # The estimand under truncation: E[p2 * 1(SNR >= theta)] over ALL calls.
+  # Not the mean over surviving calls. This is what a zeroed p_a targets.
+  truePaTrunc <- mean(ch$p_det2 * (ch$snr2 >= theta), na.rm = TRUE)
+
+  # Capture-recapture: the adjudicated set is every call at least one observer
+  # flagged, with false positives removed by the judge.
+  adj <- subset(ch, (ch$groundTruth1 | ch$groundTruth2) &
+                    (ch$detect_table1 | ch$detect_table2))
+  if (is.finite(theta)) adj <- subset(adj, adj$SNR >= theta)
+
+  fit <- fitSNRvglm(adj, c("detect_table1", "detect_table2"),
+                    whichObserver = "detect_table2")
+
+  # Nc must be truncated in step with p_a. cde() cannot do this itself -- it
+  # receives Nc as a number and never sees the detections -- so it must be
+  # confirmed via NcIsTruncated.
+  Nc <- sum(ch$detect_table2 & (if (is.finite(theta)) ch$SNR >= theta else TRUE),
+            na.rm = TRUE)
+
+  # cde()'s internal falseDiscoveryRate()/capHist2snrInfo() calls always read
+  # capHistTab$detect_table1 as ground truth and detect_table2 as the detector
+  # under test. Neither raw observer in a genuine two-observer capture-
+  # recapture setup IS ground truth, so build a copy with detect_table1
+  # overwritten by the simulated ground truth (groundTruth2), matching the
+  # real Common Ground manuscript's mchToCR() convention -- see the GLM/VGLM
+  # sections above for the same construction and its explanation.
+  chForCde <- ch
+  chForCde$detect_table1 <- chForCde$groundTruth2
+
+  result <- suppressWarnings(suppressMessages(
+    cde(Nc = Nc, capHistTab = chForCde, snrDetFun = fit,
+        SL = d$SL, TL = TL, NL = d$NL, T = d$Time, A = d$A, k = 1,
+        outerloop = outerloop,
+        truncationDistance = d$R,
+        snrTruncationThreshold = theta,
+        NcIsTruncated = is.finite(theta))
+  ))
+
+  pa <- result$pa
+  Dc <- result$Dc
+
+  data.frame(theta = theta, det1scale = det1scale, seed = seed,
+             Nc = Nc,
+             truePa = if (is.finite(theta)) truePaTrunc else truePa,
+             pa = pa,
+             paFraction = pa / (if (is.finite(theta)) truePaTrunc else truePa),
+             trueDc = trueDc, Dc = Dc, DcFraction = Dc / trueDc)
+}
+
+grid <- expand.grid(theta = c(-Inf, 0, 3, 6),
+                    det1scale = c(0.5, 8),
+                    seed = 11:13)
+
+sweepRes <- do.call(rbind, Map(runCell, grid$theta, grid$det1scale, grid$seed))
+
+sweepSummary <- aggregate(cbind(paFraction, DcFraction, Nc) ~ theta + det1scale,
+                          data = sweepRes, FUN = mean)
+sweepSummary <- sweepSummary[order(sweepSummary$det1scale, sweepSummary$theta), ]
+sweepSummary$partner <- ifelse(sweepSummary$det1scale == 0.5,
+                               "steep (scale = 0.5)", "shallow (scale = 8)")
+sweepSummary$thetaLabel <- ifelse(is.infinite(sweepSummary$theta), "none",
+                                  paste(sweepSummary$theta, "dB"))
+
+kableExtra::kbl(sweepSummary[, c("partner", "thetaLabel", "Nc", "paFraction", "DcFraction")],
+                digits = c(NA, NA, 0, 2, 2), row.names = FALSE,
+                col.names = c("partner", "$\\theta$", "$N_c$",
+                             "$p_a$ / true $p_a$", "$D_c$ / true $D_c$")) %>%
+  kableExtra::kable_classic(full_width = FALSE)
+
+```
+
+Mean of three seeds per cell, 50,000 calls, false discovery rate zero, noise supplied.
 
 Three things in that table are worth stating plainly.
 
@@ -541,43 +556,43 @@ One practical note. Fitting the untruncated VGLM in the steep-partner case emits
 
 ## Inspect detection functions for insights
 
-```{r compare snr detection functions, warning=FALSE}
-SNR <- seq(-20,20,0.5);
-snrs <- data.frame(SNR)
 
-cols = colorRampPalette(c('#EDB120','#D95319','#0072BD','#7E2F8E','#77AC30',
-                        '#4DBEEE','#A2142F'))
-preds.glm= predict(snrDetFun.glm, type='response',newdata=snrs)
-preds.glmt= predict(snrDetFun.glmt, type='response',newdata=snrs)
-preds.vglm=predict(snrDetFun.vglm,type='response',newdata=snrs)
-preds.vglm0=predict(snrDetFun.vglm,type='response',newdata=snrs,
-                    type.fitted='onempall0')# One minus probability of all zeros
-pr =apply(cbind(preds.vglm[,2],preds.vglm0),1,prod)
+This is the mechanism behind the bias in the table above, and behind the fix: the untruncated fit has to extrapolate through a region with no recaptures, and the truncated fit does not have to extrapolate there at all, because that region is simply not part of its estimand.
 
+The three curves below are deliberately not drawn over the same range. `TRUE` is the actual generating function, so it is shown everywhere -- there is no reason to hide ground truth just because a fitted curve does not reach that far. The untruncated fit is shown extrapolated across the same full range, because that is exactly what happens when it is used without truncation: it is applied everywhere, confidently and wrongly, in the region with no recaptures. The truncated fit is shown *only* where it has data, stopping at the threshold, because that is what the fit actually is -- `pDetInArea` never extrapolates it below the threshold either, it zeroes that region outright rather than trusting an unsupported continuation. Drawing the truncated curve extending below its own threshold, as if it had an opinion about that region, would misrepresent what the model was fit on and what the calculation actually does with it.
 
-par(cex=0.8,mar=c(3.1,3.1,0.25,0),mgp=c(2.1,1,0))
-plot(snrs$SNR, xlim= c(-5,10),  ylim= c(0,1),
-     xlab="SNR", ylab = "P(Detection)", type='n')
-grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
-lines(snrs$SNR,preds.glm,col=cols(7)[4],lwd=2)
-lines(snrs$SNR,preds.glmt,col=cols(7)[5],lwd=2)
-lines(snrs$SNR,pr,col=cols(7)[1],lwd=2)    # vglm 1-p(all zero)
-points(simDet2t$snr,simDet2t$p_det,pch='.')     # Actual probability of detection
-legend( "bottomright", 
-        legend =c("TRUE",
-                  "GLM-No SNR Truncation",
-                  "GLM-SNR Truncated",
-                  "VGLM-SNR Truncated"
-                  # "Perception bias: detector1 (VGLM)",
-                  # "Perception bias: detector2 (VGLM)",
-                  # "1-p(all zeros) (VGLM)"
-                  ),
-        col=c('black', cols(7)[4], cols(7)[5], 
-              cols(7)[1] #, cols(7)[6],  cols(7)[2]), 
-        ),
-        lty=rep('solid',6),
-        lwd=rep(2,6)
-)
+```{r compare snr detection functions, warning=FALSE, message=FALSE}
+fullGrid  <- data.frame(SNR = seq(-20, 20, 0.5))
+truncGrid <- data.frame(SNR = seq(snrTruncationThreshold, 20, 0.5))
+
+trueCurve  <- data.frame(SNR = fullGrid$SNR,
+                         fit = plogis(fullGrid$SNR, location = det2params$location,
+                                      scale = det2params$scale),
+                         curve = "TRUE")
+noneCurve  <- data.frame(SNR = fullGrid$SNR,
+                         fit = predictDetFun(snrDetFun.vglmNone, newdata = fullGrid)$fit,
+                         curve = "VGLM, no truncation")
+truncCurve <- data.frame(SNR = truncGrid$SNR,
+                         fit = predictDetFun(snrDetFun.vglmt, newdata = truncGrid)$fit,
+                         curve = "VGLM, truncated")
+
+detFunComparison <- rbind(trueCurve, noneCurve, truncCurve)
+detFunComparison$curve <- factor(detFunComparison$curve,
+                                 levels = c("TRUE", "VGLM, no truncation", "VGLM, truncated"))
+
+ggplot2::ggplot(detFunComparison, ggplot2::aes(SNR, fit, colour = curve, linetype = curve)) +
+  ggplot2::geom_vline(xintercept = snrTruncationThreshold, colour = "black",
+                      linewidth = 0.6) +
+  ggplot2::geom_line(linewidth = 1) +
+  ggplot2::scale_colour_manual(values = c("TRUE" = "black",
+                                          "VGLM, no truncation" = "#D95319",
+                                          "VGLM, truncated" = "#0072BD")) +
+  ggplot2::scale_linetype_manual(values = c("TRUE" = "solid",
+                                            "VGLM, no truncation" = "solid",
+                                            "VGLM, truncated" = "dashed")) +
+  ggplot2::coord_cartesian(xlim = c(-5, 10), ylim = c(0, 1)) +
+  ggplot2::labs(x = "SNR (dB)", y = "P(Detection)", colour = NULL, linetype = NULL) +
+  ggplot2::theme_bw()
 ```
 
 
