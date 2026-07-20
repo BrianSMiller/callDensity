@@ -7,8 +7,8 @@
 pDetGivenNL(
   nl,
   detFun,
-  TL,
   SL,
+  TL,
   truncationDistance = max(TL[[1]]),
   nSLnodes = 41,
   binWidth = 0.25
@@ -20,12 +20,12 @@ pDetGivenNL(
 \item{detFun}{Either a detFun object from \code{fitDetFun}, or a plain function
 of SNR returning probability of detection.}
 
+\item{SL}{List or data.frame containing the distribution of source levels,
+with elements named mean and sd.}
+
 \item{TL}{Data.frame of transmission losses. The first column contains
 ranges in metres, the remaining columns contain TL in dB for each radial
 transect at that range. Same format as \code{cde} expects.}
-
-\item{SL}{List or data.frame containing the distribution of source levels,
-with elements named mean and sd.}
 
 \item{truncationDistance}{Scalar or vector of truncation distances in
 metres. If a vector, one value per transect. Cells beyond the truncation

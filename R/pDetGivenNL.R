@@ -18,11 +18,11 @@
 #' @param nl Vector of noise levels in dB.
 #' @param detFun Either a detFun object from `fitDetFun`, or a plain function
 #'   of SNR returning probability of detection.
+#' @param SL List or data.frame containing the distribution of source levels,
+#'   with elements named mean and sd.
 #' @param TL Data.frame of transmission losses. The first column contains
 #'   ranges in metres, the remaining columns contain TL in dB for each radial
 #'   transect at that range. Same format as `cde` expects.
-#' @param SL List or data.frame containing the distribution of source levels,
-#'   with elements named mean and sd.
 #' @param truncationDistance Scalar or vector of truncation distances in
 #'   metres. If a vector, one value per transect. Cells beyond the truncation
 #'   distance carry no weight, and the returned probability is relative to the
@@ -37,7 +37,7 @@
 #'
 #' @importFrom stats dnorm approxfun
 #' @export
-pDetGivenNL <- function(nl, detFun, TL, SL,
+pDetGivenNL <- function(nl, detFun, SL, TL,
                         truncationDistance = max(TL[[1]]),
                         nSLnodes = 41,
                         binWidth = 0.25) {

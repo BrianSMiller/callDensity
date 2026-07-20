@@ -12,6 +12,7 @@ Software for estimating the density of animal vocalisations (calls) This package
 Useful links:
 \itemize{
   \item \url{https://github.com/BrianSMiller/callDensity}
+  \item \url{https://briansmiller.github.io/callDensity/}
 }
 
 }
