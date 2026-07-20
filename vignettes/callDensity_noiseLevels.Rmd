@@ -1,0 +1,1168 @@
+---
+title: "callDensity: Estimating noise levels from detections"
+output: 
+  html_document: default
+  pdf_document: default
+  rmarkdown::html_vignette:
+    vignette: >
+      %\VignetteEncoding{UTF-8}
+      %\VignetteIndexEntry{callDensity: Estimating noise levels from detections}
+      %\VignetteEngine{knitr::rmarkdown}
+bibliography: references.bib
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, fig.width = 6, fig.height = 3.5,
+                      comment = "#>")
+```
+
+```{r setup}
+library(callDensity)
+library(ggplot2)
+library(kableExtra)
+```
+
+# The problem in one paragraph
+
+For single sensor call density estimates, we rely on a Monte Carlo simulation to
+estimate the probability of detection in the area. This simulation,
+`pDetInArea`, requires a distribution of noise levels as an input parameter. An
+obvious place to get one is the noise measured at each detection, since those
+measurements are already in the capture history table (because they're required
+to estimate SNR to fit a detection function). However, those measurements are
+biased low. A quiet period gives you a high SNR, and a high SNR gives you a
+detection, so your detections oversample the quiet periods. Measure noise only
+where you detected something and you will conclude the ocean is quieter than it
+is.
+
+This vignette shows how big that bias is, where it comes from, and how to
+correct for it. The original Common Ground implementation estimated NL's mean
+and sd directly from detections, with no correction and no comment on why one
+might be needed -- a reasonable thing to do without a reason to suspect
+otherwise, but exactly the assumption this vignette exists to check.
+
+# From an average to a curve
+
+`pDetInArea` already computes something close to what we need. It answers one
+question: averaged over a whole distribution of noise levels, what fraction of
+the calls in the study area get detected? That fraction is $\hat{p}_a$, a
+single number, and `pDetInArea` gets it by drawing noise levels from a normal
+distribution and averaging the detection probability over the draws.
+
+We can change one thing about that calculation: instead of drawing noise from a
+distribution, hold it fixed at one value. The
+output is no longer a single averaged number, it is the detection probability
+*at that noise level*. Do this at 70 dB, then 74, then 78, and so on, and the
+outputs trace out a curve: probability of detection against noise level. Call
+it `pDetGivenNL`.
+
+This curve is the key to the whole solution: Detection probability at a fixed
+noise level is exactly the quantity that governs the bias. A quiet spell means
+more of the study area is audible, which means more calls detected; a loud spell
+means less area is audible and fewer calls detected. The curve is not a new idea
+bolted onto `pDetInArea`, it is $\hat{p}_a$ with the average taken back out, so
+the noise dependence it was hiding is visible again. That dependence is the
+mechanism, and the rest of this vignette is about using it, to understand how
+big the bias is, and ultimately to correct for it.
+
+# Building the curve
+
+`pDetGivenNL` takes the same transmission loss table and source level
+distribution as `pDetInArea` and `cde`, plus a vector of noise levels to
+evaluate at instead of a distribution to draw from.
+
+The transmission loss table and source levels below are the ones the rest of
+this vignette uses throughout, and the detector is a plain logistic so this
+section does not depend on anything else.
+
+```{r build.curve}
+
+R  <- 1e6
+SL <- data.frame(mean = 190, sd = 4, sampleSize = 350)
+
+TL <- simTLradials_20logR(maxRange = R, rangeStep = 1000, numTransects = 4)
+TL <- TL[is.finite(rowSums(TL)) & TL[, 1] > 0, ]     # drop r = 0 if present
+
+detector <- function(snr) plogis(snr, location = 1, scale = 2)
+
+nlGrid <- seq(from = 55, to = 135, by = 1)
+pCurve <- pDetGivenNL(nlGrid, detector, SL, TL)
+
+curveDf <- data.frame(nl = nlGrid, pDet = pCurve)
+
+```
+
+## Noise level versus audible area
+
+Before plotting it, be clear about what is on the axes, because there is no measured
+data on this plot. Every point along the line asks *if the noise were
+always exactly this loud, and never varied, what fraction of the study area
+would you be hearing calls in?*
+
+That fraction is just detection area divided by study area. So this plot is
+really about detection range, which is the quantity you think in anyway. Add
+the range at a few points and it becomes readable.
+
+```{r curve.plot, warning=FALSE, fig.height=4}
+
+# Range at which a call of mean source level sits at the detector's 50% point.
+# Approximate. Ignores the spread in SL and the smoothness of the detector, so
+# it is a label, not a calculation the curve depends on.
+detRadius_km <- function(nl, SLmean = 190, loc = 1) {
+  10^((SLmean - nl - loc) / 20) / 1000
+}
+
+marks <- data.frame(nl = c(74, 84, 94, 104))
+marks$pDet  <- pDetGivenNL(marks$nl, detector, SL, TL)
+marks$label <- sprintf("%.0f km", detRadius_km(marks$nl))
+
+# Reference line: one decade per 10 dB, anchored at 90 dB. This slope is a
+# direct consequence of spherical spreading (TL = 20 log10(r)) plus a
+# step-function detector: to hold SNR constant, range must shrink by
+# 10^(dNL/20) for each dB of extra noise, so area -- and therefore detection
+# probability -- shrinks by 10^(dNL/10). It is tied to this TL model
+# specifically, which is exactly why it is used as a reference line rather
+# than the curve itself, and why the comparison against pyRAM later in this
+# vignette anchors to the same line. It is a bare exponential with no ceiling,
+# so it is clamped at 1 -- probability cannot exceed that, even if the formula
+# it comes from does not know that.
+anchor <- pDetGivenNL(90, detector, SL, TL)
+refDf  <- data.frame(nl = nlGrid,
+                     pDet = pmin(anchor * 10^(-(nlGrid - 90) / 10), 1))
+
+ggplot(curveDf, aes(x = nl, y = pDet)) +
+  geom_line(data = refDf, linetype = "dashed", colour = "grey50",
+            linewidth = 0.6) +
+  geom_line(linewidth = 0.9, colour = "steelblue") +
+  geom_point(data = marks, size = 2, colour = "grey20") +
+  geom_text(data = marks, aes(label = label), hjust = -0.25, vjust = -0.4,
+            size = 3, colour = "grey20") +
+  geom_vline(xintercept = 84, colour = "firebrick", linetype = "dotted") +
+  annotate("text", x = 84.5, y = 1e-4, label = "true mean NL",
+           colour = "firebrick", hjust = 0, size = 3) +
+  scale_y_log10() +
+  xlab("Noise level (dB)") +
+  ylab("Fraction of the study area you can hear into") +
+  labs(caption = "Labels: detection radius. Dashed grey: one decade per 10 dB, spherical spreading")
+
+```
+
+Work through two of those labelled points by hand and the plot stops being
+abstract.
+
+**At 84 dB.** A 190 dB call reaches the detector's 50% point when SNR is 1 dB,
+so when TL is $190 - 84 - 1 = 105$ dB. Under spherical spreading that is
+$10^{105/20}$ metres, or 178 km. So you are hearing calls out to roughly 178 km.
+The area you can hear into is $\pi \times 178^2 \approx 99{,}500$ km². The study
+area is $\pi \times 1000^2 \approx 3{,}140{,}000$ km². You are hearing into
+about 3% of it.
+
+**At 94 dB.** Every call now needs 10 dB more received level. Ten decibels of
+spherical spreading is a factor of 3.16 in range. So 178 km becomes 56 km. The
+area is $\pi \times 56^2 \approx 9{,}950$ km², one tenth of what it was. You are
+hearing into 0.3% of the study area.
+
+Ten decibels louder, ten times less ocean, ten times fewer calls. Each 10 dB
+step to the right divides the curve by 10. On a log axis that is a straight
+line, and that is all the dashed reference line is saying.
+
+**The detector never entered that.** Move its threshold and the 178 km becomes
+200 km or 150 km. The factor of ten per ten decibels does not budge, because it
+came from the geometry of a circle, not from the detector. That is the single
+most important thing on this plot, and it is why correcting the noise using a
+property of the detector cannot be right.
+
+**The shoulder on the left.** Below about 69 dB the labelled radius would exceed
+1000 km. There is no ocean out there. It is past the edge of the study area, so
+it is not yours to hear into. The curve flattens at 1 and making the sea
+quieter buys nothing more. That shoulder is exactly where the tidy algebra
+stops working, and it is why this vignette computes a curve rather than fitting
+a slope to it.
+
+**Where your data sits.** The red line marks the true mean noise level, out on
+the straight portion, where a decibel of noise really does cost you ocean.
+
+If this plot still feels abstract, skip ahead. The next figure is the same
+curve on a linear axis, zoomed into the range your noise actually occupies, and
+it is doing the real work.
+
+# Illustrating why NL from detected calls is biased
+
+Now use the curve. Nature draws a noise level for each call from a normal
+distribution. The detection process then throws most of them away, and it
+throws away loud ones far more eagerly than quiet ones. The curve says exactly
+how much more eagerly.
+
+```{r filter.plot, warning=FALSE, fig.height=4}
+
+nlTrue  <- 84
+nlSd    <- 4
+
+fine  <- seq(nlTrue - 5 * nlSd, nlTrue + 5 * nlSd, length.out = 400)
+fN    <- dnorm(fine, nlTrue, nlSd)
+pd    <- pDetGivenNL(fine, detector, SL, TL)
+wt    <- fN * pd
+
+# Scale each curve to a common height so the shift is visible
+filterDf <- rbind(
+  data.frame(nl = fine, y = fN / max(fN),  what = "1. All calls (the truth)"),
+  data.frame(nl = fine, y = pd / max(pd),  what = "2. Chance of detection"),
+  data.frame(nl = fine, y = wt / max(wt),  what = "3. What you measure")
+)
+
+meanObs <- sum(fine * wt) / sum(wt)
+
+ggplot(filterDf, aes(x = nl, y = y, colour = what)) +
+  geom_line(linewidth = 0.9) +
+  scale_colour_manual(values = c("1. All calls (the truth)"   = "firebrick",
+                                 "2. Chance of detection"      = "seagreen",
+                                 "3. What you measure"         = "steelblue")) +
+  geom_vline(xintercept = nlTrue,  colour = "firebrick", linetype = "dotted",
+             linewidth = 1.1) +
+  geom_vline(xintercept = meanObs, colour = "steelblue", linetype = "dashed",
+             linewidth = 1.1) +
+  annotate("segment", x = meanObs, xend = nlTrue, y = 1.05, yend = 1.05,
+           arrow = arrow(length = unit(2, "mm"), ends = "both")) +
+  annotate("text", x = (meanObs + nlTrue) / 2, y = 1.12,
+           label = sprintf("bias = %.2f dB", nlTrue - meanObs), size = 3) +
+  xlab("Noise level (dB)") +
+  ylab("Scaled to a common height") +
+  labs(colour = NULL) +
+  theme(legend.position = "top")
+
+```
+
+Curve 1 is the truth. Curve 2 is the detection curve from the previous plot,
+now drawn on a linear axis over the range the noise actually occupies. Curve 3
+is curve 1 multiplied by curve 2, and it is what your detections show you.
+
+Multiplying by a curve that leans left drags the peak left. That is the entire
+bias. Nothing subtle is happening.
+
+Two things worth noticing, because both get used later.
+
+Curve 3 is narrower than curve 1 by very little. The width survives the
+filtering almost intact, which means the standard deviation of your measured
+noise is close to the truth even though the mean is not. That leaves only one
+unknown to solve for.
+
+The size of the shift depends on how steeply curve 2 leans, and on how wide
+curve 1 is. It does not depend on where the detector sits. Move the detector
+threshold and curve 2 changes height, not slope.
+
+# Correcting the bias
+
+The previous plot is a prediction machine. Give it a candidate true mean, and
+it tells you what mean you should have measured.
+
+We already know what we measured, and we have already estimated the
+detection function (because it is required by `pDetInArea`), so we can run this
+prediction machine backwards.
+
+```{r rootfind.plot, warning=FALSE, fig.height=3.5}
+
+muTry <- seq(80, 88, by = 1)
+muObs <- vapply(muTry, function(m)
+  predictSampledNL(mu = m, sigma = nlSd, detFun = detector, SL = SL, TL = TL),
+  numeric(1))
+
+rootDf <- data.frame(muTrue = muTry, muMeasured = muObs)
+
+# The lookup itself: read across from the known measured value (y-axis) to
+# the curve, then down to the candidate true mean that produced it. uniroot
+# does this numerically; the arrows below do it visually, landing exactly on
+# uniroot's own answer rather than on a separately-marked "true" position.
+recovered <- uniroot(
+  function(mu) predictSampledNL(mu = mu, sigma = nlSd, detFun = detector,
+                                SL = SL, TL = TL) - meanObs,
+  interval = c(meanObs, meanObs + 25))$root
+
+xFloor <- min(muTry)
+yFloor <- min(c(rootDf$muMeasured, meanObs))
+
+ggplot(rootDf, aes(x = muTrue, y = muMeasured)) +
+  geom_abline(slope = 1, intercept = 0, colour = "grey70", linetype = "dashed") +
+  geom_line(linewidth = 0.9, colour = "steelblue") +
+  # Step 1: across, from what you measured to the point on the curve
+  annotate("segment", x = xFloor, xend = recovered, y = meanObs, yend = meanObs,
+           colour = "steelblue", linewidth = 1.1,
+           arrow = arrow(length = unit(3, "mm"), type = "closed")) +
+  # Step 2: down, from that point to the candidate true mean it came from
+  annotate("segment", x = recovered, xend = recovered, y = meanObs, yend = yFloor,
+           colour = "firebrick", linewidth = 1.1,
+           arrow = arrow(length = unit(3, "mm"), type = "closed")) +
+  annotate("point", x = recovered, y = meanObs, size = 2.5, colour = "black") +
+  annotate("text", x = xFloor + 0.2, y = meanObs, hjust = 0, vjust = -0.7,
+           size = 3, colour = "steelblue", label = "measured") +
+  annotate("text", x = recovered, y = yFloor, hjust = -0.15, vjust = 1.3,
+           size = 3, colour = "firebrick", label = "recovered NL") +
+  coord_equal() +
+  xlab("Candidate true mean NL (dB)") +
+  ylab("Measured NL") +
+  labs(caption = "Dashed grey: the 1:1 line you would get with no bias")
+
+```
+
+The blue line sits below the 1:1 line by the size of the bias. It rises
+steadily, so there is exactly one candidate that reproduces your measurement.
+The two arrows are the lookup, drawn: across from what you measured (blue) to
+the point on the curve, then down (red) to read off the candidate that
+produced it. That point and that landing spot are not illustrative
+approximations -- they are `uniroot`'s own answer, plotted.
+
+`nlFromDetections` is the package function that does exactly this (`uniroot`
+over `predictSampledNL`, same shape as above). It also defaults to reading noise
+measurements from a `NoiseRL` column, so it accepts an `snrInfo` table without
+modification:
+
+```{r nlfromdetections-demo}
+
+nlFromDetections(snrInfo = data.frame(NoiseRL = rnorm(500, meanObs, nlSd)),
+                 snrDetFun = detector, SL = SL, TL = TL)
+
+```
+
+That's a synthetic `snrInfo` built from the biased mean this vignette already
+computed, just to show the call shape. `mean` should land close to `nlTrue`
+(84 dB); `sd` is passed through from the input essentially unchanged, per the
+note two paragraphs up about curve 3's width.
+
+# Where this leaves the old function (pre callDensity v1.1.1)
+
+Prior to callDensity version 1.1.1, `nlFromSnrInfo` was used to correct this
+bias by adding the SNR at which the detection function reaches 0.5. However,
+that quantity is a property of the detector, and the plots above say the bias is
+a property of the geometry and the noise variance, and the two are close only by
+coincidence for some detectors.
+
+`nlFromSnrInfo` was always a stopgap. It corrects the bias using a property of
+the detector (the SNR at its 50% point). This derived from the example scenario,
+where it arrived at the correct answer coincidentally,
+**not** because it was the thing driving the bias. `nlFromDetections` is derived
+from the geometry that actually produces the bias, and is consistently less
+biased across every detector and site this has been tested against.
+`nlFromSnrInfo` is retained as a deprecated wrapper for old scripts, but there
+is no situation where it should be preferred over `nlFromDetections`. `cde`
+already defaults to `nlFromDetections` when `NL` is not supplied.
+
+# Solution built from a lookup table, not a formula
+
+`pDetGivenNL` was never built around spherical spreading, or any other
+propagation formula. It reads transmission loss straight out of whatever
+table you hand it, and evaluates the sonar equation against that table, cell
+by cell. Swap the table for pyRAM output, AcTUP output, or anything else with
+the same range and TL columns, and the function does not need to change,
+because it never encoded an assumption about what the physics look like in
+the first place. The dashed reference line on the first plot is not part of
+that machinery: it is one candidate formula ($20\log_{10}r$), included there
+as a comparison so any departure from it is visible, not as anything
+`pDetGivenNL` relies on.
+
+Spherical spreading is not a serious model for a baleen whale call at 25 Hz in
+2000 m of water at 62°S. So below we use a real one. The file below is pyRAM
+output computed on GLORYS12 sound speed profiles along 24 radial transects out
+to 1000 km, for the South Kerguelen Plateau mooring in summer, at 25 Hz.
+
+## First, look at the data
+
+```{r pyram.inspect}
+
+dim(kerguelen2015TL)
+names(kerguelen2015TL)
+range(kerguelen2015TL$range_m)
+
+kerguelen2015TLmeta[, c("azimuths", "TruncationDistance_m")]
+
+```
+
+`kerguelen2015TL` and `kerguelen2015TLmeta` are TL data that ship with the
+callDensity package (`?kerguelen2015TL`, `?kerguelen2015TLmeta`).
+`kerguelen2015TLmeta` records where each of the 24 transects actually runs onto
+land, using the pyRAM pipeline's bathymetry source
+(`cmems_mod_glo_phy_my_0.083deg_static`).
+
+The layout is already what `pDetGivenNL` wants: `range_m` first, then 24
+columns named by bearing from `tl000` to `tl345`. Range runs 100 m to 1000 km
+in 100 m steps, so 10,000 rows.
+
+```{r pyram.prepare}
+
+# Drop any non-finite cells. Range is already in metres and starts above zero.
+TLpyram <- kerguelen2015TL[is.finite(rowSums(kerguelen2015TL)), ]
+
+sprintf("%d transects, range step %.0f m, TL at 1000 km: %.1f to %.1f dB",
+        ncol(TLpyram) - 1,
+        diff(TLpyram$range_m)[1],
+        min(as.numeric(TLpyram[nrow(TLpyram), -1])),
+        max(as.numeric(TLpyram[nrow(TLpyram), -1])))
+
+# Match truncation distances to transects by azimuth, not by row position --
+# two objects agreeing on row order is an assumption, not a guarantee, and
+# this is exactly the kind of silent misalignment that would be invisible in
+# the output. tl015 gets the metadata row where azimuths == 15, full stop.
+transectNames <- names(TLpyram)[-1]                      # tl000 .. tl345
+transectAz    <- as.numeric(sub("^tl", "", transectNames))
+pyramTrunc    <- kerguelen2015TLmeta$TruncationDistance_m[
+                   match(transectAz, kerguelen2015TLmeta$azimuths)]
+stopifnot("Every transect column must have a matching azimuth in kerguelen2015TLmeta" =
+            !anyNA(pyramTrunc))
+
+truncated <- pyramTrunc < max(TLpyram$range_m)
+sprintf("%d of %d transects hit land before %.0f km: %s km (bearings %s)",
+        sum(truncated), length(pyramTrunc), max(TLpyram$range_m) / 1000,
+        paste(round(pyramTrunc[truncated] / 1000), collapse = ", "),
+        paste(transectAz[truncated], collapse = ", "))
+
+```
+
+The spread in TL is very large, but that is because it is computed from every
+bearing's row at 1000 km regardless of whether that bearing is still in water
+there. Eight of the 24 bearings hit land between 410 and 950 km (bearings 120°
+to 225°, roughly south through the plateau), so their rows beyond that point
+describe whatever pyRAM did past the coastline, not propagation through open
+water. `TLpyram[nrow(TLpyram), -1]` mixes those in with the sixteen genuinely
+open-water bearings. It is a fair description of what the raw file contains, and
+not yet a fair description of the site. For this reason, pDetGivenNL and
+pDetInArea can take a truncationDistance as an input, and this can be used to mask (i.e. remove) land from the study area when estimating `NL` and `p_a`.
+
+## The same curve, real physics
+
+```{r pyram.curve, warning=FALSE, fig.height=4}
+
+pPyram <- pDetGivenNL(nlGrid, detector, SL, TLpyram,
+                      truncationDistance = pyramTrunc)
+
+bothDf <- rbind(
+  data.frame(nl = nlGrid, pDet = pCurve, what = "Spherical spreading"),
+  data.frame(nl = nlGrid, pDet = pPyram, what = "pyRAM, SKP summer, 25 Hz")
+)
+
+anchorP <- pDetGivenNL(90, detector, SL, TLpyram, truncationDistance = pyramTrunc)
+refBoth <- data.frame(nl = nlGrid,
+                      pDet = pmin(anchorP * 10^(-(nlGrid - 90) / 10), 1))
+
+ggplot(bothDf, aes(x = nl, y = pDet, colour = what)) +
+  geom_line(data = refBoth, aes(x = nl, y = pDet), inherit.aes = FALSE,
+            linetype = "dashed", colour = "grey50", linewidth = 0.6) +
+  geom_line(linewidth = 0.9) +
+  geom_vline(xintercept = 84, colour = "firebrick", linetype = "dotted") +
+  scale_y_log10() +
+  xlab("Noise level (dB)") +
+  ylab("Fraction of the study area you can hear into") +
+  labs(colour = NULL,
+       caption = "Dashed grey: one decade per 10 dB, anchored on the pyRAM curve") +
+  theme(legend.position = "top")
+
+```
+
+`truncationDistance = pyramTrunc` changes what "the study area" on the y-axis
+means. Without it, the denominator is the full 1000 km circle, including the
+land eight of these bearings never reach. With it, the denominator is the
+actual water area `cde()` would use, via the same `td^2`-per-sector logic
+`studyArea()` applies. This curve is now the one that matches what `p_a`
+inside `cde()` actually estimates for this site, not a hypothetical circle.
+
+What to look for, and what it means.
+
+**The slope should not be one decade per 10 dB.** At 25 Hz in 2000 m of water
+the sound is in a waveguide, not a free field. Beyond a few water depths it
+spreads more like a cylinder than a sphere, which makes TL climb more slowly
+with range. Slower TL means a decibel of extra noise costs you a wider annulus,
+so the curve should fall *faster* than the dashed line, not slower.
+
+If it does, that is the whole argument in one picture. The number
+$\lambda = \ln(10)/10$ from the spherical derivation is simply wrong here, and
+anything built on it inherits that error.
+
+**The curve should be bumpy.** Convergence zones and bottom interaction add and
+remove audible ocean at particular ranges. Wiggles are physics, not noise.
+
+**The shoulder should be further left, or gone.** Flatter TL means longer
+detection range, so it takes a quieter sea to run out of study area.
+
+**One thing worth checking before trusting any of this.** `pDetGivenNL`'s only
+approximation is the TL bin width, and a bumpy curve is exactly the case where
+too coarse a bin could blur real structure away rather than just smooth noise.
+
+```{r pyram.binwidth, warning=FALSE}
+
+binCheck <- data.frame(binWidth = c(1, 0.5, 0.25, 0.1))
+binCheck$pDet84 <- vapply(binCheck$binWidth, function(b)
+  pDetGivenNL(84, detector, SL, TLpyram, truncationDistance = pyramTrunc,
+             binWidth = b), numeric(1))
+binCheck$nBins <- vapply(binCheck$binWidth, function(b)
+  length(seq(40, 140, by = b)), numeric(1))
+
+binCheck
+
+```
+
+Stable from 0.5 dB down, so `pDetGivenNL`'s default of 0.25 dB is fine here.
+Nothing about using a real, bumpy curve instead of a synthetic one changes
+that.
+
+## Why your measurements would be biased here
+
+Same mechanism as the spherical-spreading case, same three curves. The only
+difference is which detection-probability curve does the filtering.
+
+```{r pyram.filter, warning=FALSE, fig.height=4}
+
+finePyram <- seq(nlTrue - 5 * nlSd, nlTrue + 5 * nlSd, length.out = 400)
+fNPyram   <- dnorm(finePyram, nlTrue, nlSd)
+pdPyram   <- pDetGivenNL(finePyram, detector, SL, TLpyram,
+                        truncationDistance = pyramTrunc)
+wtPyram   <- fNPyram * pdPyram
+
+filterPyramDf <- rbind(
+  data.frame(nl = finePyram, y = fNPyram / max(fNPyram),
+            what = "1. All calls (the truth)"),
+  data.frame(nl = finePyram, y = pdPyram / max(pdPyram),
+            what = "2. Chance of detection"),
+  data.frame(nl = finePyram, y = wtPyram / max(wtPyram),
+            what = "3. What you measure")
+)
+
+measuredMasked <- sum(finePyram * wtPyram) / sum(wtPyram)
+
+ggplot(filterPyramDf, aes(x = nl, y = y, colour = what)) +
+  geom_line(linewidth = 0.9) +
+  scale_colour_manual(values = c("1. All calls (the truth)"   = "firebrick",
+                                 "2. Chance of detection"      = "darkorange3",
+                                 "3. What you measure"         = "steelblue")) +
+  geom_vline(xintercept = nlTrue,       colour = "firebrick", linetype = "dotted",
+            linewidth = 1.1) +
+  geom_vline(xintercept = measuredMasked, colour = "steelblue", linetype = "dashed",
+            linewidth = 1.1) +
+  annotate("segment", x = measuredMasked, xend = nlTrue, y = 1.05, yend = 1.05,
+           arrow = arrow(length = unit(2, "mm"), ends = "both")) +
+  annotate("text", x = (measuredMasked + nlTrue) / 2, y = 1.12,
+           label = sprintf("bias = %.2f dB", nlTrue - measuredMasked), size = 3) +
+  xlab("Noise level (dB)") +
+  ylab("Scaled to a common height") +
+  labs(colour = NULL) +
+  theme(legend.position = "top")
+
+```
+
+The bias at this real site is `r round(nlTrue - measuredMasked, 2)` dB.
+Leaving the land mask out entirely -- `pDetGivenNL` with its default full
+1000 km circle -- gives almost exactly the same number. That is not a
+coincidence, and it does not generalise to `Dc` or `p_a`, so it is worth
+being clear about why.
+
+Adding the land mask back in only changes the bias if the water it adds back
+is actually contributing to the weighted average that produces `measuredMasked`.
+The near-identical numbers say it mostly isn't: whatever lies beyond each
+bearing's truncation distance is already indistinguishable from zero
+detection probability at every noise level this NL distribution reaches, so
+restoring it inflates `pDetGivenNL`'s denominator (more nominal area) without
+moving its numerator (that area was never contributing detections). A change
+that dilutes a weighted mean by the same amount at every noise level cancels
+out of `predictSampledNL`, because `predictSampledNL` only depends on the
+curve's *shape*, not its absolute height. This is an inference from the two
+numbers matching, not something independently confirmed here, but it fits the
+picture from "The same curve, real physics" above: TL climbs quickly in this
+shallow, low-frequency waveguide, so detection range is short relative to
+1000 km, and the truncated bearings' far ends were already irrelevant.
+
+`Dc` and `p_a` do depend on absolute height, not just shape, which is exactly
+why the land mask matters for them and barely registers here. Land masking
+being a big deal for `Dc`/`p_a` and a non-issue for NL are both true, and
+both consequences of the same shape-versus-height distinction.
+
+```{r pyram.seasons, eval=FALSE}
+
+# WORTH DOING, NOT DONE. The bias is a property of the propagation, so it
+# should vary by season as the sound speed profile changes, and by site. Loop
+# the four seasons and the seven AWR sites and tabulate the bias. If it moves
+# by more than a decibel between seasons, that is an argument for estimating NL
+# seasonally, which is what Castro et al. (2024) recommend for f anyway.
+
+```
+
+# When does the correction still hold?
+
+`nlFromDetections` substitutes the sample standard deviation of your
+detections for the true standard deviation of the whole noise population, and
+that substitution is where its residual bias comes from. It is a small
+residual in every example so far, because in every example so far
+`log(pDetGivenNL(nl))` has stayed close to straight over the width of the
+noise distribution. A straight line in log-probability has no curvature, and
+zero curvature means the substitution costs nothing: multiplying a Gaussian by
+a perfect exponential shifts the mean and leaves the variance untouched.
+
+Three things control how straight that line stays: how steep the detector is,
+how far from a power law the propagation is, and how wide the noise
+distribution is relative to both. None of the three is expressible as "the
+propagation's fault" or "the detector's fault" in isolation, because
+`pDetGivenNL` is a single curve built from both, and curvature is a property
+of that combined curve, not of either ingredient separately. The only way to
+find out which combinations stay safely straight is to sweep all three at
+once.
+
+## A sweep, computed exactly
+
+The residual can be computed without simulating a single call. `meanObs` and
+its standard deviation are both weighted moments of the same
+`fN * pDetGivenNL(nl)` product already used to build the three-curve plots,
+so both come from the same deterministic integral, no repeated sampling and
+no Monte Carlo noise to average out.
+
+```{r residual.function}
+
+#' Residual bias in nlFromDetections's recovered mean, computed exactly.
+#'
+#' Builds the same weighted mean and weighted variance the three-curve plots
+#' use, then inverts predictSampledNL twice: once with the true sd (which
+#' should recover nlTrue exactly, as a check), and once with the sample sd of
+#' the detections (which is what nlFromDetections actually receives). The
+#' difference between the second recovery and nlTrue is the residual.
+residualNL <- function(detFun, TLtab, truncDist, sd, nlTrue = 84) {
+
+  fine <- seq(nlTrue - 6 * sd, nlTrue + 6 * sd, length.out = 600)
+  fN   <- dnorm(fine, nlTrue, sd)
+  pd   <- pDetGivenNL(fine, detFun, SL, TLtab, truncationDistance = truncDist)
+  wt   <- fN * pd
+
+  if (sum(wt) <= 0 || !all(is.finite(wt))) return(NA_real_)
+
+  meanObs  <- sum(fine * wt) / sum(wt)
+  sigmaObs <- sqrt(sum((fine - meanObs)^2 * wt) / sum(wt))
+
+  recoveredSample <- tryCatch(
+    uniroot(function(mu) predictSampledNL(mu = mu, sigma = sigmaObs,
+                                          detFun = detFun, SL = SL,
+                                          TL = TLtab,
+                                          truncationDistance = truncDist) - meanObs,
+           interval = c(meanObs, meanObs + 40))$root,
+    error = function(e) NA_real_)
+
+  recoveredSample - nlTrue
+}
+
+```
+
+```{r residual.sweep}
+
+# Detector steepness: plogis's scale parameter, smaller is steeper.
+detScaleGrid <- c(0.5, 1, 2, 4, 8)
+
+# Width of the true NL distribution, dB.
+sdGrid <- c(1, 2, 3, 4, 6, 8)
+
+# Mean NL -- the same four landmark values already used to label detection
+# radius in "Noise level versus audible area", so this reuses points already
+# seen rather than introducing new ones. For spherical spreading, moving this
+# only matters near the shoulder (a ceiling-at-1 effect, unrelated to
+# propagation); for pyRAM, it also matters because it slides the Gaussian
+# window along a curve with real wiggles in it, and whether a given nlSd
+# catches a smooth stretch or a kink depends on where the window sits.
+nlTrueGrid <- c(74, 84, 94, 104)
+
+propModels <- list(
+  spherical = list(TL = TL,      truncationDistance = max(TL[[1]])),
+  pyRAM     = list(TL = TLpyram, truncationDistance = pyramTrunc)
+)
+
+sweepGrid <- expand.grid(detScale    = detScaleGrid,
+                         nlSd        = sdGrid,
+                         nlTrue      = nlTrueGrid,
+                         propagation = names(propModels),
+                         stringsAsFactors = FALSE)
+
+# This runs residualNL() once per row. Every call re-bins the TL table (that
+# is how pDetGivenNL works), and uniroot calls predictSampledNL, which calls
+# pDetGivenNL again, several dozen times per row while it converges. Every row
+# is independent of every other row, so this is embarrassingly parallel --
+# same future.callr backend callDensity's own parallel functions use
+# elsewhere. future.seed is deliberately omitted: residualNL never touches the
+# RNG, so there is no seed for future to manage, and no need to force
+# RNGkind() the way an actual simulation-based sweep would require.
+library(future)
+library(future.apply)
+
+future::plan(future.callr::callr, workers = future::availableCores(omit = 2))
+
+sweepGrid$residual <- future_mapply(function(scale, sd, nlT, prop) {
+  detFun <- function(snr) plogis(snr, location = 1, scale = scale)
+  p <- propModels[[prop]]
+  residualNL(detFun, p$TL, p$truncationDistance, sd, nlTrue = nlT)
+}, sweepGrid$detScale, sweepGrid$nlSd, sweepGrid$nlTrue, sweepGrid$propagation,
+future.packages = "callDensity")
+
+future::plan(future::sequential)
+
+```
+
+```{r residual.plot, warning=FALSE, fig.height=5.5}
+
+ggplot(sweepGrid, aes(x = nlSd, y = residual, colour = factor(detScale))) +
+  geom_hline(yintercept = 0, colour = "grey60", linetype = "dashed") +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 1.5) +
+  facet_grid(propagation ~ nlTrue,
+            labeller = labeller(nlTrue = as_labeller(function(x) paste0(x, " dB")))) +
+  scale_colour_viridis_d(name = "Detector scale\n(smaller = steeper)") +
+  xlab("True NL standard deviation (dB)") +
+  ylab("Residual bias in nlFromDetections (dB)") +
+  theme(legend.position = "right")
+
+```
+
+Two of the four things predicted here held up once this was actually run, and
+two did not:
+
+**Confirmed: the residual grows as the detector gets steeper (smaller
+`detScale`).** A steeper transition packs the same total change in detection
+probability into a narrower band of NL, which means more curvature in
+log-probability at fixed `nlSd`.
+
+**Confirmed: the residual grows with `nlSd`.** A wider distribution samples
+further into whatever part of the curve has bent away from locally
+exponential, regardless of why it bent.
+
+**Wrong: "pyRAM should sit above spherical wherever it is visibly bumpier."**
+At 74 and 84 dB pyRAM is *less* biased than spherical, the opposite of that
+one-directional prediction. At 94 and especially 104 dB it is far worse,
+including the one genuinely unexpected feature in this sweep -- a positive
+residual (`nlFromDetections` overshooting `nlTrue`) around `nlSd` 4-6 at
+`nlTrue` = 104, the only sign flip anywhere in the grid. Every other cell
+undercorrects; that one family of cells overcorrects, which "more curvature"
+alone cannot explain, since curvature magnitude does not change the sign.
+
+**Wrong: "spherical should be flat except near the 74 dB shoulder."** The
+knitted figure shows the spherical row peaking in magnitude around 84-94 dB
+and getting *smaller* again at both 74 and 104, not flat except at one end.
+A shoulder confined to the low-NL end cannot produce a pattern that improves
+at both ends, so whatever is actually happening involves more of the curve's
+shape than the shoulder argument alone accounts for. Both wrong predictions
+are left here rather than quietly corrected, because the mechanism behind
+either is not yet established -- see "Looking at the curve directly" below
+for the follow-up built to chase it.
+
+```{r residual.extremes}
+
+sweepGrid[order(-abs(sweepGrid$residual)), ][1:5, ]
+sweepGrid[order(abs(sweepGrid$residual)), ][1:5, ]
+
+```
+
+The largest and smallest rows say which regime this vignette's own examples
+sit in. The spherical, `scale = 2`, `nlSd = 4`, `nlTrue = 84` case used
+throughout the rest of this document is one specific point on this grid, not
+necessarily a representative one -- worth checking where it actually falls
+once this runs.
+
+## Looking at the curve directly
+
+The aggregate residual says something odd happens for pyRAM around `nlTrue` =
+104, `nlSd` 4-6. It cannot say what, because it is a single number per cell,
+already collapsed from the curve that produced it. "The same curve, real
+physics" earlier in this document already plots `pDetGivenNL` on a log axis
+over the full 55-135 dB range, which implicitly shows the same
+`log(pDetGivenNL)` this section's curvature argument is about -- slope on
+that plot is exactly the quantity that matters. But reading curvature by eye
+off a full-range line plot is exactly the wrong tool for finding one
+localised bend, so this zooms into the specific window the anomaly lives in
+and plots the slope itself, rather than a curve to eyeball for slope changes.
+
+```{r pyram.slope.diagnostic, warning=FALSE, fig.height=4.5}
+
+# Zoom to roughly the union of the nlSd = 4 and nlSd = 6 windows around
+# nlTrue = 104, where the sign flip in the sweep shows up. Faceted across
+# three of the detector scales that showed the sign flip in the extremes
+# table (0.5, 1, 2), since the single fixed detector used everywhere else in
+# this vignette does not establish whether this shape is specific to that
+# one detector or holds more generally.
+nlFine <- seq(65, 145, by = 0.5)
+slopeDetScales <- c(0.5, 1, 2)
+
+slopeDf <- do.call(rbind, lapply(slopeDetScales, function(sc) {
+  detFunSc <- function(snr) plogis(snr, location = 1, scale = sc)
+
+  pPyramFine <- pDetGivenNL(nlFine, detFunSc, SL, TLpyram,
+                            truncationDistance = pyramTrunc)
+  pSpherFine <- pDetGivenNL(nlFine, detFunSc, SL, TL)
+
+  rbind(
+    data.frame(nl    = nlFine[-1] - diff(nlFine) / 2,
+              slope = diff(log(pPyramFine)) / diff(nlFine),
+              what  = "pyRAM, SKP summer, 25 Hz",
+              detScale = sc),
+    data.frame(nl    = nlFine[-1] - diff(nlFine) / 2,
+              slope = diff(log(pSpherFine)) / diff(nlFine),
+              what  = "Spherical spreading",
+              detScale = sc)
+  )
+}))
+
+ggplot(slopeDf, aes(x = nl, y = slope, colour = what)) +
+  geom_line(linewidth = 0.9) +
+  geom_vline(xintercept = 104, colour = "firebrick", linetype = "dotted") +
+  annotate("rect", xmin = 104 - 4, xmax = 104 + 4, ymin = -Inf, ymax = Inf,
+           fill = "grey50", alpha = 0.15) +
+  annotate("rect", xmin = 104 - 6, xmax = 104 + 6, ymin = -Inf, ymax = Inf,
+           fill = "grey50", alpha = 0.10) +
+  facet_wrap(~ detScale, ncol = 3,
+            labeller = labeller(detScale = as_labeller(function(x) paste0("scale = ", x)))) +
+  xlab("Noise level (dB)") +
+  ylab("Local slope of log(pDetGivenNL) per dB") +
+  labs(colour = NULL,
+       caption = "Shaded bands: the nlSd = 4 and nlSd = 6 integration windows around nlTrue = 104") +
+  theme(legend.position = "top")
+
+```
+
+What to look for, stated as questions rather than conclusions, since the
+answer is whatever this plot actually shows:
+
+Does the pyRAM reversal near 100-110 dB get sharper, shift position, or
+disappear as the detector steepens from `scale` = 2 down to 0.5? The extremes
+table showed the sign flip at all three of these scales, so the reversal
+itself should survive across all three panels in some form -- if it does not,
+that is worth understanding on its own.
+
+Does the spherical curve's own mid-range dip and high-NL bend (visible at
+`scale` = 2) look similar at `scale` = 0.5, or does a steeper detector wash
+it out? A detector steep enough approaches a step function, which is the
+scenario the original spherical-spreading derivation assumed -- if the bend
+shrinks as the detector steepens, that would tie this directly back to the
+detector's smoothness rather than the propagation model, for the spherical
+case specifically.
+
+The sharp upturn at the very right edge of every panel (~145 dB) is very
+likely a numerical artefact of this diagnostic, not a real feature of either
+propagation model: right at the edge of the `nlFine` grid, probabilities are
+very small and the finite-difference derivative is more sensitive to
+`binWidth` and floating point precision than to physics. Worth confirming
+this by extending `nlFine` further and checking whether the upturn moves with
+the edge of the grid, but I would not build any conclusion on that part of
+the plot as it stands.
+
+# Does the 2D solver actually recover the truth?
+
+Before this solver ever sees real data, it is worth checking whether it can
+recover a truth it is handed on a plate. The residual sweep above already has
+ground truth built in -- every cell starts from a known `nlTrue` and `nlSd`
+-- so running the same two-parameter inversion on those same synthetic cells,
+and checking whether it gets back to the values that generated them, is the
+natural validation. It is also a fair test of the solver's own machinery
+(Nelder-Mead on an unconstrained least-squares objective, no bracket
+guarantee the way `uniroot` has) on its own terms, separate from any question
+about detector realism or real data.
+
+```{r moment.functions}
+
+#' Forward map: candidate true (mu, sigma) to the (mean, sd) you would
+#' actually measure at detections. Same weighted-moment integral used
+#' throughout this vignette, just returning both moments instead of one.
+predictSampledMoments <- function(mu, sigma, detFun, SL, TL, truncDist,
+                                  nNodes = 600) {
+  fine <- seq(mu - 6 * sigma, mu + 6 * sigma, length.out = nNodes)
+  fN   <- dnorm(fine, mu, sigma)
+  pd   <- pDetGivenNL(fine, detFun, SL, TL, truncationDistance = truncDist)
+  wt   <- fN * pd
+  meanPred <- sum(fine * wt) / sum(wt)
+  sdPred   <- sqrt(sum((fine - meanPred)^2 * wt) / sum(wt))
+  c(mean = meanPred, sd = sdPred)
+}
+
+#' Inverse map: observed (mean, sd) to the candidate true (mu, sigma) that
+#' would have produced them, via unconstrained least squares. sigma is
+#' optimised on the log scale so no boundary hack is needed to keep it
+#' positive. Returns the achieved objective alongside convergence, because
+#' optim reporting convergence means its own stopping rule fired, not that
+#' the fit is actually good -- a small residual is the thing that says that.
+#' A proper package function would still want a dedicated 2D root-finder with
+#' bracket guarantees, the way uniroot has for the 1D case; this does not.
+recoverTrueMoments <- function(obsMean, obsSd, detFun, SL, TL, truncDist) {
+  obj <- function(par) {
+    pred <- predictSampledMoments(par[1], exp(par[2]), detFun, SL, TL, truncDist)
+    sum((pred - c(obsMean, obsSd))^2)
+  }
+  fit <- optim(c(obsMean + 2, log(obsSd)), obj, method = "Nelder-Mead",
+              control = list(reltol = 1e-12, maxit = 2000))
+  c(muTrue = fit$par[1], sigmaTrue = exp(fit$par[2]),
+    convergence = fit$convergence, objective = fit$value)
+}
+
+```
+
+```{r solver.validation}
+
+# Deliberately a much smaller grid than the residual sweep -- each cell here
+# costs an optim() run on top of what residualNL() already costs, so the full
+# 5 x 6 x 4 x 2 grid would be prohibitively slow. Three detector scales
+# (steep, middling, shallow), three true sd values, and both nlTrue = 84 and
+# 104 (a "normal" cell and the one where the sign flip lives), across both
+# propagation models.
+recover2D <- function(detFun, TLtab, truncDist, sd, nlTrue = 84) {
+
+  fine <- seq(nlTrue - 6 * sd, nlTrue + 6 * sd, length.out = 600)
+  fN   <- dnorm(fine, nlTrue, sd)
+  pd   <- pDetGivenNL(fine, detFun, SL, TLtab, truncationDistance = truncDist)
+  wt   <- fN * pd
+
+  if (sum(wt) <= 0 || !all(is.finite(wt))) {
+    return(c(muRecovered = NA_real_, sigmaRecovered = NA_real_,
+            muError = NA_real_, sigmaError = NA_real_,
+            convergence = NA_integer_, fitRMSE = NA_real_))
+  }
+
+  meanObs  <- sum(fine * wt) / sum(wt)
+  sigmaObs <- sqrt(sum((fine - meanObs)^2 * wt) / sum(wt))
+
+  fit <- tryCatch(
+    recoverTrueMoments(meanObs, sigmaObs, detFun, SL, TLtab, truncDist),
+    error = function(e) c(muTrue = NA_real_, sigmaTrue = NA_real_,
+                          convergence = NA_integer_, objective = NA_real_))
+
+  c(muRecovered    = unname(fit["muTrue"]),
+    sigmaRecovered = unname(fit["sigmaTrue"]),
+    muError        = unname(fit["muTrue"]) - nlTrue,
+    sigmaError     = unname(fit["sigmaTrue"]) - sd,
+    convergence    = unname(fit["convergence"]),
+    fitRMSE        = sqrt(unname(fit["objective"]) / 2))
+}
+
+detScaleGrid2D <- c(0.5, 2, 8)
+sdGrid2D       <- c(2, 4, 8)
+nlTrueGrid2D   <- c(84, 104)
+
+validationGrid <- expand.grid(detScale    = detScaleGrid2D,
+                              nlSd        = sdGrid2D,
+                              nlTrue      = nlTrueGrid2D,
+                              propagation = names(propModels),
+                              stringsAsFactors = FALSE)
+
+library(future)
+library(future.apply)
+future::plan(future.callr::callr, workers = future::availableCores(omit = 2))
+
+validationFits <- future_mapply(function(scale, sd, nlT, prop) {
+  detFun <- function(snr) plogis(snr, location = 1, scale = scale)
+  p <- propModels[[prop]]
+  recover2D(detFun, p$TL, p$truncationDistance, sd, nlTrue = nlT)
+}, validationGrid$detScale, validationGrid$nlSd, validationGrid$nlTrue,
+validationGrid$propagation, future.packages = "callDensity")
+
+future::plan(future::sequential)
+
+validationGrid <- cbind(validationGrid, t(validationFits))
+
+```
+
+```{r solver.validation.plot, warning=FALSE, fig.height=4}
+
+ggplot(validationGrid, aes(x = nlSd, y = muError, colour = factor(detScale))) +
+  geom_hline(yintercept = 0, colour = "grey60", linetype = "dashed") +
+  geom_point(size = 2) +
+  geom_line(linewidth = 0.7) +
+  facet_grid(propagation ~ nlTrue,
+            labeller = labeller(nlTrue = as_labeller(function(x) paste0("nlTrue = ", x, " dB")))) +
+  scale_colour_viridis_d(name = "Detector scale") +
+  xlab("True NL standard deviation (dB)") +
+  ylab("Recovered mu error (dB)") +
+  labs(caption = "Should sit at zero everywhere, if the solver reliably recovers the truth")
+
+```
+
+```{r solver.validation.table}
+
+validationGrid[order(-abs(validationGrid$muError)), 
+              c("detScale", "nlSd", "nlTrue", "propagation",
+                "muError", "sigmaError", "convergence", "fitRMSE")][1:10, ]
+
+```
+
+`muError` and `sigmaError` sit at roughly 1e-5 to 1e-6 dB across this whole
+grid, with `convergence == 0` everywhere. That is a real validation of the
+solver, not just a demonstration that it runs: whenever the truth actually is
+Gaussian, this recovers it to a precision far tighter than anything else in
+this vignette needs.
+
+**On making this the default in `nlFromDetections`:** closer than it was,
+but still not yet. This validation removes one of the concerns raised when
+this was first built -- within the grid actually tested, the solver is
+trustworthy, not just convergent. That grid is 36 cells, not the full
+residual sweep's 240, so it has not been checked at every corner of detector,
+propagation, `nlTrue` and `nlSd` this vignette has explored elsewhere; worth
+widening before leaning on this claim at the true extremes of the parameter
+space. Two things still stand between this and production, and neither is
+about the solver:
+
+The Gaussian-mismatch risk demonstrated below is not something a better
+detector or a better solver fixes. It is a property of whichever real time
+period the estimate is built over, and needs its own check before any
+2D-corrected estimate is trusted, regardless of how good the solver itself
+is.
+
+The performance cost is real and matters more in production than in a
+vignette: every evaluation here costs several hundred `pDetGivenNL` calls
+worth of work, repeated inside `optim`'s search, versus one bracketed
+`uniroot` search over a single pre-built curve for the current 1D method. If
+`cde()` calls `nlFromDetections` inside a bootstrap or Monte Carlo loop, that
+cost is paid on every replicate. The residual sweep above exists precisely to
+show this cost is only worth paying in specific corners of parameter space --
+an opt-in path, gated by that same sweep's criterion, protects the common
+case's speed while still being available where the 1D residual is actually
+large.
+
+# What happens when this meets real seasonal data
+
+The validation above used synthetic cells with a known, exactly Gaussian
+`nlTrue`/`nlSd` behind them. Real detections carry no such guarantee. The
+table below is real per-season data from Kerguelen2015 (@castro2024, Beyond
+Counting Calls); `NLmean`/`NLsd` are exactly the *observed*, biased
+moments `nlFromDetections` receives as input in practice -- the same
+`meanObs`/`sigmaObs` this vignette has been computing throughout, just from
+real detections instead of a synthetic distribution.
+
+```{r seasonal.table}
+
+seasonalNL <- data.frame(
+  season = c("summer", "autumn", "winter", "spring", "year"),
+  nc     = c(13248, 19123, 32631, 12903, 77905),
+  f      = c(0.464, 0.243, 0.265, 0.388, 0.314),
+  T      = c(2075.4, 2199.7, 2197.3, 2167.8, 8640.2),
+  pa     = c(0.0658, 0.0192, 0.0701, 0.1836, 0.0789),
+  NLmean = c(92.4, 96.8, 87.5, 81.0, 88.6),
+  NLsd   = c(2.6, 3.7, 3.5, 2.4, 5.9)
+)
+
+seasonalNL
+
+```
+
+**This still uses the vignette's placeholder detector, not the actual fitted
+detection function for Kerguelen2015** -- illustrative of how the solver
+behaves on real-shaped moments, not corrected values for the manuscript.
+
+`sdGrid`'s 1 to 8 dB range already comfortably covers every `NLsd` value in
+this table, and the validation above already showed the solver recovers the
+truth reliably across that whole range whenever the truth is actually
+Gaussian, so there is no separate sdGrid-coverage question left to answer
+here. What is worth actually running is `year`, since it is the row most
+likely to expose what happens when the Gaussian assumption itself is wrong;
+the four individual seasons would mostly reconfirm what the synthetic sweep
+already established.
+
+```{r seasonal.year}
+
+yearFit <- recoverTrueMoments(88.6, 5.9, detector, SL, TLpyram, pyramTrunc)
+
+data.frame(
+  NLmean      = 88.6,
+  muTrue      = yearFit["muTrue"],
+  meanBias    = yearFit["muTrue"] - 88.6,
+  NLsd        = 5.9,
+  sigmaTrue   = yearFit["sigmaTrue"],
+  sdBias      = yearFit["sigmaTrue"] - 5.9,
+  convergence = yearFit["convergence"],
+  fitRMSE     = sqrt(yearFit["objective"] / 2)
+)
+
+```
+
+`year`'s recovered mean sits about 10.9 dB above the observed mean, and its
+recovered sd (about 7.2 dB) is nearly double the largest individual season's
+sd reported in the table above (3.7 dB, autumn). Both numbers came from a
+solver just shown, on synthetic data, to recover the truth to within about
+1e-5 dB. That combination is the point: the solver is not the source of this
+discrepancy, so whatever is left has to be a property of the real data it
+was asked to fit a single Gaussian to.
+
+`fitRMSE` cannot catch this, and not because it happens to be small here by
+chance. `recoverTrueMoments` has exactly two free parameters matching
+exactly two targets -- observed mean and observed sd -- so for essentially
+any finite pair of target moments, some `(mu, sigma)` exists that reproduces
+them almost exactly. `year`'s `fitRMSE` (about 1.1e-6) is barely larger than
+what a well-behaved season's `fitRMSE` would look like, despite `year` being
+the case there is every reason to distrust. `fitRMSE` checks whether the
+solver found *a* fixed point, not whether fitting a single Gaussian was the
+right thing to do -- with only two moments feeding two parameters, it has no
+way to see that.
+
+**Hypothesis, not an established mechanism:** `year` aggregates four seasons
+whose own observed means span roughly 81 to 97 dB. A single Gaussian forced
+to stand in for a mixture of differently-centred Gaussians would generally
+need to inflate its own variance to absorb the *between-season* spread on top
+of each season's *within-season* variance -- the same decomposition behind
+the law of total variance. `year`'s recovered sd coming out well above every
+individual season's is consistent with that story, and it would be a more
+direct signature of this failure mode than anything `fitRMSE` can offer. But
+this vignette has shown one data point, not a validated diagnostic: nothing
+here has checked that this pattern reliably shows up for genuine non-Gaussian
+mixtures in general, or that it stays quiet for nested windows that really
+are Gaussian throughout. Treat it as a plausible explanation worth testing,
+not a mechanism this vignette has established.
+
+If the hypothesis holds up, it would point to a real constraint on `cde`'s
+`T`, on top of the ones already known: choosing a time period over which to
+treat TL and detection probability as constant would not be enough by
+itself, since the noise level distribution within that same period would
+also need to be close enough to Gaussian for `nlFromDetections`, 1D or 2D, to
+mean what it claims to mean. `year` looks like a `T` chosen too coarse for
+that. Whether the individual seasons are themselves coarse enough to show
+some of the same problem in miniature is a separate open question this table
+cannot settle by itself -- their own biases (0.8 to 4.1 dB) are compatible
+with some residual non-Gaussianity, not only with the small solver/detector
+residual the synthetic validation already bounds. Checking whether recovered
+sd inflates when a candidate `T` is built by aggregating finer sub-periods is
+a plausible diagnostic for that question, contingent on the hypothesis above
+actually validating.
+
+Non-Gaussian and non-parametric noise level distributions are out of scope
+for this vignette. Every function here -- `pDetGivenNL`, `predictSampledNL`,
+`nlFromDetections`, and the exploratory 2D solver above -- assumes a Gaussian
+`fN`. Real seasonal NL distributions from Kerguelen2015 are available and not
+obviously Gaussian by eye (winter in particular looks bimodal, and `year`
+looks like a clear mixture, consistent with the hypothesis above), which
+would make them a natural next step if this ever gets pursued further, but
+fitting other parametric families or a non-parametric density is a
+substantially harder problem than anything solved here, and deliberately not
+attempted in this vignette.
+
+# What is still open
+
+`pDetGivenNL`, `predictSampledNL` and `nlFromDetections` are all in the
+package now, and `cde` calls `nlFromDetections` by default whenever `NL` is
+not supplied, so `nlFromSnrInfo` is a deprecated wrapper rather than the
+active path. Two things noted while building this are still genuinely open.
+
+`pDetGivenNL` still duplicates work that `pDetInArea` already does. Both thin
+the transmission loss table, broadcast the truncation distance across
+transects, mask cells beyond truncation, and form area weights. That
+preparation should be pulled out of `pDetInArea` into a shared helper and used
+by both. Doing it any other way means the two drift apart.
+
+The standard deviation is taken straight from the detections, and "When does
+the correction still hold?" above is the sweep that decides whether that
+matters. A first attempt at solving for the mean and standard deviation
+jointly now exists ("Does the 2D solver actually recover the truth?" and
+"What happens when this meets real seasonal data?" above), built with
+`optim` rather than a proper bracketed 2D root-finder. Validated against
+synthetic ground truth, it recovers the truth to within about 1e-5 dB --
+detector data was never the limiting factor. Real seasonal data exposed a
+different, more fundamental problem instead: the correction assumes the true
+NL distribution is Gaussian, and whether that holds depends on how the time
+period `T` was chosen, not on the solver or the detector. Promoting this into
+the package, and deciding whether it becomes a default or an opt-in path,
+should wait on that question having its own answer, not just on fixing the
+solver's remaining robustness gaps.
+
+# What this does not fix
+
+Two assumptions run through every plot above and neither is touched by any of
+this.
+
+Calls are assumed spread evenly in two dimensions. The area weight
+` r * (r <= td)` in `pDetGivenNL` is that assumption written down. Clustered
+calling, or calls concentrated at particular depths, changes it.
+
+Noise is assumed independent of whether whales are calling. If loud hours are
+also whale hours, the detection curve is not the only thing shaping curve 3,
+and the correction is solving the wrong problem accurately.
+
+# References
