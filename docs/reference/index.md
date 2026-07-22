@@ -92,6 +92,11 @@ capture-recapture.
   year.
 - [`predictSampledNL()`](https://briansmiller.github.io/callDensity/reference/predictSampledNL.md)
   : Predict the mean noise level you would measure at detections
+- [`kerguelen2015TL`](https://briansmiller.github.io/callDensity/reference/kerguelen2015TL.md)
+  : pyRAM transmission loss, Kerguelen2015 summer, 25 Hz
+- [`kerguelen2015TLmeta`](https://briansmiller.github.io/callDensity/reference/kerguelen2015TLmeta.md)
+  : Transect metadata for the Kerguelen2015 pyRAM transmission loss
+  table
 
 ## Capture history construction
 

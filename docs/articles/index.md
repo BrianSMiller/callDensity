@@ -10,6 +10,8 @@
   spot](https://briansmiller.github.io/callDensity/articles/callDensity_snrThreshold.md):
 - [Non-uniform study areas: distance truncation and
   coastlines](https://briansmiller.github.io/callDensity/articles/callDensity_coast.md):
+- [callDensity: Estimating noise levels from
+  detections](https://briansmiller.github.io/callDensity/articles/callDensity_noiseLevels.md):
 
 ### Reference
 

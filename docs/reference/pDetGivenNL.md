@@ -11,8 +11,8 @@ be detected?
 pDetGivenNL(
   nl,
   detFun,
-  TL,
   SL,
+  TL,
   truncationDistance = max(TL[[1]]),
   nSLnodes = 41,
   binWidth = 0.25
@@ -30,16 +30,16 @@ pDetGivenNL(
   Either a detFun object from `fitDetFun`, or a plain function of SNR
   returning probability of detection.
 
+- SL:
+
+  List or data.frame containing the distribution of source levels, with
+  elements named mean and sd.
+
 - TL:
 
   Data.frame of transmission losses. The first column contains ranges in
   metres, the remaining columns contain TL in dB for each radial
   transect at that range. Same format as `cde` expects.
-
-- SL:
-
-  List or data.frame containing the distribution of source levels, with
-  elements named mean and sd.
 
 - truncationDistance:
 

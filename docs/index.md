@@ -3,14 +3,19 @@
 [![Lifecycle:
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![DOI](https://zenodo.org/badge/638054659.svg)](https://doi.org/10.5281/zenodo.19932510)
+[![Documentation](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://briansmiller.github.io/callDensity/)
 
 ### Estimating the density of animal calls using auxiliary information from the sonar equation.
 
-This R package implements the methods described by Harris (2012) and
-Castro et al (2024) for estimating the density of calls produced by
-baleen whales from detections on a single fixed hydrophone.
+This R package implements the methods described by Harris (2012), Castro
+et al (2024), and Miller et al (2026) for estimating the density of
+calls produced by baleen whales from detections on a single fixed
+hydrophone.
 
-The output of this software is an estiamte of call density: i.e. the
+Documentation and Getting Started:
+<https://briansmiller.github.io/callDensity/>
+
+The output of this software is an estimate of call density: i.e. the
 number of calls per unit time per unit area. Call densities are similar
 to detection rates (calls per unit time), but are also standardised by
 unit area. Furthermore, the call densities produced by this software can
@@ -61,7 +66,7 @@ devtools::install_github("BrianSMiller/callDensity", build_vignettes = TRUE)
 1.  Harris, DV. *Estimating Whale Abundance Using Sparse Hydrophone
     Arrays.* PhD Thesis, University of St Andrews, 2012.
     <https://research-repository.st-andrews.ac.uk/handle/10023/3463>.
-2.  Castro, FR et al.. *Beyond Counting Calls: Estimating Detection
+2.  Castro, FR et al. *Beyond Counting Calls: Estimating Detection
     Probability for Antarctic Blue Whales Reveals Biological Trends in
     Seasonal Calling.* Frontiers in Marine Science 11 (2024).
     <https://doi.org/10.3389/fmars.2024.1406678>.
@@ -70,7 +75,8 @@ devtools::install_github("BrianSMiller/callDensity", build_vignettes = TRUE)
     Density Estimation.* The Journal of the Acoustical Society of
     America 158, no. 6 (2025): 4582–93.
     <https://doi.org/10.1121/10.0036892>.
-4.  Miller, BS et al. (in press). Common ground: efficient, consistent,
-    observer-independent bioacoustic call density estimation with
-    adjudicated ground truth and capture-recapture detection functions.
-    *Methods in Ecology and Evolution*. doi: \[to be assigned\]
+4.  Miller, BS. et al. *Common Ground: Efficient, Consistent,
+    Observer‐independent Bioacoustic Call Density Estimation with
+    Adjudicated Ground Truth and Capture–Recapture Detection Functions.*
+    Methods in Ecology and Evolution, 2041-210x.70331.
+    <https://doi.org/10.1111/2041-210x.70331>.

@@ -38,6 +38,7 @@
     <li><a class="dropdown-item" href="../articles/callDensity_CommonGround.html">Imperfect ground truth: capture-recapture (Common Ground) as the fix</a></li>
     <li><a class="dropdown-item" href="../articles/callDensity_snrThreshold.html">SNR truncation: fixing capture-recapture's blind spot</a></li>
     <li><a class="dropdown-item" href="../articles/callDensity_coast.html">Non-uniform study areas: distance truncation and coastlines</a></li>
+    <li><a class="dropdown-item" href="../articles/callDensity_noiseLevels.html">Noise levels: correcting for detection-biased NL</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><a class="dropdown-item" href="../articles/parallel_benchmarks.html">Parallel performance benchmarking</a></li>
   </ul>
@@ -240,14 +241,21 @@ function so we can benchmark both code paths.</p>
 <span></span>
 <span><span class="co"># Test a range from serial through ~75% of cores.</span></span>
 <span><span class="co"># Going beyond ~50% of cores may cause resource exhaustion on Windows.</span></span>
+<span><span class="co">#</span></span>
+<span><span class="co"># All candidates scale with n_cores -- no hardcoded floor. This previously</span></span>
+<span><span class="co"># still forced at least 4 workers regardless of n_cores, via a literal 4 in</span></span>
+<span><span class="co"># the candidate list that the &gt;= 4 filter below then kept while discarding</span></span>
+<span><span class="co"># every properly n_cores-scaled, smaller candidate. On a low-core machine</span></span>
+<span><span class="co"># that meant real oversubscription regardless of what the scaling logic</span></span>
+<span><span class="co"># intended.</span></span>
 <span><span class="va">worker_counts</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
-<span>  <span class="fl">4</span>,</span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="fl">4</span>, <span class="va">n_cores</span> <span class="op">-</span> <span class="fl">1</span><span class="op">)</span>,</span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="fl">8</span>, <span class="va">n_cores</span> <span class="op">-</span> <span class="fl">1</span><span class="op">)</span>,</span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="fl">16</span>, <span class="va">n_cores</span> <span class="op">-</span> <span class="fl">1</span><span class="op">)</span>,</span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">n_cores</span> <span class="op">/</span> <span class="fl">2</span><span class="op">)</span>, <span class="va">n_cores</span> <span class="op">-</span> <span class="fl">1</span><span class="op">)</span>,</span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">n_cores</span> <span class="op">*</span> <span class="fl">0.75</span><span class="op">)</span>, <span class="va">n_cores</span> <span class="op">-</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">worker_counts</span> <span class="op">&lt;-</span> <span class="va">worker_counts</span><span class="op">[</span><span class="va">worker_counts</span> <span class="op">&gt;=</span> <span class="fl">4</span><span class="op">]</span></span>
+<span><span class="va">worker_counts</span> <span class="op">&lt;-</span> <span class="va">worker_counts</span><span class="op">[</span><span class="va">worker_counts</span> <span class="op">&gt;=</span> <span class="fl">1</span><span class="op">]</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Worker counts to test:"</span>, <span class="va">worker_counts</span>, <span class="st">"\n"</span><span class="op">)</span></span></code></pre></div>
 </div>

@@ -29,6 +29,7 @@ detected?"></head><body>
     <li><a class="dropdown-item" href="../articles/callDensity_CommonGround.html">Imperfect ground truth: capture-recapture (Common Ground) as the fix</a></li>
     <li><a class="dropdown-item" href="../articles/callDensity_snrThreshold.html">SNR truncation: fixing capture-recapture's blind spot</a></li>
     <li><a class="dropdown-item" href="../articles/callDensity_coast.html">Non-uniform study areas: distance truncation and coastlines</a></li>
+    <li><a class="dropdown-item" href="../articles/callDensity_noiseLevels.html">Noise levels: correcting for detection-biased NL</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><a class="dropdown-item" href="../articles/parallel_benchmarks.html">Parallel performance benchmarking</a></li>
   </ul></li>
@@ -61,8 +62,8 @@ detected?</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">pDetGivenNL</span><span class="op">(</span></span>
 <span>  <span class="va">nl</span>,</span>
 <span>  <span class="va">detFun</span>,</span>
-<span>  <span class="va">TL</span>,</span>
 <span>  <span class="va">SL</span>,</span>
+<span>  <span class="va">TL</span>,</span>
 <span>  truncationDistance <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">TL</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>,</span>
 <span>  nSLnodes <span class="op">=</span> <span class="fl">41</span>,</span>
 <span>  binWidth <span class="op">=</span> <span class="fl">0.25</span></span>
@@ -82,15 +83,15 @@ detected?</p>
 of SNR returning probability of detection.</p></dd>
 
 
+<dt id="arg-sl">SL<a class="anchor" aria-label="anchor" href="#arg-sl"></a></dt>
+<dd><p>List or data.frame containing the distribution of source levels,
+with elements named mean and sd.</p></dd>
+
+
 <dt id="arg-tl">TL<a class="anchor" aria-label="anchor" href="#arg-tl"></a></dt>
 <dd><p>Data.frame of transmission losses. The first column contains
 ranges in metres, the remaining columns contain TL in dB for each radial
 transect at that range. Same format as <code>cde</code> expects.</p></dd>
-
-
-<dt id="arg-sl">SL<a class="anchor" aria-label="anchor" href="#arg-sl"></a></dt>
-<dd><p>List or data.frame containing the distribution of source levels,
-with elements named mean and sd.</p></dd>
 
 
 <dt id="arg-truncationdistance">truncationDistance<a class="anchor" aria-label="anchor" href="#arg-truncationdistance"></a></dt>

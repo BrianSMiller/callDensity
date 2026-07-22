@@ -26,6 +26,8 @@ navbar:
         href: articles/callDensity_snrThreshold.html
       - text: "Non-uniform study areas: distance truncation and coastlines"
         href: articles/callDensity_coast.html
+      - text: "Noise levels: correcting for detection-biased NL"
+        href: articles/callDensity_noiseLevels.html
       - text: "-------"
       - text: "Parallel performance benchmarking"
         href: articles/parallel_benchmarks.html
@@ -38,6 +40,7 @@ articles:
   - callDensity_CommonGround
   - callDensity_snrThreshold
   - callDensity_coast
+  - callDensity_noiseLevels
 - title: Reference
   navbar: ~
   contents:
@@ -91,6 +94,8 @@ reference:
   - nlFromSnrInfo
   - noiseLevelDistribution
   - predictSampledNL
+  - kerguelen2015TL
+  - kerguelen2015TLmeta
 
 - title: Capture history construction
   desc: Building and reshaping the tables cde() and the detection-function

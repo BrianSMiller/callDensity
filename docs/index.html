@@ -42,6 +42,7 @@
     <li><a class="dropdown-item" href="articles/callDensity_CommonGround.html">Imperfect ground truth: capture-recapture (Common Ground) as the fix</a></li>
     <li><a class="dropdown-item" href="articles/callDensity_snrThreshold.html">SNR truncation: fixing capture-recapture's blind spot</a></li>
     <li><a class="dropdown-item" href="articles/callDensity_coast.html">Non-uniform study areas: distance truncation and coastlines</a></li>
+    <li><a class="dropdown-item" href="articles/callDensity_noiseLevels.html">Noise levels: correcting for detection-biased NL</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><a class="dropdown-item" href="articles/parallel_benchmarks.html">Parallel performance benchmarking</a></li>
   </ul>
@@ -63,12 +64,13 @@
   <main id="main" class="col-md-9"><div class="section level1">
 <div class="page-header"><h1 id="calldensity">callDensity<a class="anchor" aria-label="anchor" href="#calldensity"></a>
 </h1></div>
-<p><!-- badges: start --> <a href="https://lifecycle.r-lib.org/articles/stages.html#experimental" class="external-link"><img src="https://img.shields.io/badge/lifecycle-experimental-orange.svg" alt="Lifecycle: experimental"></a> <a href="https://doi.org/10.5281/zenodo.19932510" class="external-link"><img src="https://zenodo.org/badge/638054659.svg" alt="DOI"></a> <!-- badges: end --></p>
+<p><!-- badges: start --> <a href="https://lifecycle.r-lib.org/articles/stages.html#experimental" class="external-link"><img src="https://img.shields.io/badge/lifecycle-experimental-orange.svg" alt="Lifecycle: experimental"></a> <a href="https://doi.org/10.5281/zenodo.19932510" class="external-link"><img src="https://zenodo.org/badge/638054659.svg" alt="DOI"></a> <a href="https://briansmiller.github.io/callDensity/"><img src="https://img.shields.io/badge/docs-pkgdown-blue.svg" alt="Documentation"></a> <!-- badges: end --></p>
 <div class="section level3">
 <h3 id="estimating-the-density-of-animal-calls-using-auxiliary-information-from-the-sonar-equation">Estimating the density of animal calls using auxiliary information from the sonar equation.<a class="anchor" aria-label="anchor" href="#estimating-the-density-of-animal-calls-using-auxiliary-information-from-the-sonar-equation"></a>
 </h3>
-<p>This R package implements the methods described by Harris (2012) and Castro et al (2024) for estimating the density of calls produced by baleen whales from detections on a single fixed hydrophone.</p>
-<p>The output of this software is an estiamte of call density: i.e. the number of calls per unit time per unit area. Call densities are similar to detection rates (calls per unit time), but are also standardised by unit area. Furthermore, the call densities produced by this software can also be corrected for detector biases (false positives and probability of detection). The software also produces estimates of CV call density, and each of the components used to estimate call density.</p>
+<p>This R package implements the methods described by Harris (2012), Castro et al (2024), and Miller et al (2026) for estimating the density of calls produced by baleen whales from detections on a single fixed hydrophone.</p>
+<p>Documentation and Getting Started: <a href="https://briansmiller.github.io/callDensity/" class="uri">https://briansmiller.github.io/callDensity/</a></p>
+<p>The output of this software is an estimate of call density: i.e. the number of calls per unit time per unit area. Call densities are similar to detection rates (calls per unit time), but are also standardised by unit area. Furthermore, the call densities produced by this software can also be corrected for detector biases (false positives and probability of detection). The software also produces estimates of CV call density, and each of the components used to estimate call density.</p>
 <p>The inputs into this package are a ‘capture history table’ of detections of calls, and sonar equation information for these detections. Capture history tables include reconciled detections from two or more detectors. The required inputs from the sonar equation includes: 1) Signal-to-noise ratio (SNR) of each detection. 2) Source level, (SL) distribution for the calls (mean &amp; standard deviation) 3) Noise level, (NL) distribution (mean &amp; standard deviation) 4) Transmission losses (TL) for the recording site as a Nx2D radial profiles originating at the recording site and ending at a point at which the probability of detection can be safely assumed to be negligible.</p>
 </div>
 <div class="section level2">
@@ -93,9 +95,9 @@
 </h2>
 <ol style="list-style-type: decimal">
 <li>Harris, DV. <em>Estimating Whale Abundance Using Sparse Hydrophone Arrays.</em> PhD Thesis, University of St Andrews, 2012. <a href="https://research-repository.st-andrews.ac.uk/handle/10023/3463" class="external-link uri">https://research-repository.st-andrews.ac.uk/handle/10023/3463</a>.</li>
-<li>Castro, FR et al.. <em>Beyond Counting Calls: Estimating Detection Probability for Antarctic Blue Whales Reveals Biological Trends in Seasonal Calling.</em> Frontiers in Marine Science 11 (2024). <a href="https://doi.org/10.3389/fmars.2024.1406678" class="external-link uri">https://doi.org/10.3389/fmars.2024.1406678</a>.</li>
+<li>Castro, FR et al. <em>Beyond Counting Calls: Estimating Detection Probability for Antarctic Blue Whales Reveals Biological Trends in Seasonal Calling.</em> Frontiers in Marine Science 11 (2024). <a href="https://doi.org/10.3389/fmars.2024.1406678" class="external-link uri">https://doi.org/10.3389/fmars.2024.1406678</a>.</li>
 <li>Harris, DV et al. <em>Estimating the Detection Probability of Long-Ranging Baleen Whale Song Using a Single Sensor: Towards Density Estimation.</em> The Journal of the Acoustical Society of America 158, no. 6 (2025): 4582–93. <a href="https://doi.org/10.1121/10.0036892" class="external-link uri">https://doi.org/10.1121/10.0036892</a>.</li>
-<li>Miller, BS et al. (in press). Common ground: efficient, consistent, observer-independent bioacoustic call density estimation with adjudicated ground truth and capture-recapture detection functions. <em>Methods in Ecology and Evolution</em>. doi: [to be assigned]</li>
+<li>Miller, BS. et al. <em>Common Ground: Efficient, Consistent, Observer‐independent Bioacoustic Call Density Estimation with Adjudicated Ground Truth and Capture–Recapture Detection Functions.</em> Methods in Ecology and Evolution, 2041-210x.70331. <a href="https://doi.org/10.1111/2041-210x.70331" class="external-link uri">https://doi.org/10.1111/2041-210x.70331</a>.</li>
 </ol>
 </div>
 </div>

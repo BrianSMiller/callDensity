@@ -4,6 +4,7 @@
 <url><loc>https://briansmiller.github.io/callDensity/articles/callDensity2.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/articles/callDensity_coast.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/articles/callDensity_CommonGround.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/articles/callDensity_noiseLevels.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/articles/callDensity_snrThreshold.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/articles/index.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/articles/parallel_benchmarks.html</loc></url>
@@ -43,6 +44,8 @@
 <url><loc>https://briansmiller.github.io/callDensity/reference/fitSNRvgam.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/fitSNRvglm.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/index.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/kerguelen2015TL.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/kerguelen2015TLmeta.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/listTLFiles.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/mat2Rdate.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/mchToCR.html</loc></url>
