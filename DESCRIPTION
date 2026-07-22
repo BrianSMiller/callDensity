@@ -46,7 +46,8 @@ Suggests:
     parallelly,
     future,
     future.apply,
-    future.callr
+    future.callr,
+    ggside
 VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE)
 Config/testthat/edition: 3

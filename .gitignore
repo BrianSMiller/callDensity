@@ -5,9 +5,10 @@
 inst/doc
 *.txt
 *.csv
-/vignettes/callDensity_cache
-/vignettes/callDensity_CommonGround_cache
+vignettes/callDensity_cache
+vignettes/callDensity_CommonGround_cache
 vignettes/callDensity.knit.md
+vignettes/callDensity_noiseLevels_cache
 /doc/
 /Meta/
 readme.html
