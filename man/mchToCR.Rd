@@ -32,3 +32,20 @@ relevant columns to the \code{_table1}/\code{_table2} suffixes expected by
 the rest of the callDensity package. The \code{verdict} column from the
 source is used as the ground-truth detection for table1.
 }
+\section{Deprecated}{
+
+No current analysis needs this reduction. \code{cde()}'s only use of
+\code{capHistTab} is \code{falseDiscoveryRate()}, which already accepts
+\code{gtColName}/\code{testColName} directly against native
+\code{detect_observerN} columns (once \code{cde()} forwards them --
+see its own argument list). \code{fitDetFun(modelType = 'vglm')}
+accepts any number of native-named observer columns directly via
+\code{yColNames}, with no reduction to two required at all --
+\code{VGAM::posbernoulli.t} is not limited to two occasions. This
+function's body is unchanged and will keep working, kept only so the
+published Common Ground and Beyond Counting Calls analysis scripts
+keep reproducing exactly. New work should skip the 2-observer
+reduction entirely and use \code{\link{chtToSNRinfo}} with a
+\code{observers} vector of whatever length is needed.
+}
+

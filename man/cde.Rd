@@ -27,7 +27,9 @@ cde(
   NcIsTruncated = FALSE,
   siteCode = "",
   densityResultsFile = NULL,
-  parallel = FALSE
+  parallel = FALSE,
+  groundTruthCol = "detect_table1",
+  observerCol = "detect_table2"
 )
 }
 \arguments{
@@ -165,7 +167,18 @@ execution.
 
 As a rule of thumb: use \code{parallel=TRUE} for VGLM-based detection
 functions (\code{modelType='vglm'}) and \code{parallel=FALSE}
-(the default) for everything else.
+(the default) for everything else.}
+
+\item{groundTruthCol}{Column in \code{capHistTab} treated as ground
+truth, forwarded to \code{falseDiscoveryRate()} and
+\code{\link{chtToSNRinfo}}. Default \code{'detect_table1'}, matching
+original behaviour. For a native matchbox table with adjudicated
+verdicts, pass \code{'verdict'} (or \code{'detect_verdict'} --
+both resolve the same column).}
+
+\item{observerCol}{Column in \code{capHistTab} for the detector under
+evaluation, forwarded the same way as \code{groundTruthCol}. Default
+\code{'detect_table2'}.
 
 Requires the \pkg{future.apply} package. If not installed, falls back
 to serial execution with a warning.}

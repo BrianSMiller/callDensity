@@ -3,23 +3,21 @@
 \name{capHistTosnrInfo}
 \alias{capHistTosnrInfo}
 \title{Convert capture history DATA.FRAME into the 'SNRinfo' format used
-by the callDensity package
-capHistTosnrInfo}
+by the callDensity package}
 \usage{
 capHistTosnrInfo(capHistTab)
 }
 \arguments{
 \item{capHistTab}{\itemize{
-\item Capture history table of detections
+\item Capture history table of detections. Must have
+\code{detect_table1}/\code{detect_table2}, a \code{signalRMSdB1}/
+\code{signalRMSdB2} and \code{noiseRMSdB1}/\code{noiseRMSdB2} pair
+(averaged, matching original behaviour), and \code{datetime}.
 }}
 }
-\value{
-\itemize{
-\item SNRInfo data.frame containing SNR, detections, RL, NL
-}
-}
 \description{
-Convert capture history DATA.FRAME into the 'SNRinfo' format used
-by the callDensity package
-capHistTosnrInfo
+\strong{Deprecated.} A thin wrapper around \code{\link{chtToSNRinfo}},
+kept so the published Common Ground and Beyond Counting Calls analyses
+keep reproducing exactly against current \code{main}. New code should
+call \code{chtToSNRinfo} directly.
 }

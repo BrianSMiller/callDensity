@@ -4,7 +4,12 @@
 \alias{capHist2snrInfo}
 \title{Convert a capture history table into an SNRinfo data.frame}
 \usage{
-capHist2snrInfo(snr, season = "year")
+capHist2snrInfo(
+  snr,
+  season = "year",
+  groundTruthCol = "detect_table1",
+  detectedCol = "detect_table2"
+)
 }
 \arguments{
 \item{snr}{A capture history data.frame containing detections and SNR info.
@@ -23,6 +28,12 @@ requirement and a pointer to a worked example.}
 
 \item{season}{A timeCode corresponding to months, seasons, or 'year'
 (the default, which returns all rows).}
+
+\item{groundTruthCol}{Column name treated as ground truth. Default
+\code{'detect_table1'}, matching original behaviour.}
+
+\item{detectedCol}{Column name for the detector under evaluation.
+Default \code{'detect_table2'}, matching original behaviour.}
 }
 \value{
 SNRinfo data.frame with columns \code{Detected}, \code{CallRL},
@@ -30,5 +41,8 @@ SNRinfo data.frame with columns \code{Detected}, \code{CallRL},
 filtered to the requested timeCode.
 }
 \description{
-Convert a capture history table into an SNRinfo data.frame
+\strong{Deprecated.} A thin wrapper around \code{\link{chtToSNRinfo}},
+kept so the published Common Ground and Beyond Counting Calls analyses
+keep reproducing exactly against current \code{main}. New code should
+call \code{chtToSNRinfo} directly.
 }
