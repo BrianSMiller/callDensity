@@ -1,4 +1,69 @@
-# callDensity 1.1.1
+# callDensity 1.1.2 (unreleased)
+
+## New features
+
+* **`chtToSNRinfo()` replaces the three-function `mchToCR()` /
+  `capHist2snrInfo()` / `capHistTosnrInfo()` sprawl with one converter,
+  and adds genuine N-observer capture-recapture support that no function
+  in the package had before.** These three grew independently as the
+  package's capabilities expanded, without ever settling on one
+  contract: two assume a 2-observer `detect_table1`/`detect_table2`
+  shape that requires renaming native matchbox columns before use;
+  `capHistTosnrInfo()` additionally assumes SNR was measured *before*
+  matching (a per-observer `signalRMSdB1`/`signalRMSdB2` pair, averaged)
+  rather than *after* (matchbox-native: one shared value per matched
+  event); and none of the three can actually feed
+  `fitDetFun(modelType = 'vglm')`, despite `capHistTosnrInfo()`'s own
+  documentation saying it could -- `vglm`'s `posbernoulli.t` needs the
+  raw per-observer 0/1 columns still present in the table, and both
+  functions collapse them into a single `Detected` column before
+  returning. Every real capture-recapture analysis using this package
+  has had to hand-build its VGLM input as a result.
+
+  `chtToSNRinfo(cht, groundTruth, observers, ...)` fixes all three
+  problems at once. It defaults to native matchbox column names
+  (`t0`, `signalRMSdB`, `noiseRMSdB`, `verdict`, `detect_observerN`),
+  accepts any number of `observers` (not just two --
+  `VGAM::posbernoulli.t` was never actually limited to two occasions,
+  it just hadn't been exercised with more in this package before now),
+  and keeps the raw observer columns intact in its output so the result
+  can be passed straight to
+  `fitDetFun(modelType = 'vglm', yColNames = c(groundTruthCol, observerCols))`
+  with nothing hand-built. A single-element `observers` reproduces the
+  old 2-observer OG shape exactly, so this isn't a second code path
+  alongside a simpler one -- OG is just the N=1 case of the same
+  function.
+
+* **`cde()` gains `groundTruthCol`/`observerCol` arguments**, forwarded
+  to both `falseDiscoveryRate()` (which already accepted them, but
+  couldn't be reached -- `cde()` called it positionally without
+  forwarding) and the new `chtToSNRinfo()`. `cde()` can now run directly
+  against a native matchbox `capHistTab` (`verdict`, `detect_observerN`)
+  with no reduction step, in addition to the legacy
+  `detect_table1`/`detect_table2` shape it already supported. Defaults
+  are unchanged (`'detect_table1'`/`'detect_table2'`), so no existing
+  call site is affected.
+
+## Deprecated
+
+* **`mchToCR()`, `capHist2snrInfo()`, and `capHistTosnrInfo()` are
+  deprecated in favour of `chtToSNRinfo()`.** All three still work
+  exactly as before -- bodies unchanged (`mchToCR()`) or reimplemented
+  as thin wrappers with identical output (`capHist2snrInfo()`,
+  `capHistTosnrInfo()`) -- so the published Common Ground and Beyond
+  Counting Calls analysis scripts keep reproducing against current
+  `main` without modification. New analyses should call
+  `chtToSNRinfo()` directly; none of the three deprecated functions'
+  2-observer-reduction/renaming machinery is needed by any current
+  workflow, since neither `fitDetFun(modelType = 'vglm')` nor (as of
+  this release) `cde()` requires it.
+
+  This is a deliberate streamlining, not a stopgap: going forward, one
+  function covers OG and CR alike, for any number of observers, on
+  native matchbox column names by default -- with the old interfaces
+  kept working, not removed, so nothing currently in production or
+  published breaks.
+
 
 Reworks the callDensity\_snrThreshold vignette around the actual failing  
 scenario the truncation feature addresses, rather than an arbitrary  
