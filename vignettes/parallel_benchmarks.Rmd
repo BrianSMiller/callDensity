@@ -140,7 +140,7 @@ ch_scam$signalRMSdB_table2 <- ch_scam$signalRMSdB2
 ch_scam$noiseRMSdB_table2 <- ch_scam$noiseRMSdB2
 
 # Fit scam detection function
-SNRinfo_scam <- capHist2snrInfo(ch_scam)
+SNRinfo_scam <- chtToSNRinfo(ch_scam, groundTruth = "table1", observers = "table2", timeCol = "t")
 detFun_scam <- fitSNRdetectionFunc(SNRinfo_scam, modelType = 'scam',
                                     numKnots = 5)
 cat("scam model fitted:", class(detFun_scam)[1], "\n")

@@ -287,7 +287,7 @@ Convert this capture history table into an SNRinfo table, and treat detector1 as
 # ground truth. This is an observer ground (OG) so includes false positives from
 # detector1, but does not include detections from detector2 not detected on
 # detector1
-SNRinfo <- capHistTosnrInfo(capHistTab)
+SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "table1", observers = "table2", timeCol = "t")
 
 # Positive on detector 2, but not on 1
 n_fp_subsample <- sum(capHistTab$detect_table2 & !capHistTab$detect_table1)

@@ -230,7 +230,7 @@ Nc <- sum(simDet2$detect_table)
 # ground truth. This is an observer ground (OG) so includes false positives from
 # detector1, but does not include detections from detector2 not detected on
 # detector1
-SNRinfo <- capHistTosnrInfo(capHistTab)
+SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "table1", observers = "table2", timeCol = "t")
 
 
 ```
@@ -277,7 +277,7 @@ snrDetFun.vglm <- fitSNRvglm(adjudicated, observerNames,
                              whichObserver = "detect_table2")
 
 # Best estimate of NL 
-NLadj <- nlFromSnrInfo(capHistTosnrInfo(capHistTab), snrDetFun.vglm)
+NLadj <- nlFromSnrInfo(chtToSNRinfo(capHistTab, groundTruth = "table1", observers = "table2", timeCol = "t"), snrDetFun.vglm)
 
 
 Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
