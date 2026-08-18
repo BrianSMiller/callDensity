@@ -51,7 +51,7 @@ test_that("cde()'s default NL is nlFromDetections, not nlFromSnrInfo", {
   snrData <- make_snr_data()
   fit <- fitDetFun(snrData, modelType = "scam", numKnots = 5)
 
-  SNRinfo <- capHist2snrInfo(d$capHistTab, "year")
+  SNRinfo <- chtToSNRinfo(d$capHistTab, groundTruth = "table1", observers = "table2", timeCol = "t")
 
   nlOld <- nlFromSnrInfo(SNRinfo, fit)
   nlNew <- nlFromDetections(SNRinfo, fit, d$SL, TL)
