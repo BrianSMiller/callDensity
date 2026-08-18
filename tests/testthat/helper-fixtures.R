@@ -139,7 +139,7 @@ simulateDetectedNoise <- function(n = 1e6, R = 1e6, nlMean = 84, nlSd = 4,
 # --- Capture history table for cde tests --------------------------------------
 # Two detectors on the same calls, merged the way the vignettes do it. This is
 # the only fixture that produces something cde will accept: cde calls
-# falseDiscoveryRate() and capHist2snrInfo() on its first two lines, and both
+# falseDiscoveryRate() and chtToSNRinfo() on its first two lines, and both
 # need the detect_tableN / groundTruthN / consolidated-column structure that
 # simsTocaptureHistoryTable builds.
 #

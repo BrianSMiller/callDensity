@@ -1,17 +1,23 @@
 # Tests for the detect_table1-as-ground-truth convention.
 #
-# cde()'s internal falseDiscoveryRate()/capHist2snrInfo() calls always read
+# cde()'s internal falseDiscoveryRate()/chtToSNRinfo() calls read
 # capHistTab$detect_table1 as ground truth and detect_table2 as the detector
-# under investigation. Neither function is told otherwise by cde(), which
-# does not expose gtColName/testColName at all.
+# under investigation BY DEFAULT. Since chtToSNRinfo(), cde() also accepts
+# groundTruthCol/observerCol to point at different columns (e.g. a native
+# matchbox verdict/detect_observerN table needs no detect_table1/2 renaming
+# at all) -- but the default remains detect_table1/detect_table2, and the
+# regression this file guards against is independent of that: it's about
+# WHAT VALUES occupy the ground-truth column, not what it's named.
 #
-# For an observer-ground (OG) analysis this holds automatically, since one
-# trusted observer's own column genuinely is ground truth. For an adjudicated
-# capture-recapture (CR) analysis with two fallible observers, neither raw
-# observer is ground truth, and detect_table1 must be deliberately overwritten
-# with the adjudicator's verdict before the table reaches cde() -- exactly
-# what mchToCR() does in the Common Ground manuscript's own analysis script,
-# and what the callDensity_snrThreshold vignette's CR section now does too.
+# For an observer-ground (OG) analysis, one trusted observer's own column
+# genuinely is ground truth, so the default holds automatically. For an
+# adjudicated capture-recapture (CR) analysis with two or more fallible
+# observers, no raw observer column is ground truth on its own, and
+# whichever column cde() is pointed at (via groundTruthCol, or by
+# overwriting detect_table1 the older way) must contain the adjudicator's
+# verdict -- exactly what mchToCR() did in the Common Ground manuscript's
+# own analysis script, and what chtToSNRinfo()'s groundTruth argument does
+# directly now.
 #
 # Discovered because it wasn't done in an earlier draft of both the vignette
 # and notes/truncationSweep.R: cde() silently computed a false discovery rate
