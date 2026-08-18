@@ -282,7 +282,157 @@ nlFromSnrInfo <- function(snrInfo, snrDetFun){
 }
 
 
+#' Convert a capture history table to SNRinfo format
+#'
+#' @description
+#' Canonical converter from a capture history table to the 'SNRinfo' format
+#' used throughout callDensity for detection-function fitting
+#' (\code{\link{fitDetFun}}) and \code{\link{cde}}. Replaces
+#' \code{capHist2snrInfo}/\code{capHistTosnrInfo} (now deprecated thin
+#' wrappers around this function -- see \code{\link{mchToCR}}, also
+#' deprecated, for the older 2-observer-reduction route these superseded).
+#'
+#' Supports both:
+#' \itemize{
+#'   \item \strong{OG} (observer-ground-truth): a single \code{observers}
+#'     column, treated as the detector under evaluation against a
+#'     (possibly imperfect) \code{groundTruth} column. This is the
+#'     original, degenerate-format shape (Danielle Harris' original
+#'     script): every retained row is treated as a real call, and
+#'     \code{Detected} records whether one automated detector also caught
+#'     it.
+#'   \item \strong{CR} (capture-recapture): two or more \code{observers}
+#'     columns, fit jointly via
+#'     \code{fitDetFun(modelType = 'vglm', yColNames = c(groundTruthCol, observerCols))}.
+#'     Any number of observers is supported -- \code{VGAM::posbernoulli.t}
+#'     is not limited to two occasions, despite most examples in this
+#'     package using two.
+#' }
+#'
+#' Row selection is a union filter across \code{groundTruth} and all
+#' \code{observers} columns (flagged by at least one), followed by
+#' restriction to \code{groundTruth == 1} (i.e. adjudicated/assumed-true
+#' calls only). This is the sample construction \code{posbernoulli.t}
+#' (the CR/vglm case) assumes generated the data -- it conditions on
+#' detection by at least one occasion internally, so handing it a sample
+#' that was itself assembled that way is correct, not circular. The same
+#' construction is also correct, and simpler, for the OG/glm/gam/scam
+#' case. What is NOT safe is filtering to \code{groundTruth == 1} and then
+#' fitting an ordinary \code{glm} on a \code{vglm}-style union-filtered
+#' sample -- \code{glm} has no equivalent internal correction for that
+#' selection mechanism, and doing so silently biases the fit (see
+#' \code{notes/cde_nl_and_truncation_handover.md}'s ablation section for a
+#' worked example of exactly this mistake).
+#'
+#' @param cht Capture history table. Matchbox-native column names
+#'   (\code{t0}, \code{signalRMSdB}, \code{noiseRMSdB}, \code{verdict},
+#'   \code{detect_observerN}) are assumed by default. Legacy
+#'   \code{detect_table1}/\code{detect_table2} naming also works directly
+#'   without any renaming step -- e.g. \code{groundTruth = 'table1'},
+#'   \code{observers = 'table2'} reproduces the old
+#'   \code{capHist2snrInfo}/\code{capHistTosnrInfo} row selection exactly
+#'   (a single-element \code{observers} degenerates algebraically to
+#'   their \code{groundTruth == 1} filter, since the union filter with a
+#'   single observer is redundant with the ground-truth restriction that
+#'   follows it).
+#' @param groundTruth Column name (or bare suffix, resolved as
+#'   \code{detect_<groundTruth>} if not found directly) to treat as
+#'   ground truth. Default \code{'verdict'}.
+#' @param observers Character vector of one or more column names (or bare
+#'   suffixes, same resolution as \code{groundTruth}) for the detector(s)
+#'   under evaluation. A single element reproduces the old OG/SNRinfo
+#'   shape; two or more is a genuine multi-observer CR sample.
+#' @param signalCol,noiseCol Column(s) supplying CallRL/NoiseRL. Default
+#'   \code{'signalRMSdB'}/\code{'noiseRMSdB'} (matchbox-native: one shared
+#'   value per matched event, SNR measured after matching). A length-2
+#'   vector instead averages a per-observer pair (legacy shape, SNR
+#'   measured before matching -- see \code{notes/cde_pipeline_handover.md}'s
+#'   "SNR join timing" note).
+#' @param timeCol Column to derive \code{t}/\code{month}/\code{season}
+#'   from. Default \code{'t0'} (matchbox-native, a Matlab datenum,
+#'   converted via \code{\link{mat2Rdate}}). Any other column is used
+#'   as-is (assumed already POSIXct-like) -- e.g. \code{timeCol = 't'}
+#'   for the legacy pre-computed-time shape.
+#' @param season A timeCode corresponding to months, seasons, or 'year'
+#'   (the default, which returns all rows).
+#'
+#' @returns SNRinfo data.frame: the resolved \code{groundTruth} and all
+#'   \code{observers} columns (kept intact, unrenamed -- ready to pass as
+#'   \code{yColNames} to \code{fitDetFun(modelType = 'vglm')}), plus
+#'   \code{Detected} (the last-named observer, for the single-observer
+#'   OG case and backward compatibility), \code{CallRL}, \code{NoiseRL},
+#'   \code{SNR}, \code{t}, \code{month}, and \code{season}.
+#' @export
+chtToSNRinfo <- function(cht,
+                          groundTruth = 'verdict',
+                          observers,
+                          signalCol = 'signalRMSdB',
+                          noiseCol  = 'noiseRMSdB',
+                          timeCol   = 't0',
+                          season    = 'year') {
+
+  resolveCol <- function(name, df) {
+    if (name %in% names(df)) return(name)
+    alt <- paste0('detect_', name)
+    if (alt %in% names(df)) return(alt)
+    stop("chtToSNRinfo: column '", name, "' not found (also tried '", alt,
+         "'). Pass the exact column name if neither matches.")
+  }
+
+  gtCol   <- resolveCol(groundTruth, cht)
+  obsCols <- vapply(observers, resolveCol, character(1), df = cht)
+
+  # Union filter (flagged by ground truth or any observer under
+  # evaluation), then restrict to ground-truth-positive rows. See the
+  # function-level @description for why this order, and why it's correct
+  # for both OG and CR rather than a compromise between them.
+  keep <- Reduce(`|`, as.list(cht[c(gtCol, obsCols)]))
+  cht  <- cht[keep, ]
+  cht  <- cht[cht[[gtCol]] == 1, ]
+
+  CallRL  <- if (length(signalCol) == 1) as.numeric(cht[[signalCol]])
+             else as.numeric(rowMeans(cht[, signalCol], na.rm = TRUE))
+  NoiseRL <- if (length(noiseCol) == 1) as.numeric(cht[[noiseCol]])
+             else as.numeric(rowMeans(cht[, noiseCol], na.rm = TRUE))
+  SNR <- CallRL - NoiseRL
+
+  if (!timeCol %in% names(cht)) {
+    stop("chtToSNRinfo: time column '", timeCol, "' not found.")
+  }
+  t <- if (timeCol == 't0') mat2Rdate(cht[[timeCol]]) else cht[[timeCol]]
+
+  SNRinfo <- data.frame(cht[, c(gtCol, obsCols), drop = FALSE],
+                        Detected = cht[[utils::tail(obsCols, 1)]],
+                        CallRL = CallRL, NoiseRL = NoiseRL, SNR = SNR,
+                        t = t,
+                        month  = time2monthCode(t),
+                        season = time2season(t))
+
+  infRows <- which(is.infinite(SNRinfo$SNR))
+  if (length(infRows) > 0) {
+    warning(sprintf('%g of the SNR were infinite:\n', length(infRows)))
+    SNRinfo <- SNRinfo[-infRows, ]
+  }
+
+  if (!(season %in% c('year', '00'))) {
+    if (season %in% c('summer','autumn','winter','spring')) {
+      SNRinfo <- SNRinfo[SNRinfo$season == season, ]
+    } else {
+      SNRinfo <- SNRinfo[SNRinfo$month == season, ]
+    }
+  }
+
+  SNRinfo
+}
+
+
 #' Convert a capture history table into an SNRinfo data.frame
+#'
+#' @description
+#' \strong{Deprecated.} A thin wrapper around \code{\link{chtToSNRinfo}},
+#' kept so the published Common Ground and Beyond Counting Calls analyses
+#' keep reproducing exactly against current \code{main}. New code should
+#' call \code{chtToSNRinfo} directly.
 #'
 #' @param snr A capture history data.frame containing detections and SNR info.
 #'   Must have columns \code{detect_table1}, \code{detect_table2},
@@ -299,102 +449,58 @@ nlFromSnrInfo <- function(snrInfo, snrDetFun){
 #'   requirement and a pointer to a worked example.
 #' @param season A timeCode corresponding to months, seasons, or 'year'
 #'   (the default, which returns all rows).
+#' @param groundTruthCol Column name treated as ground truth. Default
+#'   \code{'detect_table1'}, matching original behaviour.
+#' @param detectedCol Column name for the detector under evaluation.
+#'   Default \code{'detect_table2'}, matching original behaviour.
 #'
 #' @returns SNRinfo data.frame with columns \code{Detected}, \code{CallRL},
 #'   \code{NoiseRL}, \code{SNR}, \code{t}, \code{month}, and \code{season},
 #'   filtered to the requested timeCode.
 #' @export
-capHist2snrInfo <- function(snr,season='year'){
+capHist2snrInfo <- function(snr, season = 'year',
+                            groundTruthCol = 'detect_table1',
+                            detectedCol    = 'detect_table2'){
+  .Deprecated('chtToSNRinfo')
   if (class(snr)=='character'){
   stop(paste0("Calling capHistToSnrInfo with a file name is deprecated.\n",
                  "Instead call capHist2SnrInfo with the capture ",
                  "history table in a data.frame.")
        )
   }
-
-
-  # remove false positives
-  snr <- snr[snr$detect_table1==1,]
-
-  #Check for duplicate lines:
-  # class(snr) # dataframe
-  dup<-duplicated(snr$key,fromLast = TRUE)
-
-  ### Z Call: If only work with z calls
-  #snr<-subset(snr, classification == "BmAntZ")
-
-  # CallRL and NoiseRL here in dB, but do NOT need to be re 1 uPa (09-Nov-22)
-  Detected<-snr$detect_table2
-  CallRL<-as.numeric(snr$signalRMSdB) #dB
-  NoiseRL<-as.numeric(snr$noiseRMSdB) #dB
-
-  # SNR<-as.numeric(snr$signalRMSdB-snr$noiseRMSdB) # SNR measured as in DH
-  SNR<-CallRL-NoiseRL # to check
-  SNRinfo<-data.frame(Detected,CallRL,NoiseRL,SNR,snr$t,snr$month,snr$season)
-  names(SNRinfo)[5:7]<- c('t','month','season')
-  # Define some sample sizes needed inside the loop
-
-  # Check for SNR=Inf: put in a warning to user here, since infinite SNR is likely
-  # indicative of a problem with the inputs
-  lines<-c(which(SNRinfo$SNR=="Inf", arr.ind = TRUE))
-  if ( length(lines) >0) { # Run this line if inf occurs
-    warning( sprintf('%g of the SNR were infinite:\n',length(lines)) )
-    SNRinfo <- SNRinfo[-lines,]
-  }
-
-  if (season=='year' || season=='00'){
-    return(SNRinfo)
-  } else if (season == 'summer' || season=='autumn' ||
-             season=='winter' || season=='spring'){
-    SNRinfo <- SNRinfo[SNRinfo$season==season,]
-  } else {
-    SNRinfo <- SNRinfo[SNRinfo$month==season,]
-  }
-
-  return(SNRinfo)
+  timeCol <- if ('t0' %in% names(snr)) 't0' else 't'
+  out <- chtToSNRinfo(snr,
+                      groundTruth = sub('^detect_', '', groundTruthCol),
+                      observers   = sub('^detect_', '', detectedCol),
+                      signalCol = 'signalRMSdB', noiseCol = 'noiseRMSdB',
+                      timeCol = timeCol, season = season)
+  out[, c('Detected', 'CallRL', 'NoiseRL', 'SNR', 't', 'month', 'season')]
 }
+
 
 #' Convert capture history DATA.FRAME into the 'SNRinfo' format used
 #' by the callDensity package
-#' capHistTosnrInfo
 #'
-#' @param capHistTab - Capture history table of detections
+#' @description
+#' \strong{Deprecated.} A thin wrapper around \code{\link{chtToSNRinfo}},
+#' kept so the published Common Ground and Beyond Counting Calls analyses
+#' keep reproducing exactly against current \code{main}. New code should
+#' call \code{chtToSNRinfo} directly.
 #'
-#' @returns - SNRInfo data.frame containing SNR, detections, RL, NL
+#' @param capHistTab - Capture history table of detections. Must have
+#'   \code{detect_table1}/\code{detect_table2}, a \code{signalRMSdB1}/
+#'   \code{signalRMSdB2} and \code{noiseRMSdB1}/\code{noiseRMSdB2} pair
+#'   (averaged, matching original behaviour), and \code{datetime}.
 #' @export
 capHistTosnrInfo <- function(capHistTab){
-
-  # Assume detect_table1 is ground truth, so only keep rows where
-  # detect_table1==1 (includes both true and false positives though)
-  capHistTab <- capHistTab[capHistTab$detect_table1==1, ]
-
-  # Detected refers to the automated detector, here detect_table2
-  Detected<-capHistTab$detect_table2
-
-  # Add time rows for compatibility with callDensity format
-  t <- capHistTab$datetime
-  season <- time2season(t)
-  month <- time2monthCode(t)
-
-  # CallRL and NoiseRL here in dB
-  CallRL<-as.numeric(rowMeans(
-    subset(capHistTab,select=c('signalRMSdB1','signalRMSdB2')) ,na.rm=T) )#dB
-  NoiseRL<-as.numeric(rowMeans(
-    subset(capHistTab,select=c('noiseRMSdB1','noiseRMSdB2')) ,na.rm=T) )#dB
-
-  # SNR<-as.numeric(capHistTab$signalRMSdB-capHistTab$noiseRMSdB) # SNR measured as in DH
-  SNR<-CallRL-NoiseRL # to check
-  SNRinfo<-data.frame(Detected,CallRL,NoiseRL,SNR,t,month,season)
-
-  # Check for SNR=Inf: put in a warning to user here, since infinite SNR is
-  # likely indicative of a problem with the inputs
-  lines<-c(which(SNRinfo$SNR=="Inf", arr.ind = TRUE))
-  if ( length(lines) >0) { # Run this line if inf occurs
-    warning( sprintf('%g of the SNR were infinite:\n',length(lines)) )
-    SNRinfo <- SNRinfo[-lines,]
-  }
-
-  return(SNRinfo)
+  .Deprecated('chtToSNRinfo')
+  out <- chtToSNRinfo(capHistTab,
+                      groundTruth = 'table1',
+                      observers   = 'table2',
+                      signalCol = c('signalRMSdB1', 'signalRMSdB2'),
+                      noiseCol  = c('noiseRMSdB1', 'noiseRMSdB2'),
+                      timeCol   = 'datetime', season = 'year')
+  out[, c('Detected', 'CallRL', 'NoiseRL', 'SNR', 't', 'month', 'season')]
 }
 
 
@@ -775,8 +881,28 @@ readCapHist <- function(capHistFile,
 #' @returns A capture history data.frame in the two-observer (table1, table2)
 #'   format expected by \code{\link{cde}}, with time/season columns added by
 #'   \code{\link{capHistTimeSeason}}.
+#'
+#' @section Deprecated:
+#' No current analysis needs this reduction. \code{cde()}'s only use of
+#' \code{capHistTab} is \code{falseDiscoveryRate()}, which already accepts
+#' \code{gtColName}/\code{testColName} directly against native
+#' \code{detect_observerN} columns (once \code{cde()} forwards them --
+#' see its own argument list). \code{fitDetFun(modelType = 'vglm')}
+#' accepts any number of native-named observer columns directly via
+#' \code{yColNames}, with no reduction to two required at all --
+#' \code{VGAM::posbernoulli.t} is not limited to two occasions. This
+#' function's body is unchanged and will keep working, kept only so the
+#' published Common Ground and Beyond Counting Calls analysis scripts
+#' keep reproducing exactly. New work should skip the 2-observer
+#' reduction entirely and use \code{\link{chtToSNRinfo}} with a
+#' \code{observers} vector of whatever length is needed.
 #' @export
 mchToCR <- function (d, table1suffix, table2suffix){
+  .Deprecated(msg = paste(
+    "mchToCR() is deprecated: cde()/fitDetFun(modelType='vglm') no longer",
+    "need the 2-observer table1/table2 reduction. Use chtToSNRinfo()",
+    "directly on the native multi-observer table instead -- see",
+    "?mchToCR's Deprecated section."))
   # Column names
   d1 <- paste0('detect_',table1suffix)      # detection from first observer
   d2 <- paste0('detect_',table2suffix)      # detection from detector of interest
