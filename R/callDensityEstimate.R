@@ -152,6 +152,15 @@
 #'   As a rule of thumb: use \code{parallel=TRUE} for VGLM-based detection
 #'   functions (\code{modelType='vglm'}) and \code{parallel=FALSE}
 #'   (the default) for everything else.
+#' @param groundTruthCol Column in \code{capHistTab} treated as ground
+#'   truth, forwarded to \code{falseDiscoveryRate()} and
+#'   \code{\link{chtToSNRinfo}}. Default \code{'detect_table1'}, matching
+#'   original behaviour. For a native matchbox table with adjudicated
+#'   verdicts, pass \code{'verdict'} (or \code{'detect_verdict'} --
+#'   both resolve the same column).
+#' @param observerCol Column in \code{capHistTab} for the detector under
+#'   evaluation, forwarded the same way as \code{groundTruthCol}. Default
+#'   \code{'detect_table2'}.
 #'
 #'   Requires the \pkg{future.apply} package. If not installed, falls back
 #'   to serial execution with a warning.
@@ -189,7 +198,9 @@ cde <- function (Nc,
                  NcIsTruncated = FALSE,
                  siteCode='',
                  densityResultsFile=NULL,
-                 parallel = FALSE
+                 parallel = FALSE,
+                 groundTruthCol = 'detect_table1',
+                 observerCol    = 'detect_table2'
 ){
   # Check inputs and create outputs
   # Store all parameters for call-density estimation in data frame called 'p'
@@ -210,7 +221,11 @@ cde <- function (Nc,
   }
 
   # c, CV_c---------------------------------------------------------------------
-  fdr <- falseDiscoveryRate(capHistTab, season, snrTruncationThreshold)
+  # groundTruthCol/observerCol default to the legacy detect_table1/table2
+  # names, so existing callers see no change. Native matchbox callers pass
+  # e.g. groundTruthCol='verdict', observerCol='detect_observer2'.
+  fdr <- falseDiscoveryRate(capHistTab, season, snrTruncationThreshold,
+                            gtColName = groundTruthCol, testColName = observerCol)
 
   # CV.c and c are packed in a list, so unpack
   CV.c <- fdr$cv.c
@@ -219,7 +234,16 @@ cde <- function (Nc,
   #   ### $p_a$ (Overall probability of detection)
   # This is the most complicated part and takes the longest time
   # Pa--------------------------------------------------------------------------
-  SNRinfo <- capHist2snrInfo(capHistTab,season)
+  # chtToSNRinfo directly, not the deprecated capHist2snrInfo wrapper --
+  # this runs on every cde() call regardless of whether snrDetFun was
+  # supplied (it also feeds NL estimation below), so going through the
+  # deprecated wrapper here would emit a .Deprecated() warning on every
+  # single cde() call, not just legacy ones.
+  timeCol <- if ('t0' %in% names(capHistTab)) 't0' else 't'
+  SNRinfo <- chtToSNRinfo(capHistTab,
+                          groundTruth = sub('^detect_', '', groundTruthCol),
+                          observers   = sub('^detect_', '', observerCol),
+                          timeCol = timeCol, season = season)
 
   # Check whether user supplied an snr detection function or estimate from data
   # NB: This needs to occur AFTER any SNR truncation.
