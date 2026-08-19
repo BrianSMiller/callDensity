@@ -161,6 +161,18 @@
 #' @param observerCol Column in \code{capHistTab} for the detector under
 #'   evaluation, forwarded the same way as \code{groundTruthCol}. Default
 #'   \code{'detect_table2'}.
+#' @param snrColName Column in \code{capHistTab} holding SNR, forwarded to
+#'   \code{falseDiscoveryRate()}. Default \code{'SNR'} (uppercase), matching
+#'   original behaviour -- raw simulation/detection tables typically carry
+#'   lowercase \code{snr} instead (see \code{notes/cde_pipeline_handover.md}'s
+#'   "column-name trap"), so pass \code{snrColName = 'snr'} for those.
+#' @param timeCol Column in \code{capHistTab} to derive time/season from,
+#'   forwarded to \code{\link{chtToSNRinfo}}. Default \code{NULL}
+#'   auto-detects \code{'t0'} (matchbox-native) else \code{'t'} (legacy),
+#'   matching original behaviour. Raw simulation tables carry
+#'   \code{'datetime'} instead of either -- pass \code{timeCol = 'datetime'}
+#'   for those, rather than relying on the auto-detection growing a third
+#'   implicit guess.
 #' @param returnDetFun Logical, default \code{FALSE}. If \code{TRUE}, the
 #'   detection function actually used to compute \code{pa}/\code{Dc} --
 #'   whichever was passed in as \code{snrDetFun}, or the one \code{cde()}
@@ -219,6 +231,8 @@ cde <- function (Nc,
                  parallel = FALSE,
                  groundTruthCol = 'detect_table1',
                  observerCol    = 'detect_table2',
+                 snrColName     = 'SNR',
+                 timeCol        = NULL,
                  returnDetFun     = FALSE,
                  returnPdetDetail = FALSE
 ){
@@ -245,7 +259,8 @@ cde <- function (Nc,
   # names, so existing callers see no change. Native matchbox callers pass
   # e.g. groundTruthCol='verdict', observerCol='detect_observer2'.
   fdr <- falseDiscoveryRate(capHistTab, season, snrTruncationThreshold,
-                            gtColName = groundTruthCol, testColName = observerCol)
+                            gtColName = groundTruthCol, testColName = observerCol,
+                            snrColName = snrColName)
 
   # CV.c and c are packed in a list, so unpack
   CV.c <- fdr$cv.c
@@ -259,7 +274,9 @@ cde <- function (Nc,
   # supplied (it also feeds NL estimation below), so going through the
   # deprecated wrapper here would emit a .Deprecated() warning on every
   # single cde() call, not just legacy ones.
-  timeCol <- if ('t0' %in% names(capHistTab)) 't0' else 't'
+  if (is.null(timeCol)) {
+    timeCol <- if ('t0' %in% names(capHistTab)) 't0' else 't'
+  }
   SNRinfo <- chtToSNRinfo(capHistTab,
                           groundTruth = sub('^detect_', '', groundTruthCol),
                           observers   = sub('^detect_', '', observerCol),

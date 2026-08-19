@@ -30,6 +30,8 @@ cde(
   parallel = FALSE,
   groundTruthCol = "detect_table1",
   observerCol = "detect_table2",
+  snrColName = "SNR",
+  timeCol = NULL,
   returnDetFun = FALSE,
   returnPdetDetail = FALSE
 )
@@ -181,6 +183,20 @@ both resolve the same column).}
 \item{observerCol}{Column in \code{capHistTab} for the detector under
 evaluation, forwarded the same way as \code{groundTruthCol}. Default
 \code{'detect_table2'}.}
+
+\item{snrColName}{Column in \code{capHistTab} holding SNR, forwarded to
+\code{falseDiscoveryRate()}. Default \code{'SNR'} (uppercase), matching
+original behaviour -- raw simulation/detection tables typically carry
+lowercase \code{snr} instead (see \code{notes/cde_pipeline_handover.md}'s
+"column-name trap"), so pass \code{snrColName = 'snr'} for those.}
+
+\item{timeCol}{Column in \code{capHistTab} to derive time/season from,
+forwarded to \code{\link{chtToSNRinfo}}. Default \code{NULL}
+auto-detects \code{'t0'} (matchbox-native) else \code{'t'} (legacy),
+matching original behaviour. Raw simulation tables carry
+\code{'datetime'} instead of either -- pass \code{timeCol = 'datetime'}
+for those, rather than relying on the auto-detection growing a third
+implicit guess.}
 
 \item{returnDetFun}{Logical, default \code{FALSE}. If \code{TRUE}, the
 detection function actually used to compute \code{pa}/\code{Dc} --
