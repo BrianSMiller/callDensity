@@ -213,16 +213,6 @@ View the spatial detection density (which is not the same as spatial call densit
 
 ```{r detector.plots, fig.height=2, fig.width=6, message=FALSE, warning=FALSE}
 
-plotSpatialDetections <- function(sim){
-  
-  # Spatial distribution (excludes false positives)
-  ggplot(data=sim, aes(x=x/1e3, y=y/1e3, weight=detect_table) )+
-    geom_bin_2d(alpha=1,binwidth=c(10,10))+
-    coord_equal()+
-    xlab("X location (km)")+
-    ylab("Y location (km)")
-}
-
 sp1 <- plotSpatialDetections(simDet1)+ggtitle('Detector 1')
 sp2 <- plotSpatialDetections(simDet2)+ggtitle('Detector 2')
 gridExtra::grid.arrange(sp1,sp2,nrow=1)
@@ -322,15 +312,14 @@ The detector was a logistic function, so fitting a GLM should provide good resul
 
 A GAM or SCAM should also be able to provide a good fit to a logistic function, but to keep this concise we leave fitting those as an exercise for the reader (see callDensity vignette).
 
-The callDensity package provides a convenience function fitSNRdetectionFunc to fit GLM, GAM, and SCAM models:
-`fitSNRdetectionFunc <- `
-```{r, code=fitSNRdetectionFunc, eval=FALSE}
+The callDensity package provides a convenience function fitDetFun to fit GLM, GAM, and SCAM models:
+`fitDetFun <- `
+```{r, code=fitDetFun, eval=FALSE}
 ```
 
 ```{r GLM p.det, warning=FALSE, message=FALSE}
 
-snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
-                                              modelType = "glm")
+snrDetFun.glm <- callDensity::fitDetFun(SNRinfo, modelType = "glm")
 
 results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
                    SL = SL, TL = TL, NL=NLsamp, A = A, modelType = 'glm',
@@ -461,8 +450,8 @@ adj_c <- fp2/pp2
 
 
 observerNames = c("detect_observer1", "detect_observer2")
-snrDetFun.vglm <- fitSNRvglm(adjudicated, observerNames, 
-                             whichObserver = "detect_observer2")
+snrDetFun.vglm <- fitDetFun(adjudicated, modelType = "vglm", yColNames = observerNames,
+                            whichObserver = "detect_observer2")
 # Best estimate of NL 
 # NLadj <- nlFromSnrInfo(adjudicated, snrDetFun.vglm)
 
