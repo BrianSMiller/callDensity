@@ -257,9 +257,9 @@ observerNames  <- c("detect_observer1", "detect_observer2")
 # untruncated fit is exactly the one that extrapolates into the low-SNR
 # desert with no recaptures, and the truncated fit is exactly the one that
 # does not.
-snrDetFun.vglmNone  <- fitSNRvglm(adjudicated,  observerNames,
+snrDetFun.vglmNone  <- fitDetFun(adjudicated, modelType = "vglm", yColNames = observerNames,
                                   whichObserver = "detect_observer2")
-snrDetFun.vglmt <- fitSNRvglm(adjudicatedt, observerNames,
+snrDetFun.vglmt <- fitDetFun(adjudicatedt, modelType = "vglm", yColNames = observerNames,
                               whichObserver = "detect_observer2")
 
 # groundTruthCol/observerCol point cde() at the simulated ground truth
@@ -445,7 +445,7 @@ runCell <- function(theta, det1scale, seed, n = 5e4, outerloop = 10) {
                     (ch$detect_observer1 | ch$detect_observer2))
   if (is.finite(theta)) adj <- subset(adj, adj$SNR >= theta)
 
-  fit <- fitSNRvglm(adj, c("detect_observer1", "detect_observer2"),
+  fit <- fitDetFun(adj, modelType = "vglm", yColNames = c("detect_observer1", "detect_observer2"),
                     whichObserver = "detect_observer2")
 
   # Nc must be truncated in step with p_a. cde() cannot do this itself -- it
