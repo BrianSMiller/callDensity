@@ -133,14 +133,14 @@ function so we can benchmark both code paths.
 ```{r fit.scam, warning=FALSE, message=FALSE}
 # OG-style capture history for scam
 ch_scam <- capHistTab
-ch_scam$detect_table1 <- as.logical(ch_scam$groundTruth1)
-ch_scam$detect_table2 <- as.logical(ch_scam$detect_table2)
-ch_scam$snr_table2 <- ch_scam$snr2
-ch_scam$signalRMSdB_table2 <- ch_scam$signalRMSdB2
-ch_scam$noiseRMSdB_table2 <- ch_scam$noiseRMSdB2
+ch_scam$detect_observer1 <- as.logical(ch_scam$groundTruth1)
+ch_scam$detect_observer2 <- as.logical(ch_scam$detect_observer2)
+ch_scam$snr_observer2 <- ch_scam$snr2
+ch_scam$signalRMSdB_observer2 <- ch_scam$signalRMSdB2
+ch_scam$noiseRMSdB_observer2 <- ch_scam$noiseRMSdB2
 
 # Fit scam detection function
-SNRinfo_scam <- chtToSNRinfo(ch_scam, groundTruth = "table1", observers = "table2", timeCol = "t")
+SNRinfo_scam <- chtToSNRinfo(ch_scam, groundTruth = "observer1", observers = "observer2", timeCol = "t")
 detFun_scam <- fitSNRdetectionFunc(SNRinfo_scam, modelType = 'scam',
                                     numKnots = 5)
 cat("scam model fitted:", class(detFun_scam)[1], "\n")
@@ -149,20 +149,20 @@ cat("scam model fitted:", class(detFun_scam)[1], "\n")
 ```{r fit.vglm, warning=FALSE, message=FALSE}
 # Adjudicated data for VGLM (true positives only from both detectors)
 adjudicated <- subset(capHistTab, capHistTab$groundTruth1 &
-                        (capHistTab$detect_table1 | capHistTab$detect_table2))
+                        (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 
-observerNames <- c("detect_table1", "detect_table2")
+observerNames <- c("detect_observer1", "detect_observer2")
 detFun_vglm <- fitSNRvglm(adjudicated, observerNames,
-                            whichObserver = "detect_table2")
+                            whichObserver = "detect_observer2")
 
 # CR-style capture history for cde
 ch_vglm <- capHistTab
-ch_vglm$detect_table1 <- as.logical(
-  ch_vglm$detect_table1 | ch_vglm$detect_table2)
-ch_vglm$detect_table2 <- as.logical(ch_vglm$detect_table2)
-ch_vglm$snr_table2 <- ch_vglm$snr2
-ch_vglm$signalRMSdB_table2 <- ch_vglm$signalRMSdB2
-ch_vglm$noiseRMSdB_table2 <- ch_vglm$noiseRMSdB2
+ch_vglm$detect_observer1 <- as.logical(
+  ch_vglm$detect_observer1 | ch_vglm$detect_observer2)
+ch_vglm$detect_observer2 <- as.logical(ch_vglm$detect_observer2)
+ch_vglm$snr_observer2 <- ch_vglm$snr2
+ch_vglm$signalRMSdB_observer2 <- ch_vglm$signalRMSdB2
+ch_vglm$noiseRMSdB_observer2 <- ch_vglm$noiseRMSdB2
 
 Nc <- sum(simDet2$detect_table)
 
