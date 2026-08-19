@@ -220,41 +220,6 @@ Presently, false positives have randomly generated date-times, so have a negligi
 capHistTab<- simsTocaptureHistoryTable(subsampleDet1,subsampleDet2)
 capHistTabt<- simsTocaptureHistoryTable(subsampleDet1t,subsampleDet2t)
 
-# Total number of true positive detections for detector1 OR detector2
-nTrueDetectedSubset <- with(capHistTab,sum(detect_observer1 & groundTruth1 |   
-                                        detect_observer2 & groundTruth2) )
-nTrueDetectedSubsett <- with(capHistTabt,sum(detect_observer1 & groundTruth1 |   
-                                        detect_observer2 & groundTruth2) )
-
-# Total number of positive detections for detector1 OR detector2
-nPositiveSubset <- with(capHistTab,sum(detect_observer1 | detect_observer2))
-nPositiveSubsett <- with(capHistTabt,sum(detect_observer1 | detect_observer2))
-
-```
-
-Convert this capture history table into an SNRinfo table, and treat detector1 as ground truth.
-
-```{r format.output.for.callDensity.package}
-
-# Convert capture history into SNRinfo format (removing detections )
-SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2", timeCol = "t")
-SNRinfot<- chtToSNRinfo(capHistTabt, groundTruth = "observer1", observers = "observer2", timeCol = "t")
-
-# Detector 2 true & false positives
-n_p_subsampleDet2 <- sum(capHistTab$detect_observer2)
-n_p_subsampleDet2t <- sum(capHistTabt$detect_observer2) 
-
-# Detectir 2 false positives (Positive on detector 2, but not on 1)
-n_fp_subsample <- sum(capHistTab$detect_observer2 & !capHistTab$detect_observer1)
-n_fp_subsamplet <- sum(capHistTabt$detect_observer2 & !capHistTabt$detect_observer1)
-
-# False discovery rate is number.false.positives/number.predicted.positive
-c_subsample <- n_fp_subsample/n_p_subsampleDet2
-c_subsamplet<- n_fp_subsamplet/n_p_subsampleDet2t
-
-n_subsample <- dim(SNRinfo)[1]  # Number positive detections in SUBset
-n_subsamplet <- dim(SNRinfot)[1]  # Number positive detections in SUBset
-
 truncationDistances <- R 
 
 # Number positive detections in FULL set
