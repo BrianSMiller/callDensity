@@ -1,4 +1,4 @@
-# callDensity 1.2.0 (unreleased)
+# callDensity 1.2.0 
 
 ## New features
 
