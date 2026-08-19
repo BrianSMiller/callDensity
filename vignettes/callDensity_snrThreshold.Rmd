@@ -221,14 +221,14 @@ capHistTab<- simsTocaptureHistoryTable(subsampleDet1,subsampleDet2)
 capHistTabt<- simsTocaptureHistoryTable(subsampleDet1t,subsampleDet2t)
 
 # Total number of true positive detections for detector1 OR detector2
-nTrueDetectedSubset <- with(capHistTab,sum(detect_table1 & groundTruth1 |   
-                                        detect_table2 & groundTruth2) )
-nTrueDetectedSubsett <- with(capHistTabt,sum(detect_table1 & groundTruth1 |   
-                                        detect_table2 & groundTruth2) )
+nTrueDetectedSubset <- with(capHistTab,sum(detect_observer1 & groundTruth1 |   
+                                        detect_observer2 & groundTruth2) )
+nTrueDetectedSubsett <- with(capHistTabt,sum(detect_observer1 & groundTruth1 |   
+                                        detect_observer2 & groundTruth2) )
 
 # Total number of positive detections for detector1 OR detector2
-nPositiveSubset <- with(capHistTab,sum(detect_table1 | detect_table2))
-nPositiveSubsett <- with(capHistTabt,sum(detect_table1 | detect_table2))
+nPositiveSubset <- with(capHistTab,sum(detect_observer1 | detect_observer2))
+nPositiveSubsett <- with(capHistTabt,sum(detect_observer1 | detect_observer2))
 
 ```
 
@@ -237,16 +237,16 @@ Convert this capture history table into an SNRinfo table, and treat detector1 as
 ```{r format.output.for.callDensity.package}
 
 # Convert capture history into SNRinfo format (removing detections )
-SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "table1", observers = "table2", timeCol = "t")
-SNRinfot<- chtToSNRinfo(capHistTabt, groundTruth = "table1", observers = "table2", timeCol = "t")
+SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2", timeCol = "t")
+SNRinfot<- chtToSNRinfo(capHistTabt, groundTruth = "observer1", observers = "observer2", timeCol = "t")
 
 # Detector 2 true & false positives
-n_p_subsampleDet2 <- sum(capHistTab$detect_table2)
-n_p_subsampleDet2t <- sum(capHistTabt$detect_table2) 
+n_p_subsampleDet2 <- sum(capHistTab$detect_observer2)
+n_p_subsampleDet2t <- sum(capHistTabt$detect_observer2) 
 
 # Detectir 2 false positives (Positive on detector 2, but not on 1)
-n_fp_subsample <- sum(capHistTab$detect_table2 & !capHistTab$detect_table1)
-n_fp_subsamplet <- sum(capHistTabt$detect_table2 & !capHistTabt$detect_table1)
+n_fp_subsample <- sum(capHistTab$detect_observer2 & !capHistTab$detect_observer1)
+n_fp_subsamplet <- sum(capHistTabt$detect_observer2 & !capHistTabt$detect_observer1)
 
 # False discovery rate is number.false.positives/number.predicted.positive
 c_subsample <- n_fp_subsample/n_p_subsampleDet2
@@ -271,21 +271,21 @@ Density is calculated via `cde()` directly here -- the same interface an end use
 
 ### Detection function via VGLM (adjudicated capture-recapture)
 
-Capture-recapture with two fallible observers means neither `detect_table1` nor `detect_table2` is ground truth on its own. `cde()` accepts `groundTruthCol`/`observerCol` directly, so whichever column actually holds the adjudicated truth -- here, the simulated `groundTruth2` -- can be pointed to without renaming anything in the table itself. Skipping this does not error -- it silently computes a false discovery rate for one observer against the other, which is not a meaningful quantity and will not match the truth.
+Capture-recapture with two fallible observers means neither `detect_observer1` nor `detect_observer2` is ground truth on its own. `cde()` accepts `groundTruthCol`/`observerCol` directly, so whichever column actually holds the adjudicated truth -- here, the simulated `groundTruth2` -- can be pointed to without renaming anything in the table itself. Skipping this does not error -- it silently computes a false discovery rate for one observer against the other, which is not a meaningful quantity and will not match the truth.
 
 ```{r cde.vglm, warning=FALSE, message=FALSE}
 library(VGAM)
 
 adjudicated <- subset(capHistTab,
                 (capHistTab$groundTruth1 | capHistTab$groundTruth2) &
-                (capHistTab$detect_table1 | capHistTab$detect_table2))
+                (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 adjudicatedt <- subset(capHistTabt,
                 (capHistTabt$groundTruth1 | capHistTabt$groundTruth2) &
-                (capHistTabt$detect_table1 | capHistTabt$detect_table2))
+                (capHistTabt$detect_observer1 | capHistTabt$detect_observer2))
 adjudicatedt$SNR <- rowMeans(
   subset(adjudicatedt, select = c("snr1", "snr2")), na.rm = TRUE)
 
-observerNames  <- c("detect_table1", "detect_table2")
+observerNames  <- c("detect_observer1", "detect_observer2")
 
 # Fit on the sample matching each analysis's own threshold, so the curve and
 # the rest of the calculation describe the same set of detections -- the
@@ -293,9 +293,9 @@ observerNames  <- c("detect_table1", "detect_table2")
 # desert with no recaptures, and the truncated fit is exactly the one that
 # does not.
 snrDetFun.vglmNone  <- fitSNRvglm(adjudicated,  observerNames,
-                                  whichObserver = "detect_table2")
+                                  whichObserver = "detect_observer2")
 snrDetFun.vglmt <- fitSNRvglm(adjudicatedt, observerNames,
-                              whichObserver = "detect_table2")
+                              whichObserver = "detect_observer2")
 
 # groundTruthCol/observerCol point cde() at the simulated ground truth
 # directly -- the synthetic equivalent of a judge's adjudication -- so no
@@ -307,14 +307,14 @@ cr.none <- cde(Nc = Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.vglmNone,
                SL = SL, TL = TL, NL = NL, T = Time, A = A, k = k,
                outerloop = 10, truncationDistance = R,
                snrTruncationThreshold = -Inf,
-               groundTruthCol = "groundTruth2", observerCol = "detect_table2")
+               groundTruthCol = "groundTruth2", observerCol = "detect_observer2")
 
 cr.trunc <- cde(Nc = Nct, capHistTab = capHistTabt, snrDetFun = snrDetFun.vglmt,
                 SL = SL, TL = TL, NL = NL, T = Time, A = A, k = k,
                 outerloop = 10, truncationDistance = R,
                 snrTruncationThreshold = snrTruncationThreshold,
                 NcIsTruncated = TRUE,
-                groundTruthCol = "groundTruth2", observerCol = "detect_table2")
+                groundTruthCol = "groundTruth2", observerCol = "detect_observer2")
 
 resultsTrue <- data.frame(Dc = TrueCallDensity, Nc = n,
                           pa = mean(simDet2$p_det, na.rm = TRUE),
@@ -384,7 +384,7 @@ So set $\theta$ where the recaptures run out. That is measurable directly from t
 # Recapture coverage: the SNR range over which BOTH observers contribute
 # detections. Not where the sample reaches; where the agreement reaches.
 recaptureCoverage <- function(ch, breaks = seq(-20, 20, by = 2),
-                              obs1 = "detect_table1", obs2 = "detect_table2",
+                              obs1 = "detect_observer1", obs2 = "detect_observer2",
                               snrCol = "SNR") {
   # Only calls somebody flagged are in the capture-recapture sample.
   ch  <- ch[ch[[obs1]] | ch[[obs2]], ]
@@ -477,16 +477,16 @@ runCell <- function(theta, det1scale, seed, n = 5e4, outerloop = 10) {
   # Capture-recapture: the adjudicated set is every call at least one observer
   # flagged, with false positives removed by the judge.
   adj <- subset(ch, (ch$groundTruth1 | ch$groundTruth2) &
-                    (ch$detect_table1 | ch$detect_table2))
+                    (ch$detect_observer1 | ch$detect_observer2))
   if (is.finite(theta)) adj <- subset(adj, adj$SNR >= theta)
 
-  fit <- fitSNRvglm(adj, c("detect_table1", "detect_table2"),
-                    whichObserver = "detect_table2")
+  fit <- fitSNRvglm(adj, c("detect_observer1", "detect_observer2"),
+                    whichObserver = "detect_observer2")
 
   # Nc must be truncated in step with p_a. cde() cannot do this itself -- it
   # receives Nc as a number and never sees the detections -- so it must be
   # confirmed via NcIsTruncated.
-  Nc <- sum(ch$detect_table2 & (if (is.finite(theta)) ch$SNR >= theta else TRUE),
+  Nc <- sum(ch$detect_observer2 & (if (is.finite(theta)) ch$SNR >= theta else TRUE),
             na.rm = TRUE)
 
   # groundTruthCol/observerCol point cde() at the simulated ground truth
@@ -501,7 +501,7 @@ runCell <- function(theta, det1scale, seed, n = 5e4, outerloop = 10) {
         truncationDistance = d$R,
         snrTruncationThreshold = theta,
         NcIsTruncated = is.finite(theta),
-        groundTruthCol = "groundTruth2", observerCol = "detect_table2")
+        groundTruthCol = "groundTruth2", observerCol = "detect_observer2")
   ))
 
   pa <- result$pa
