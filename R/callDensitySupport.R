@@ -1343,3 +1343,101 @@ plotSNRHistogram <- function(df,
   print(p)
   invisible(p)
 }
+
+#' Plot probability of detection as a directional range footprint
+#'
+#' @description
+#' Renders p(det) as a function of range and azimuth as a polar heatmap
+#' centred on the recorder -- ports Brian's MATLAB \code{plotPDetRadials.m}
+#' to a native ggplot2 \code{coord_polar()} plot, rather than manually
+#' unrolling to Cartesian coordinates (\code{pcolor(x = r*cos(theta),
+#' y = r*sin(theta), z)}) the way MATLAB does. ggplot2 has a polar
+#' coordinate system built in, so that workaround isn't needed here.
+#'
+#' @param pDetResults Either the full list returned by
+#'   \code{\link{pDetInArea}} (in which case \code{$allDetFunctions} is
+#'   used), or that data.frame directly -- \code{range_m} in the first
+#'   column, one column per transect named \code{tl<angle>} (matching
+#'   \code{\link{simTLradials_20logR}}'s convention) giving p(det) at
+#'   every range along that transect.
+#' @param maxRange Optional upper limit (m) for the range axis. Default
+#'   \code{NULL} uses the full range present in the data.
+#'
+#' @details
+#' Assumes a constant range step (true of \code{simTLradials_20logR}'s
+#' output and of \code{pDetInArea}'s own \code{output.resolution.m}
+#' spacing) so each tile can use a fixed height. Irregular range bins
+#' (e.g. the log-spaced bins in \code{plotSnrRadials.m}) would need
+#' explicit per-row bin edges via \code{geom_rect} instead -- not
+#' implemented here, since nothing in the package currently produces that
+#' shape.
+#'
+#' @returns A ggplot object. Azimuth is plotted compass-style (0 = North,
+#'   increasing clockwise), matching \code{simTLradials_20logR}'s
+#'   convention -- \code{coord_polar}'s \code{start} is defined as an
+#'   offset from 12 o'clock, and \code{direction = 1} is clockwise, so
+#'   \code{start = 0, direction = 1} maps azimuth directly onto compass
+#'   bearing with no rotation needed. Verified by rendering a synthetic
+#'   case (known high p(det) at due north, medium at due east) and
+#'   visually confirming the bright/grey wedges land where expected,
+#'   rather than assumed from the parameter names alone.
+#' @importFrom ggplot2 ggplot aes geom_tile coord_polar scale_x_continuous
+#'   scale_fill_gradient labs theme_minimal
+#' @export
+plotPDetRadials <- function(pDetResults, maxRange = NULL) {
+
+  pdet <- if (!is.null(pDetResults$allDetFunctions)) {
+    pDetResults$allDetFunctions
+  } else {
+    pDetResults
+  }
+
+  transectCols <- setdiff(names(pdet), "range_m")
+  if (length(transectCols) == 0) {
+    stop("plotPDetRadials: no transect columns found (expected tl<angle> ",
+         "columns alongside range_m).")
+  }
+
+  az <- suppressWarnings(as.numeric(sub("^tl", "", transectCols)))
+  if (any(is.na(az))) {
+    stop("plotPDetRadials: could not parse azimuth from column names ",
+         "(expected 'tl<angle>', e.g. 'tl0', 'tl90'). Got: ",
+         paste(transectCols, collapse = ", "))
+  }
+
+  long <- data.frame(
+    range_km = rep(pdet$range_m / 1e3, times = length(transectCols)),
+    azimuth  = rep(az, each = nrow(pdet)),
+    pDet     = unlist(pdet[transectCols], use.names = FALSE)
+  )
+
+  # Wraparound: duplicate the smallest-azimuth transect's data at
+  # az + 360, so the polar tile grid closes seamlessly rather than
+  # leaving a wedge-shaped gap between the last and first transect --
+  # the same fix MATLAB's manual az=360 duplicate column applies.
+  az0  <- min(az)
+  wrap <- long[long$azimuth == az0, ]
+  wrap$azimuth <- az0 + 360
+  long <- rbind(long, wrap)
+
+  if (!is.null(maxRange)) {
+    long <- long[long$range_km <= maxRange / 1e3, ]
+  }
+
+  angleStep <- if (length(az) > 1) min(diff(sort(unique(az)))) else 360
+  rangeStep <- if (nrow(pdet) > 1) {
+    min(diff(sort(unique(pdet$range_m)))) / 1e3
+  } else {
+    max(pdet$range_m) / 1e3
+  }
+
+  ggplot2::ggplot(long, ggplot2::aes(x = azimuth, y = range_km, fill = pDet)) +
+    ggplot2::geom_tile(width = angleStep, height = rangeStep) +
+    ggplot2::coord_polar(theta = "x", start = 0, direction = 1) +
+    ggplot2::scale_x_continuous(breaks = seq(0, 270, 90),
+                                labels = c("N", "E", "S", "W")) +
+    ggplot2::scale_fill_gradient(low = "black", high = "white",
+                                 limits = c(0, 1), name = "P(det)") +
+    ggplot2::labs(x = NULL, y = "Range (km)") +
+    ggplot2::theme_minimal()
+}
