@@ -241,11 +241,10 @@ We fit a capture-recapture model to these adjudicated data using the VGAM packag
 
 ```{r GLM p.det, warning=FALSE, message=FALSE}
 
-snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
-                                              modelType = "glm")
+snrDetFun.glm <- callDensity::fitDetFun(SNRinfo, modelType = "glm")
 
 results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
-                   SL = SL, TL = TL, A = A, modelType = 'glm', 
+                   SL = SL, TL = TL, A = A, k = k, T = Time, modelType = 'glm', 
                    truncationDistance = truncDist,
                    groundTruthCol = "detect_observer1", observerCol = "detect_observer2")
 
@@ -258,60 +257,47 @@ results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
 adjudicated <- subset(capHistTab,capHistTab$groundTruth1 &
                 (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 
-# Number of adjudicated positive detections
-n_adj <- dim(adjudicated)[1]
-
 # Combine SNR of both detectors (shouldn't be necessary unless we've somehow
 # made them different)
 adjudicated$SNR <-   rowMeans(
   subset(adjudicated,select=c('snr1','snr2')) ,na.rm=T) #dB
 
-# Subset used for calculating false discovery rate of detector 2. Actually, we
-# use the fact that the false discovery rate is equal to (1-precision). 
-tp <- subset(capHistTab, as.logical(capHistTab$detect_observer2), 
-              select = c('groundTruth2') )
-precision <- sum(tp)/dim(tp)[1]
-adj_c <- 1-precision
-
 observerNames = c("detect_observer1", "detect_observer2")
-snrDetFun.vglm <- fitSNRvglm(adjudicated, observerNames, 
+snrDetFun.vglm <- fitDetFun(adjudicated, modelType = "vglm", yColNames = observerNames,
                              whichObserver = "detect_observer2")
 
 # Best estimate of NL 
 NLadj <- nlFromSnrInfo(chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2", timeCol = "t"), snrDetFun.vglm)
 
-
-Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
-           output.resolution.m=100,
-           outerloop = 100,
-           truncationDistance=truncDist, # in m
-           snrTruncationThreshold = -Inf)
-pa.vglm <- Pa.vglm$overall
-
-# Density estimation equation
-Dc.vglm <- (Nc * (1 - adj_c) )/( k * Atrunc * pa.vglm * Time )
-
-results.vglm <- data.frame(Dc=Dc.vglm, SampleSize=n_adj, A = Atrunc,# Environment
-                      NLmean = NLadj$mean, NLsd = NLadj$sd,# Noise
-                      # Detector params
-                        model='vglm', c=adj_c, Pa=pa.vglm,  
-                      row.names = paste('ACR',numTransects, "radial transects"))
+# groundTruthCol/observerCol point cde() at the simulated ground truth
+# (groundTruth2) directly, matching the manual fp/precision calculation
+# this replaces (fp/(fp+tp), the same definition falseDiscoveryRate()
+# already computes internally) -- no separate pDetInArea() call or
+# hand-derived Dc formula needed. returnPdetDetail=TRUE keeps the
+# per-transect detail available below for the same diagnostic plots
+# pDetInArea() itself would have given.
+results.vglm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.vglm,
+                   SL = SL, TL = TL, NL = NLadj, A = Atrunc, k = k, T = Time,
+                   modelType = 'vglm', truncationDistance = truncDist,
+                   groundTruthCol = "groundTruth2", observerCol = "detect_observer2",
+                   returnPdetDetail = TRUE)
 
 ```
 
 ```{r Call.Density.Results, echo=TRUE, warning=FALSE}
 
-results = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
-                      NLmean = NL$mean, NLsd = NL$sd,            # Noise
-                      model=det2params$func, c = det2params$c, # Detector params
-                      Pa = mean(simDet2$p_det,na.rm=TRUE), 
-                      row.names='Truth')
+resultsTrue <- data.frame(season='year', siteCode='', Nc=n, c=det2params$c,
+                          k=k, T=Time, A=A, pa=mean(simDet2$p_det,na.rm=TRUE),
+                          SLmean=SL$mean, SLsd=SL$sd, NLmean=NL$mean, NLsd=NL$sd,
+                          modelType=det2params$func, CV.Nc=0, CV.c=0, CV.pa=0,
+                          Dc=TrueCallDensity, CV.Dc=0)
 
-results<-rbind( results, results.vglm)
+results <- rbind(resultsTrue, results.vglm)
 
-kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 4), 
-                col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
-                             'Model','c','P_a')) %>% 
+kableExtra::kbl(results[, c('Dc','Nc','A','NLmean','NLsd','modelType','c','pa','CV.Dc')],
+                digits = c(4,0,0,1,2,NA,3,4,4),
+                col.names= c('Dc','Sample Size','A','NL_mean','NL_sd',
+                             'Model','c','P_a','CV.Dc')) %>% 
   kableExtra::kable_classic(full_width=FALSE)
 
 
