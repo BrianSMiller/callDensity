@@ -176,7 +176,15 @@ make_capture_history <- function(n = 5e4, seed = 42,
 
   A <- studyArea(R / 1e3)
 
-  list(capHistTab = simsTocaptureHistoryTable(simDet1, simDet2),
+  # Pinned to the legacy table1/table2 suffix explicitly: this fixture is
+  # shared by most of the test suite, which assumes detect_table1/table2
+  # column names throughout. simsTocaptureHistoryTable()'s own default is
+  # now matchbox-native (detect_observer1/observer2) -- pinning here means
+  # the whole suite keeps working unchanged rather than needing every
+  # downstream test updated for a fixture-naming change unrelated to what
+  # each of them actually tests.
+  list(capHistTab = simsTocaptureHistoryTable(simDet1, simDet2,
+                                              observerSuffix = c('table1','table2')),
        SL     = SL,
        NL     = NL,
        R      = R,
