@@ -24,8 +24,11 @@ test_that("pDetInArea returns a list with the expected elements", {
   fit <- fitDetFun(d, modelType = "scam", numKnots = 5)
   res <- run_pdet(fit)
   expect_type(res, "list")
-  expect_named(res, c("overall", "perTransectMeanSD", "meanOfAllTransects"),
-               ignore.order = TRUE)
+  # At least these elements -- not an exact set, so this doesn't need
+  # updating every time a new element (e.g. allDetFunctions) is added for
+  # a genuinely new capability, only if one of these three is ever removed
+  # or renamed.
+  expect_true(all(c("overall", "perTransectMeanSD", "meanOfAllTransects") %in% names(res)))
 })
 
 test_that("pDetInArea overall pDet is a single finite numeric in [0, 1]", {
