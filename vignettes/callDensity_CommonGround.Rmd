@@ -287,11 +287,11 @@ Convert this capture history table into an SNRinfo table, and treat detector1 as
 # ground truth. This is an observer ground (OG) so includes false positives from
 # detector1, but does not include detections from detector2 not detected on
 # detector1
-SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "table1", observers = "table2", timeCol = "t")
+SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2", timeCol = "t")
 
 # Positive on detector 2, but not on 1
-n_fp_subsample <- sum(capHistTab$detect_table2 & !capHistTab$detect_table1)
-n_p_subsampleDet2 <- sum(capHistTab$detect_table2) 
+n_fp_subsample <- sum(capHistTab$detect_observer2 & !capHistTab$detect_observer1)
+n_p_subsampleDet2 <- sum(capHistTab$detect_observer2) 
 
 # False discovery rate is number.false.positives/number.predicted.positive
 c_subsample <- n_fp_subsample/n_p_subsampleDet2
@@ -333,7 +333,8 @@ snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
                                               modelType = "glm")
 
 results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
-                   SL = SL, TL = TL, NL=NLsamp, A = A, modelType = 'glm')
+                   SL = SL, TL = TL, NL=NLsamp, A = A, modelType = 'glm',
+                   groundTruthCol = "detect_observer1", observerCol = "detect_observer2")
 
 
 ```
@@ -386,7 +387,8 @@ Here, we correct for the over-representation of detections with lower NL in our 
 NLind <- callDensity::nlFromDetections(SNRinfo, snrDetFun.glm, SL, TL)
 
 results.NLind <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
-                   SL = SL, TL = TL, NL=NLind, A = A, modelType = 'glm')
+                   SL = SL, TL = TL, NL=NLind, A = A, modelType = 'glm',
+                   groundTruthCol = "detect_observer1", observerCol = "detect_observer2")
 
 ```
 
@@ -425,31 +427,23 @@ We fit a capture-recapture model to these adjudicated data using the VGAM packag
 library(VGAM)
 
 #VGLMs work a bit differently. We still pass in a capture history table. But now
-#the ground-truth column is in a column separate from detect_table1 (here
+#the ground-truth column is in a column separate from detect_observer1 (here
 #groundTruth2). we want to include in our CH table all predicted positive
 #detections from either detector, not just the ground-truth. We fit the vglm
 #detection function outside of the call to cde, and pass it in as a parameter.
 #For the vglm fit, we want only adjudicated positive detections (no false
-#positives). Then we rename all the   columns from detector1 (i.e. that end in
-#1) to something that won't conflict. Finally, we rename our ground-truth column
-#to detect_table1, since that is what the cde function expects to be
-#ground-truth. 
-#
-#TODO: Change the column name in the capture history table to groundtruth or
-#make this an explicit parameter.
+#positives). cde()'s groundTruthCol/observerCol arguments point it directly at
+#groundTruth2/detect_observer2, on a capHistTab restricted to rows flagged by
+#at least one detector -- the union filter here is not just for the vglm
+#fit's own sample; cde()'s NL estimate is sensitive to it too, so it is kept
+#as a real step, not folded away with the renaming it used to be tangled up
+#with.
 
-ch <- subset(capHistTab,
-                      (capHistTab$detect_table1 | capHistTab$detect_table2))
-# Rename all detector 1 to something that won't conflict e.g. i
-names(ch) <- gsub('1','i',names(capHistTab))
-
-# Rename adjudicated to detect_table1
-names(ch)[names(ch)=='groundTruth2']<-'detect_table1'
-
+ch <- subset(capHistTab, (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 
 ### Adjudicated positive for VGLM capture recapture model
 adjudicated <- subset(capHistTab,capHistTab$groundTruth1 &
-                (capHistTab$detect_table1 | capHistTab$detect_table2))
+                (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 
 summary(adjudicated$group1)
 summary(adjudicated$group2)
@@ -459,21 +453,22 @@ n_adj <- dim(adjudicated)[1]
 
 # Subset used for calculating false discovery rate of detector 2. Actually, we
 # use the fact that the false discovery rate is equal to (1-precision). 
-pp2 = sum(capHistTab$detect_table2==TRUE,na.rm=TRUE) # Predicted positive det2
-fp2 = sum(capHistTab$detect_table2==TRUE & capHistTab$groundTruth2==FALSE,
+pp2 = sum(capHistTab$detect_observer2==TRUE,na.rm=TRUE) # Predicted positive det2
+fp2 = sum(capHistTab$detect_observer2==TRUE & capHistTab$groundTruth2==FALSE,
           na.rm=TRUE) # false positives from det2
 
 adj_c <- fp2/pp2
 
 
-observerNames = c("detect_table1", "detect_table2")
+observerNames = c("detect_observer1", "detect_observer2")
 snrDetFun.vglm <- fitSNRvglm(adjudicated, observerNames, 
-                             whichObserver = "detect_table2")
+                             whichObserver = "detect_observer2")
 # Best estimate of NL 
 # NLadj <- nlFromSnrInfo(adjudicated, snrDetFun.vglm)
 
 results.vglm <- cde(Nc=Nc, capHistTab = ch, snrDetFun = snrDetFun.vglm,
-                   SL = SL, TL = TL, A = A, modelType = 'vglm')
+                   SL = SL, TL = TL, A = A, modelType = 'vglm',
+                   groundTruthCol = "groundTruth2", observerCol = "detect_observer2")
 
 ```
 
