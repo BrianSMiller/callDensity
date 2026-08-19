@@ -29,7 +29,9 @@ cde(
   densityResultsFile = NULL,
   parallel = FALSE,
   groundTruthCol = "detect_table1",
-  observerCol = "detect_table2"
+  observerCol = "detect_table2",
+  returnDetFun = FALSE,
+  returnPdetDetail = FALSE
 )
 }
 \arguments{
@@ -178,7 +180,24 @@ both resolve the same column).}
 
 \item{observerCol}{Column in \code{capHistTab} for the detector under
 evaluation, forwarded the same way as \code{groundTruthCol}. Default
-\code{'detect_table2'}.
+\code{'detect_table2'}.}
+
+\item{returnDetFun}{Logical, default \code{FALSE}. If \code{TRUE}, the
+detection function actually used to compute \code{pa}/\code{Dc} --
+whichever was passed in as \code{snrDetFun}, or the one \code{cde()}
+fit internally when \code{snrDetFun=NULL} -- is attached to the
+returned data.frame as the \code{"detFun"} attribute (retrieve with
+\code{attr(result, "detFun")}). Off by default so this is purely
+opt-in: the return value's shape and content are unchanged for every
+existing caller unless they ask for this.}
+
+\item{returnPdetDetail}{Logical, default \code{FALSE}. If \code{TRUE},
+the full result of the internal \code{pDetInArea()} call -- including
+the per-transect detail (\code{$meanOfAllTransects}) needed to plot
+probability of detection as a function of range, not just the single
+\code{pa} value \code{cde()} itself returns -- is attached as the
+\code{"pDetResults"} attribute. Off by default, same reasoning as
+\code{returnDetFun}.
 
 Requires the \pkg{future.apply} package. If not installed, falls back
 to serial execution with a warning.}
@@ -187,6 +206,9 @@ to serial execution with a warning.}
 \code{cde} returns a data.frame containing the results of the call
 density estimate \eqn{\hat{D}_c}, intermediate results such as \eqn{p_a,
   c}, coefficient of variation of these terms, and the input parameters.
+If \code{returnDetFun}/\code{returnPdetDetail} are set, the
+corresponding extra objects are attached as attributes on this same
+data.frame (see those parameters) rather than changing its shape.
 }
 \description{
 Applies the auxiliary information methods of Castro et. al. (2024)/Harris

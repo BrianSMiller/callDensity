@@ -161,6 +161,21 @@
 #' @param observerCol Column in \code{capHistTab} for the detector under
 #'   evaluation, forwarded the same way as \code{groundTruthCol}. Default
 #'   \code{'detect_table2'}.
+#' @param returnDetFun Logical, default \code{FALSE}. If \code{TRUE}, the
+#'   detection function actually used to compute \code{pa}/\code{Dc} --
+#'   whichever was passed in as \code{snrDetFun}, or the one \code{cde()}
+#'   fit internally when \code{snrDetFun=NULL} -- is attached to the
+#'   returned data.frame as the \code{"detFun"} attribute (retrieve with
+#'   \code{attr(result, "detFun")}). Off by default so this is purely
+#'   opt-in: the return value's shape and content are unchanged for every
+#'   existing caller unless they ask for this.
+#' @param returnPdetDetail Logical, default \code{FALSE}. If \code{TRUE},
+#'   the full result of the internal \code{pDetInArea()} call -- including
+#'   the per-transect detail (\code{$meanOfAllTransects}) needed to plot
+#'   probability of detection as a function of range, not just the single
+#'   \code{pa} value \code{cde()} itself returns -- is attached as the
+#'   \code{"pDetResults"} attribute. Off by default, same reasoning as
+#'   \code{returnDetFun}.
 #'
 #'   Requires the \pkg{future.apply} package. If not installed, falls back
 #'   to serial execution with a warning.
@@ -168,6 +183,9 @@
 #' @returns `cde` returns a data.frame containing the results of the call
 #'   density estimate \eqn{\hat{D}_c}, intermediate results such as \eqn{p_a,
 #'   c}, coefficient of variation of these terms, and the input parameters.
+#'   If \code{returnDetFun}/\code{returnPdetDetail} are set, the
+#'   corresponding extra objects are attached as attributes on this same
+#'   data.frame (see those parameters) rather than changing its shape.
 #'
 #' @importFrom stats rnorm sd vcov
 #' @importFrom utils read.csv write.table
@@ -200,7 +218,9 @@ cde <- function (Nc,
                  densityResultsFile=NULL,
                  parallel = FALSE,
                  groundTruthCol = 'detect_table1',
-                 observerCol    = 'detect_table2'
+                 observerCol    = 'detect_table2',
+                 returnDetFun     = FALSE,
+                 returnPdetDetail = FALSE
 ){
   # Check inputs and create outputs
   # Store all parameters for call-density estimation in data frame called 'p'
@@ -333,6 +353,21 @@ cde <- function (Nc,
   names(result) <- c('season','siteCode','Nc','c','k','T','A','pa',
                      'SLmean','SLsd','NLmean','NLsd','modelType',
                      'CV.Nc','CV.c','CV.pa','Dc','CV.Dc')
+
+  # Opt-in extras, off by default so no existing caller's return value
+  # changes shape or content unless they explicitly ask for it. Attached as
+  # attributes rather than wrapped in a list, so `result` is always the
+  # same plain data.frame either way -- rbind(), result$Dc, etc. all keep
+  # working unchanged whether or not these are requested.
+  if (returnDetFun) {
+    # snrDetFun holds either what the caller passed in, or what cde() fit
+    # internally when snrDetFun=NULL -- either way, this is the curve that
+    # was actually used to compute pa/Dc above.
+    attr(result, 'detFun') <- snrDetFun
+  }
+  if (returnPdetDetail) {
+    attr(result, 'pDetResults') <- pDetResults
+  }
 
   if (!is.null(densityResultsFile)){
     utils::write.csv(result, file = densityResultsFile, row.names=F)
