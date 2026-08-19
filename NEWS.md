@@ -1,4 +1,4 @@
-# callDensity 1.1.2 (unreleased)
+# callDensity 1.2.0 (unreleased)
 
 ## New features
 
@@ -44,6 +44,68 @@
   are unchanged (`'detect_table1'`/`'detect_table2'`), so no existing
   call site is affected.
 
+* **`cde()` also gains `snrColName`/`timeCol` arguments**, same
+  reasoning as `groundTruthCol`/`observerCol` above and found the same
+  way -- by actually running `cde()` against raw simulation data.
+  `snrColName` (default `'SNR'`) is forwarded to `falseDiscoveryRate()`,
+  which already accepted it but wasn't reachable from `cde()`; raw
+  simulation/detection tables typically carry lowercase `snr` instead.
+  `timeCol` (default `NULL`, auto-detecting `'t0'` then `'t'` as before)
+  is forwarded to the internal `chtToSNRinfo()` call, for tables using
+  neither (e.g. `'datetime'`).
+
+* **`cde()` gains opt-in `returnDetFun`/`returnPdetDetail` arguments**,
+  both default `FALSE`. When requested, the detection function actually
+  used (whether passed in or fit internally) and/or `pDetInArea()`'s
+  full result (including the per-transect detail needed for a
+  probability-of-detection-vs-range plot) are attached as attributes on
+  the returned data.frame (`attr(result, "detFun")`/`"pDetResults"`)
+  rather than changing its shape -- `result` is always the same plain
+  data.frame either way, so `rbind()`, `result$Dc`, etc. all keep
+  working unchanged whether or not these are requested.
+
+* **`pDetInArea()` now returns `allDetFunctions`**, the full
+  range-by-transect probability-of-detection grid that was already being
+  computed internally but previously only escaped via the optional
+  `transectFile` CSV write. Purely additive (a new named list element,
+  not a fixed-shape data.frame), so existing callers accessing
+  `$overall`/`$perTransectMeanSD`/`$meanOfAllTransects` are unaffected.
+
+* **New `plotPDetRadials()`** plots probability of detection as a
+  function of both range and azimuth around the recorder -- a directional
+  detection-range footprint, rather than the 1D range-only view
+  `meanOfAllTransects` gives. Ports Brian's MATLAB `plotPDetRadials.m` to
+  a native ggplot2 `coord_polar()` plot. Takes `pDetInArea()`'s own
+  `allDetFunctions` output directly.
+
+* **Vignettes reworked to use existing package functions instead of
+  hand-rolled equivalents**, closing a gap where the package's own
+  capabilities (`chtToSNRinfo()`, `fitDetFun()`, `showDetFun()`,
+  `predictDetFun()`, `plotSpatialDetections()`, and now `cde()`'s new
+  opt-in returns) had grown without the published examples being updated
+  to demonstrate them. `callDensity.Rmd` -- the flagship vignette, same
+  name as the package -- previously reimplemented `cde()`'s own density
+  formula by hand, three times over (once per detection-function model
+  type), silently dropping every uncertainty column (`CV.Dc`, `CV.pa`,
+  `CV.c`) `cde()` computes automatically; now uses `cde()` directly, and
+  gained two diagnostics it never had before (`showDetFun()`'s fitted-
+  curve-vs-observed-SNR plot, and `plotPDetRadials()`'s directional
+  footprint) rather than only ever plotting probability of detection vs.
+  range. `parallel_benchmarks.Rmd`, `callDensity_CommonGround.Rmd`,
+  `callDensity_coast.Rmd`, and `callDensity_snrThreshold.Rmd` updated
+  similarly; `callDensity_CommonGround.Rmd`'s capture-recapture section
+  had its own `TODO: ... make this an explicit parameter` comment,
+  directly resolved by `cde()`'s new `groundTruthCol`/`observerCol`.
+
+* **`simsTocaptureHistoryTable()` defaults to matchbox-native
+  `detect_observer1`/`detect_observer2`** column naming (was
+  `detect_table1`/`detect_table2`). New `observerSuffix` argument,
+  default `c('observer1','observer2')`; pass `c('table1','table2')` for
+  the previous naming. Every vignette's simulated example now
+  demonstrates the same column convention `chtToSNRinfo()` defaults to,
+  rather than teaching the older convention by example while the
+  documented default points elsewhere.
+
 ## Deprecated
 
 * **`mchToCR()`, `capHist2snrInfo()`, and `capHistTosnrInfo()` are
@@ -64,6 +126,8 @@
   kept working, not removed, so nothing currently in production or
   published breaks.
 
+
+# callDensity 1.1.1
 
 Reworks the callDensity\_snrThreshold vignette around the actual failing  
 scenario the truncation feature addresses, rather than an arbitrary  
