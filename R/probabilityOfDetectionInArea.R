@@ -62,6 +62,24 @@
 #'    implementation. Requires the future.apply package to be installed
 #'    when TRUE; falls back to serial with a warning if not available.
 #'
+#' @returns A list with four elements:
+#'   \describe{
+#'     \item{overall}{Single overall probability of detection across the
+#'       whole area (the \code{pa} value used by \code{\link{cde}}).}
+#'     \item{perTransectMeanSD}{Mean and SD of p(det) per transect, plus an
+#'       overall row (see \code{\link{pa_CV}}).}
+#'     \item{meanOfAllTransects}{data.frame with \code{range_m} and
+#'       \code{pDet}, averaged across transects -- a 1D detection function
+#'       vs. range, ignoring azimuth.}
+#'     \item{allDetFunctions}{data.frame with \code{range_m} and one column
+#'       per transect (named to match \code{TLlookup}, e.g. \code{tl0},
+#'       \code{tl90}, ...) giving p(det) at every range along every
+#'       transect -- the full 2D grid \code{meanOfAllTransects} was
+#'       averaged down from. Feed this to
+#'       \code{\link{plotPDetRadials}} for a directional detection-range
+#'       footprint plot.}
+#'   }
+#'
 #' @export
 pDetInArea <-
   function(detFun, SL, TLlookup,  NL, # Sonar equation inputs
@@ -564,7 +582,8 @@ pDetInArea <-
   )
   return(list(overall = overallpdet,
               perTransectMeanSD = pdetsandvar,
-              meanOfAllTransects = meanOfAllTransects))
+              meanOfAllTransects = meanOfAllTransects,
+              allDetFunctions = allDetFunctions))
 
   # Once have looked at the results, decide an appropriate truncation distance,
   # w Redo Steps 5-7 using the different truncation distance

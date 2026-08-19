@@ -55,6 +55,25 @@ is currently active (set via future::plan() before calling). If FALSE
 implementation. Requires the future.apply package to be installed
 when TRUE; falls back to serial with a warning if not available.}
 }
+\value{
+A list with four elements:
+\describe{
+\item{overall}{Single overall probability of detection across the
+whole area (the \code{pa} value used by \code{\link{cde}}).}
+\item{perTransectMeanSD}{Mean and SD of p(det) per transect, plus an
+overall row (see \code{\link{pa_CV}}).}
+\item{meanOfAllTransects}{data.frame with \code{range_m} and
+\code{pDet}, averaged across transects -- a 1D detection function
+vs. range, ignoring azimuth.}
+\item{allDetFunctions}{data.frame with \code{range_m} and one column
+per transect (named to match \code{TLlookup}, e.g. \code{tl0},
+\code{tl90}, ...) giving p(det) at every range along every
+transect -- the full 2D grid \code{meanOfAllTransects} was
+averaged down from. Feed this to
+\code{\link{plotPDetRadials}} for a directional detection-range
+footprint plot.}
+}
+}
 \description{
 The simulation has several steps:
 (1) SNR regression and TL data now passed in via function call
