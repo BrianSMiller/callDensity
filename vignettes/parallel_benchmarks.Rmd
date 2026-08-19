@@ -141,8 +141,7 @@ ch_scam$noiseRMSdB_observer2 <- ch_scam$noiseRMSdB2
 
 # Fit scam detection function
 SNRinfo_scam <- chtToSNRinfo(ch_scam, groundTruth = "observer1", observers = "observer2", timeCol = "t")
-detFun_scam <- fitSNRdetectionFunc(SNRinfo_scam, modelType = 'scam',
-                                    numKnots = 5)
+detFun_scam <- fitDetFun(SNRinfo_scam, modelType = 'scam', numKnots = 5)
 cat("scam model fitted:", class(detFun_scam)[1], "\n")
 ```
 
@@ -152,7 +151,7 @@ adjudicated <- subset(capHistTab, capHistTab$groundTruth1 &
                         (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 
 observerNames <- c("detect_observer1", "detect_observer2")
-detFun_vglm <- fitSNRvglm(adjudicated, observerNames,
+detFun_vglm <- fitDetFun(adjudicated, modelType = "vglm", yColNames = observerNames,
                             whichObserver = "detect_observer2")
 
 # CR-style capture history for cde
