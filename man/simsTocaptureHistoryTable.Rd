@@ -2,23 +2,35 @@
 % Please edit documentation in R/callDensitySim.R
 \name{simsTocaptureHistoryTable}
 \alias{simsTocaptureHistoryTable}
-\title{Create a capture history table from the two simulated detection tables}
+\title{Merge two simulated detectors into a capture history table}
 \usage{
-simsTocaptureHistoryTable(subsampleDet1, subsampleDet2)
+simsTocaptureHistoryTable(
+  subsampleDet1,
+  subsampleDet2,
+  observerSuffix = c("observer1", "observer2")
+)
 }
 \arguments{
-\item{subsampleDet1}{\itemize{
-\item Simulated detection table 1
-}}
+\item{subsampleDet1, subsampleDet2}{Output of \code{\link{simulateDetector}}
+for each of the two simulated detectors.}
 
-\item{subsampleDet2}{\itemize{
-\item Simulated detection table 2
-}}
-}
-\value{
-capture history table containing a row for each detection that was
-detected by either detector.
+\item{observerSuffix}{Character vector of length 2 giving the suffix
+used for the two detection-flag columns in the output. Default
+\code{c('observer1', 'observer2')} -- matchbox-native, matching
+\code{\link{chtToSNRinfo}}'s own default \code{observers} naming, so a
+simulated capture history table needs no renaming before use. Pass
+\code{c('table1', 'table2')} for the older
+\code{detect_table1}/\code{detect_table2} shape.
+
+Only the two detection-flag columns are affected. The per-observer
+\code{groundTruth}/\code{snr}/\code{signalRMSdB}/\code{noiseRMSdB}
+columns keep their existing \code{1}/\code{2} numbering regardless --
+they're simulation-only ground-truth/diagnostic columns with no
+equivalent in real matchbox output (which carries one shared
+\code{signalRMSdB}/\code{noiseRMSdB} per matched event, already
+consolidated below, and no ground truth at all), so there's no
+matchbox convention for \code{observerSuffix} to align them to.}
 }
 \description{
-Create a capture history table from the two simulated detection tables
+Merge two simulated detectors into a capture history table
 }

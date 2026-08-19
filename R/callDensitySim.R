@@ -239,16 +239,29 @@ subsampleSimInTime <- function(sim,
   return(sim)
 }
 
-#' Create a capture history table from the two simulated detection tables
+#' Merge two simulated detectors into a capture history table
 #'
-#' @param subsampleDet1 - Simulated detection table 1
-#' @param subsampleDet2 - Simulated detection table 2
+#' @param subsampleDet1,subsampleDet2 Output of \code{\link{simulateDetector}}
+#'   for each of the two simulated detectors.
+#' @param observerSuffix Character vector of length 2 giving the suffix
+#'   used for the two detection-flag columns in the output. Default
+#'   \code{c('observer1', 'observer2')} -- matchbox-native, matching
+#'   \code{\link{chtToSNRinfo}}'s own default \code{observers} naming, so a
+#'   simulated capture history table needs no renaming before use. Pass
+#'   \code{c('table1', 'table2')} for the older
+#'   \code{detect_table1}/\code{detect_table2} shape.
 #'
-#' @returns capture history table containing a row for each detection that was
-#'   detected by either detector.
+#'   Only the two detection-flag columns are affected. The per-observer
+#'   \code{groundTruth}/\code{snr}/\code{signalRMSdB}/\code{noiseRMSdB}
+#'   columns keep their existing \code{1}/\code{2} numbering regardless --
+#'   they're simulation-only ground-truth/diagnostic columns with no
+#'   equivalent in real matchbox output (which carries one shared
+#'   \code{signalRMSdB}/\code{noiseRMSdB} per matched event, already
+#'   consolidated below, and no ground truth at all), so there's no
+#'   matchbox convention for \code{observerSuffix} to align them to.
 #' @export
-#'
-simsTocaptureHistoryTable <- function(subsampleDet1, subsampleDet2){
+simsTocaptureHistoryTable <- function(subsampleDet1, subsampleDet2,
+                                      observerSuffix = c('observer1','observer2')){
   capHistTab <- merge(x=subsampleDet1, y=subsampleDet2, all=TRUE,
                       by = c('datetime'), suffixes = c('1','2'))
 
@@ -279,6 +292,12 @@ simsTocaptureHistoryTable <- function(subsampleDet1, subsampleDet2){
                                     na.rm = TRUE)
   capHistTab$signalRMSdB <- rowMeans(capHistTab[,c('signalRMSdB1','signalRMSdB2')],
                                      na.rm = TRUE)
+
+  # Rename the two detection-flag columns last, so every intermediate step
+  # above works against the fixed table1/table2 names merge() actually
+  # produces, regardless of what the caller requested.
+  names(capHistTab)[names(capHistTab)=='detect_table1'] <- paste0('detect_', observerSuffix[1])
+  names(capHistTab)[names(capHistTab)=='detect_table2'] <- paste0('detect_', observerSuffix[2])
 
   return (capHistTab)
 }
