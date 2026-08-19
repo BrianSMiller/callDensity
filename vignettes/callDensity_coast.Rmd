@@ -217,11 +217,11 @@ Presently, false positives have randomly generated date-times, so have a negligi
 capHistTab<- simsTocaptureHistoryTable(subsampleDet1,subsampleDet2)
 
 # Total number of true positive detections for detector1 OR detector2
-nDetectedSubset <- with(capHistTab,sum(detect_table1 & groundTruth1 |   
-                                        detect_table2 & groundTruth2) )
+nDetectedSubset <- with(capHistTab,sum(detect_observer1 & groundTruth1 |   
+                                        detect_observer2 & groundTruth2) )
 
 # Total number of positive detections for detector1 OR detector2
-nPositiveSubset <- with(capHistTab,sum(detect_table1 | detect_table2))
+nPositiveSubset <- with(capHistTab,sum(detect_observer1 | detect_observer2))
 
 # Number positive detections in FULL set
 Nc <- sum(simDet2$detect_table)       
@@ -230,7 +230,7 @@ Nc <- sum(simDet2$detect_table)
 # ground truth. This is an observer ground (OG) so includes false positives from
 # detector1, but does not include detections from detector2 not detected on
 # detector1
-SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "table1", observers = "table2", timeCol = "t")
+SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2", timeCol = "t")
 
 
 ```
@@ -246,7 +246,8 @@ snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
 
 results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
                    SL = SL, TL = TL, A = A, modelType = 'glm', 
-                   truncationDistance = truncDist)
+                   truncationDistance = truncDist,
+                   groundTruthCol = "detect_observer1", observerCol = "detect_observer2")
 
 
 ```
@@ -255,7 +256,7 @@ results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
 
 ### Adjudicated capture recapture model
 adjudicated <- subset(capHistTab,capHistTab$groundTruth1 &
-                (capHistTab$detect_table1 | capHistTab$detect_table2))
+                (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 
 # Number of adjudicated positive detections
 n_adj <- dim(adjudicated)[1]
@@ -267,17 +268,17 @@ adjudicated$SNR <-   rowMeans(
 
 # Subset used for calculating false discovery rate of detector 2. Actually, we
 # use the fact that the false discovery rate is equal to (1-precision). 
-tp <- subset(capHistTab, as.logical(capHistTab$detect_table2), 
+tp <- subset(capHistTab, as.logical(capHistTab$detect_observer2), 
               select = c('groundTruth2') )
 precision <- sum(tp)/dim(tp)[1]
 adj_c <- 1-precision
 
-observerNames = c("detect_table1", "detect_table2")
+observerNames = c("detect_observer1", "detect_observer2")
 snrDetFun.vglm <- fitSNRvglm(adjudicated, observerNames, 
-                             whichObserver = "detect_table2")
+                             whichObserver = "detect_observer2")
 
 # Best estimate of NL 
-NLadj <- nlFromSnrInfo(chtToSNRinfo(capHistTab, groundTruth = "table1", observers = "table2", timeCol = "t"), snrDetFun.vglm)
+NLadj <- nlFromSnrInfo(chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2", timeCol = "t"), snrDetFun.vglm)
 
 
 Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
