@@ -522,7 +522,7 @@ snrDetFun.vglm2@extra$whichObserver <- other_observer
 # Ground truth from simulation
 truth <- data.frame(
   SNR   = c(simDet2$snr,      capHistTab$snr_observer1),
-  p_det = c(simDet2$p_det,    capHistTab$p_det1),
+  p_det = c(simDet2$p_det,    capHistTab$p_det_observer1),
   group = c(rep("Observer 2", nrow(simDet2)),
             rep("Observer 1", nrow(capHistTab)))
 )
