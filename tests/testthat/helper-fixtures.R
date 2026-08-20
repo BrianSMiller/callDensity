@@ -101,6 +101,39 @@ make_two_observer_data <- function(n_subsample = 1e3, seed = 42) {
   d
 }
 
+# ---------------------------------------------------------------------------
+# N-observer data for genuine multi-occasion vglm tests (N >= 2)
+# ---------------------------------------------------------------------------
+# Generalizes make_two_observer_data() to an arbitrary number of observers.
+# Each is an independent Bernoulli draw off the same underlying SNR-dependent
+# probability curve at its own quality level (spread between 0.9 and 0.5 by
+# default, so no two observers are identical and none achieves perfect
+# separation), requiring at least one detection across all N observers for
+# vglm identifiability. Not a drop-in replacement for make_two_observer_data()
+# -- default quality levels differ (0.9/0.5 spread vs 0.8/0.7) -- just the
+# same pattern generalized to N.
+
+make_n_observer_data <- function(n_subsample = 1e3, n_observers = 3, seed = 42,
+                                 quality = NULL) {
+  stopifnot(n_observers >= 2)
+  d <- make_snr_data(n_subsample = n_subsample, seed = seed)
+  set.seed(seed + 1)
+  p <- plogis(0.3 * (d$SNR - median(d$SNR, na.rm = TRUE)))
+
+  if (is.null(quality)) {
+    quality <- seq(0.9, 0.5, length.out = n_observers)
+  }
+  stopifnot(length(quality) == n_observers)
+
+  obsCols <- paste0("detect_observer", seq_len(n_observers))
+  for (i in seq_len(n_observers)) {
+    d[[obsCols[i]]] <- rbinom(nrow(d), 1, p * quality[i])
+  }
+
+  keep <- rowSums(d[, obsCols, drop = FALSE]) > 0
+  d[keep, ]
+}
+
 # --- Fixtures for pDetGivenNL and nlFromDetections ----------------------------
 # Deliberately independent of make_sim_data(). The point of these tests is to
 # check pDetGivenNL against a simulation that shares no code with it, so they
