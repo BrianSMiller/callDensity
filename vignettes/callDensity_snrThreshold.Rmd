@@ -219,6 +219,14 @@ Presently, false positives have randomly generated date-times, so have a negligi
 # simulated calls in the subset whether detected or not)
 capHistTab<- simsTocaptureHistoryTable(subsampleDet1,subsampleDet2)
 capHistTabt<- simsTocaptureHistoryTable(subsampleDet1t,subsampleDet2t)
+# simsTocaptureHistoryTable() keeps every observer's own signal/noise/SNR
+# columns separately, suffixed (matchbox-native), rather than
+# auto-consolidating them the way it used to. cde()'s own
+# falseDiscoveryRate() call needs a single SNR column for its truncation
+# handling (a separate mechanism from chtToSNRinfo()'s signalCol/noiseCol
+# averaging), so that's built explicitly here for both tables.
+capHistTab$SNR  <- rowMeans(capHistTab[,  c("snr_observer1", "snr_observer2")], na.rm = TRUE)
+capHistTabt$SNR <- rowMeans(capHistTabt[, c("snr_observer1", "snr_observer2")], na.rm = TRUE)
 
 truncationDistances <- R 
 
@@ -236,19 +244,19 @@ Density is calculated via `cde()` directly here -- the same interface an end use
 
 ### Detection function via VGLM (adjudicated capture-recapture)
 
-Capture-recapture with two fallible observers means neither `detect_observer1` nor `detect_observer2` is ground truth on its own. `cde()` accepts `groundTruthCol`/`observerCol` directly, so whichever column actually holds the adjudicated truth -- here, the simulated `groundTruth2` -- can be pointed to without renaming anything in the table itself. Skipping this does not error -- it silently computes a false discovery rate for one observer against the other, which is not a meaningful quantity and will not match the truth.
+Capture-recapture with two fallible observers means neither `detect_observer1` nor `detect_observer2` is ground truth on its own. `cde()` accepts `groundTruthCol`/`observerCol` directly, so whichever column actually holds the adjudicated truth -- here, the simulated `groundTruth` -- can be pointed to without renaming anything in the table itself. Skipping this does not error -- it silently computes a false discovery rate for one observer against the other, which is not a meaningful quantity and will not match the truth.
 
 ```{r cde.vglm, warning=FALSE, message=FALSE}
 library(VGAM)
 
 adjudicated <- subset(capHistTab,
-                (capHistTab$groundTruth1 | capHistTab$groundTruth2) &
+                capHistTab$groundTruth &
                 (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 adjudicatedt <- subset(capHistTabt,
-                (capHistTabt$groundTruth1 | capHistTabt$groundTruth2) &
+                capHistTabt$groundTruth &
                 (capHistTabt$detect_observer1 | capHistTabt$detect_observer2))
 adjudicatedt$SNR <- rowMeans(
-  subset(adjudicatedt, select = c("snr1", "snr2")), na.rm = TRUE)
+  subset(adjudicatedt, select = c("snr_observer1", "snr_observer2")), na.rm = TRUE)
 
 observerNames  <- c("detect_observer1", "detect_observer2")
 
@@ -267,19 +275,24 @@ snrDetFun.vglmt <- fitDetFun(adjudicatedt, modelType = "vglm", yColNames = obser
 # copy of capHistTab with a renamed column is needed. The vglm fits above
 # already used the genuine two-observer columns; this only affects what
 # cde() itself treats as ground truth for its false-discovery-rate
-# calculation.
+# calculation. signalCol/noiseCol point at each observer's own suffixed
+# signal/noise columns, which chtToSNRinfo() averages per event.
 cr.none <- cde(Nc = Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.vglmNone,
                SL = SL, TL = TL, NL = NL, T = Time, A = A, k = k,
                outerloop = 10, truncationDistance = R,
                snrTruncationThreshold = -Inf,
-               groundTruthCol = "groundTruth2", observerCol = "detect_observer2")
+               groundTruthCol = "groundTruth", observerCol = "detect_observer2",
+               signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+               noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
 
 cr.trunc <- cde(Nc = Nct, capHistTab = capHistTabt, snrDetFun = snrDetFun.vglmt,
                 SL = SL, TL = TL, NL = NL, T = Time, A = A, k = k,
                 outerloop = 10, truncationDistance = R,
                 snrTruncationThreshold = snrTruncationThreshold,
                 NcIsTruncated = TRUE,
-                groundTruthCol = "groundTruth2", observerCol = "detect_observer2")
+                groundTruthCol = "groundTruth", observerCol = "detect_observer2",
+                signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+                noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
 
 resultsTrue <- data.frame(Dc = TrueCallDensity, Nc = n,
                           pa = mean(simDet2$p_det, na.rm = TRUE),
@@ -427,6 +440,10 @@ runCell <- function(theta, det1scale, seed, n = 5e4, outerloop = 10) {
                              det1location = 1, det2location = 2,
                              det2scale = 4, fdr = 0)
   ch <- d$capHistTab
+  # simsTocaptureHistoryTable() no longer auto-computes a consolidated SNR --
+  # needed below both for the truncation filter and for cde()'s own
+  # falseDiscoveryRate() call.
+  ch$SNR <- rowMeans(ch[, c("snr_observer1", "snr_observer2")], na.rm = TRUE)
   # Spherical-spreading TL table, r = 0 and non-finite rows removed.
   TL <- simTLradials_20logR(maxRange = 1e6, rangeStep = 2000, numTransects = 4)
   TL <- TL[is.finite(rowSums(TL)) & TL[[1]] > 0, ]
@@ -437,11 +454,11 @@ runCell <- function(theta, det1scale, seed, n = 5e4, outerloop = 10) {
 
   # The estimand under truncation: E[p2 * 1(SNR >= theta)] over ALL calls.
   # Not the mean over surviving calls. This is what a zeroed p_a targets.
-  truePaTrunc <- mean(ch$p_det2 * (ch$snr2 >= theta), na.rm = TRUE)
+  truePaTrunc <- mean(ch$p_det_observer2 * (ch$snr_observer2 >= theta), na.rm = TRUE)
 
   # Capture-recapture: the adjudicated set is every call at least one observer
   # flagged, with false positives removed by the judge.
-  adj <- subset(ch, (ch$groundTruth1 | ch$groundTruth2) &
+  adj <- subset(ch, ch$groundTruth &
                     (ch$detect_observer1 | ch$detect_observer2))
   if (is.finite(theta)) adj <- subset(adj, adj$SNR >= theta)
 
@@ -455,10 +472,12 @@ runCell <- function(theta, det1scale, seed, n = 5e4, outerloop = 10) {
             na.rm = TRUE)
 
   # groundTruthCol/observerCol point cde() at the simulated ground truth
-  # (groundTruth2) directly -- the synthetic equivalent of a judge's
+  # (groundTruth) directly -- the synthetic equivalent of a judge's
   # adjudication -- matching the real Common Ground manuscript's own
   # ground-truth convention, without needing a renamed copy of ch. See the
   # GLM/VGLM sections above for the same construction and its explanation.
+  # signalCol/noiseCol point at each observer's own suffixed signal/noise
+  # columns, which chtToSNRinfo() averages per event.
   result <- suppressWarnings(suppressMessages(
     cde(Nc = Nc, capHistTab = ch, snrDetFun = fit,
         SL = d$SL, TL = TL, NL = d$NL, T = d$Time, A = d$A, k = 1,
@@ -466,7 +485,9 @@ runCell <- function(theta, det1scale, seed, n = 5e4, outerloop = 10) {
         truncationDistance = d$R,
         snrTruncationThreshold = theta,
         NcIsTruncated = is.finite(theta),
-        groundTruthCol = "groundTruth2", observerCol = "detect_observer2")
+        groundTruthCol = "groundTruth", observerCol = "detect_observer2",
+        signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+        noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
   ))
 
   pa <- result$pa

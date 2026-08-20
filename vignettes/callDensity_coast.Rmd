@@ -216,9 +216,17 @@ Presently, false positives have randomly generated date-times, so have a negligi
 
 capHistTab<- simsTocaptureHistoryTable(subsampleDet1,subsampleDet2)
 
+# simsTocaptureHistoryTable() keeps every observer's own signal/noise/SNR
+# columns separately, suffixed (matchbox-native), rather than
+# auto-consolidating them the way it used to. cde()'s own
+# falseDiscoveryRate() call needs a single SNR column for its truncation
+# handling (a separate mechanism from chtToSNRinfo()'s signalCol/noiseCol
+# averaging below), so that's built explicitly here.
+capHistTab$SNR <- rowMeans(capHistTab[, c("snr_observer1", "snr_observer2")], na.rm = TRUE)
+
 # Total number of true positive detections for detector1 OR detector2
-nDetectedSubset <- with(capHistTab,sum(detect_observer1 & groundTruth1 |   
-                                        detect_observer2 & groundTruth2) )
+nDetectedSubset <- with(capHistTab,sum(detect_observer1 & groundTruth |   
+                                        detect_observer2 & groundTruth) )
 
 # Total number of positive detections for detector1 OR detector2
 nPositiveSubset <- with(capHistTab,sum(detect_observer1 | detect_observer2))
@@ -229,8 +237,12 @@ Nc <- sum(simDet2$detect_table)
 # SNRinfo is used to calculate snrDetFun for detector2 assuming detector1 is the
 # ground truth. This is an observer ground (OG) so includes false positives from
 # detector1, but does not include detections from detector2 not detected on
-# detector1
-SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2", timeCol = "t")
+# detector1. signalCol/noiseCol point at each observer's own suffixed
+# signal/noise columns, which chtToSNRinfo() averages per event -- there is
+# no single consolidated signalRMSdB/noiseRMSdB column to fall back on.
+SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2",
+                        signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+                        noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
 
 
 ```
@@ -246,7 +258,9 @@ snrDetFun.glm <- callDensity::fitDetFun(SNRinfo, modelType = "glm")
 results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
                    SL = SL, TL = TL, A = A, k = k, T = Time, modelType = 'glm', 
                    truncationDistance = truncDist,
-                   groundTruthCol = "detect_observer1", observerCol = "detect_observer2")
+                   groundTruthCol = "detect_observer1", observerCol = "detect_observer2",
+                   signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+                   noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
 
 
 ```
@@ -254,23 +268,26 @@ results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
 ```{r VGLM p.det, warning=FALSE, message=FALSE}
 
 ### Adjudicated capture recapture model
-adjudicated <- subset(capHistTab,capHistTab$groundTruth1 &
+adjudicated <- subset(capHistTab,capHistTab$groundTruth &
                 (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 
 # Combine SNR of both detectors (shouldn't be necessary unless we've somehow
 # made them different)
 adjudicated$SNR <-   rowMeans(
-  subset(adjudicated,select=c('snr1','snr2')) ,na.rm=T) #dB
+  subset(adjudicated,select=c('snr_observer1','snr_observer2')) ,na.rm=T) #dB
 
 observerNames = c("detect_observer1", "detect_observer2")
 snrDetFun.vglm <- fitDetFun(adjudicated, modelType = "vglm", yColNames = observerNames,
                              whichObserver = "detect_observer2")
 
 # Best estimate of NL 
-NLadj <- nlFromSnrInfo(chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2", timeCol = "t"), snrDetFun.vglm)
+NLadj <- nlFromSnrInfo(chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2",
+                                    signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+                                    noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2")),
+                       snrDetFun.vglm)
 
 # groundTruthCol/observerCol point cde() at the simulated ground truth
-# (groundTruth2) directly, matching the manual fp/precision calculation
+# (groundTruth) directly, matching the manual fp/precision calculation
 # this replaces (fp/(fp+tp), the same definition falseDiscoveryRate()
 # already computes internally) -- no separate pDetInArea() call or
 # hand-derived Dc formula needed. returnPdetDetail=TRUE keeps the
@@ -279,7 +296,9 @@ NLadj <- nlFromSnrInfo(chtToSNRinfo(capHistTab, groundTruth = "observer1", obser
 results.vglm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.vglm,
                    SL = SL, TL = TL, NL = NLadj, A = Atrunc, k = k, T = Time,
                    modelType = 'vglm', truncationDistance = truncDist,
-                   groundTruthCol = "groundTruth2", observerCol = "detect_observer2",
+                   groundTruthCol = "groundTruth", observerCol = "detect_observer2",
+                   signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+                   noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"),
                    returnPdetDetail = TRUE)
 
 ```

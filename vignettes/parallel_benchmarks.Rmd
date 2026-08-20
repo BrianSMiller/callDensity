@@ -111,6 +111,10 @@ subsampleDet2 <- subsampleSimInTime(simDet2, minDate, maxDate,
 
 # Create capture history table
 capHistTab <- simsTocaptureHistoryTable(subsampleDet1, subsampleDet2)
+# simsTocaptureHistoryTable() no longer auto-computes a consolidated SNR --
+# needed below both for direct vglm fitting and for cde()'s own
+# falseDiscoveryRate() call.
+capHistTab$SNR <- rowMeans(capHistTab[, c("snr_observer1", "snr_observer2")], na.rm = TRUE)
 
 cat("Capture history table:", nrow(capHistTab), "rows\n")
 ```
@@ -133,21 +137,23 @@ function so we can benchmark both code paths.
 ```{r fit.scam, warning=FALSE, message=FALSE}
 # OG-style capture history for scam
 ch_scam <- capHistTab
-ch_scam$detect_observer1 <- as.logical(ch_scam$groundTruth1)
-ch_scam$detect_observer2 <- as.logical(ch_scam$detect_observer2)
-ch_scam$snr_observer2 <- ch_scam$snr2
-ch_scam$signalRMSdB_observer2 <- ch_scam$signalRMSdB2
-ch_scam$noiseRMSdB_observer2 <- ch_scam$noiseRMSdB2
+ch_scam$detect_observer1 <- as.logical(ch_scam$groundTruth)
 
-# Fit scam detection function
-SNRinfo_scam <- chtToSNRinfo(ch_scam, groundTruth = "observer1", observers = "observer2", timeCol = "t")
+# Fit scam detection function. signalCol/noiseCol point at each observer's
+# own suffixed signal/noise columns -- simsTocaptureHistoryTable() keeps
+# these separate now (matchbox-native) rather than auto-consolidating them,
+# so there's no single signalRMSdB/noiseRMSdB to fall back on. The default
+# timeCol='t0' now works unmodified, since t0 is a genuine MATLAB datenum.
+SNRinfo_scam <- chtToSNRinfo(ch_scam, groundTruth = "observer1", observers = "observer2",
+                             signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+                             noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
 detFun_scam <- fitDetFun(SNRinfo_scam, modelType = 'scam', numKnots = 5)
 cat("scam model fitted:", class(detFun_scam)[1], "\n")
 ```
 
 ```{r fit.vglm, warning=FALSE, message=FALSE}
 # Adjudicated data for VGLM (true positives only from both detectors)
-adjudicated <- subset(capHistTab, capHistTab$groundTruth1 &
+adjudicated <- subset(capHistTab, capHistTab$groundTruth &
                         (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 
 observerNames <- c("detect_observer1", "detect_observer2")
@@ -158,10 +164,6 @@ detFun_vglm <- fitDetFun(adjudicated, modelType = "vglm", yColNames = observerNa
 ch_vglm <- capHistTab
 ch_vglm$detect_observer1 <- as.logical(
   ch_vglm$detect_observer1 | ch_vglm$detect_observer2)
-ch_vglm$detect_observer2 <- as.logical(ch_vglm$detect_observer2)
-ch_vglm$snr_observer2 <- ch_vglm$snr2
-ch_vglm$signalRMSdB_observer2 <- ch_vglm$signalRMSdB2
-ch_vglm$noiseRMSdB_observer2 <- ch_vglm$noiseRMSdB2
 
 Nc <- sum(simDet2$detect_table)
 
@@ -215,7 +217,10 @@ run_timed_cde <- function(ch, detFun, model_type, outerloop, parallel) {
         modelType = model_type, season = season,
         outerloop = outerloop, truncationDistance = truncDist,
         output.resolution.m = 100, siteCode = "bench",
-        parallel = parallel)
+        parallel = parallel,
+        groundTruthCol = "detect_observer1", observerCol = "detect_observer2",
+        signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+        noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
   )["elapsed"]
   as.numeric(elapsed)
 }
@@ -252,7 +257,10 @@ for (nw in worker_counts) {
         SL = SL, TL = TL, T = Time, A = A,
         modelType = "vglm", season = season, outerloop = 5,
         truncationDistance = truncDist, output.resolution.m = 100,
-        siteCode = "warmup", parallel = TRUE)
+        siteCode = "warmup", parallel = TRUE,
+        groundTruthCol = "detect_observer1", observerCol = "detect_observer2",
+        signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+        noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
   )["elapsed"]
   cat(round(as.numeric(warmup_t), 1), "s\n")
 

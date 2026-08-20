@@ -262,6 +262,14 @@ Presently, false positives have randomly generated date-times, so have a negligi
 
 capHistTab <- simsTocaptureHistoryTable(subsampleDet1, subsampleDet2)
 
+# simsTocaptureHistoryTable() keeps every observer's own signal/noise/SNR
+# columns separately, suffixed (matchbox-native), rather than
+# auto-consolidating them the way it used to. cde()'s own
+# falseDiscoveryRate() call needs a single SNR column for its truncation
+# handling (a separate mechanism from chtToSNRinfo()'s signalCol/noiseCol
+# averaging below), so that's built explicitly here.
+capHistTab$SNR <- rowMeans(capHistTab[, c("snr_observer1", "snr_observer2")], na.rm = TRUE)
+
 ```
 
 Code used to merge simulated detections into a capture history table:
@@ -276,8 +284,12 @@ Convert this capture history table into an SNRinfo table, and treat detector1 as
 # SNRinfo is used to calculate snrDetFun for detector2 assuming detector1 is the
 # ground truth. This is an observer ground (OG) so includes false positives from
 # detector1, but does not include detections from detector2 not detected on
-# detector1
-SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2", timeCol = "t")
+# detector1. signalCol/noiseCol point at each observer's own suffixed
+# signal/noise columns, which chtToSNRinfo() averages per event -- there is
+# no single consolidated signalRMSdB/noiseRMSdB column to fall back on.
+SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2",
+                        signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+                        noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
 
 # Positive on detector 2, but not on 1
 n_fp_subsample <- sum(capHistTab$detect_observer2 & !capHistTab$detect_observer1)
@@ -323,7 +335,9 @@ snrDetFun.glm <- callDensity::fitDetFun(SNRinfo, modelType = "glm")
 
 results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
                    SL = SL, TL = TL, NL=NLsamp, A = A, modelType = 'glm',
-                   groundTruthCol = "detect_observer1", observerCol = "detect_observer2")
+                   groundTruthCol = "detect_observer1", observerCol = "detect_observer2",
+                   signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+                   noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
 
 
 ```
@@ -372,7 +386,9 @@ NLind <- callDensity::nlFromDetections(SNRinfo, snrDetFun.glm, SL, TL)
 
 results.NLind <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
                    SL = SL, TL = TL, NL=NLind, A = A, modelType = 'glm',
-                   groundTruthCol = "detect_observer1", observerCol = "detect_observer2")
+                   groundTruthCol = "detect_observer1", observerCol = "detect_observer2",
+                   signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+                   noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
 
 ```
 
@@ -412,12 +428,12 @@ library(VGAM)
 
 #VGLMs work a bit differently. We still pass in a capture history table. But now
 #the ground-truth column is in a column separate from detect_observer1 (here
-#groundTruth2). we want to include in our CH table all predicted positive
+#groundTruth). we want to include in our CH table all predicted positive
 #detections from either detector, not just the ground-truth. We fit the vglm
 #detection function outside of the call to cde, and pass it in as a parameter.
 #For the vglm fit, we want only adjudicated positive detections (no false
 #positives). cde()'s groundTruthCol/observerCol arguments point it directly at
-#groundTruth2/detect_observer2, on a capHistTab restricted to rows flagged by
+#groundTruth/detect_observer2, on a capHistTab restricted to rows flagged by
 #at least one detector -- the union filter here is not just for the vglm
 #fit's own sample; cde()'s NL estimate is sensitive to it too, so it is kept
 #as a real step, not folded away with the renaming it used to be tangled up
@@ -426,11 +442,11 @@ library(VGAM)
 ch <- subset(capHistTab, (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 
 ### Adjudicated positive for VGLM capture recapture model
-adjudicated <- subset(capHistTab,capHistTab$groundTruth1 &
+adjudicated <- subset(capHistTab,capHistTab$groundTruth &
                 (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 
-summary(adjudicated$group1)
-summary(adjudicated$group2)
+summary(adjudicated$group_observer1)
+summary(adjudicated$group_observer2)
 
 # Number of adjudicated positive detections
 n_adj <- dim(adjudicated)[1]
@@ -438,7 +454,7 @@ n_adj <- dim(adjudicated)[1]
 # Subset used for calculating false discovery rate of detector 2. Actually, we
 # use the fact that the false discovery rate is equal to (1-precision). 
 pp2 = sum(capHistTab$detect_observer2==TRUE,na.rm=TRUE) # Predicted positive det2
-fp2 = sum(capHistTab$detect_observer2==TRUE & capHistTab$groundTruth2==FALSE,
+fp2 = sum(capHistTab$detect_observer2==TRUE & capHistTab$groundTruth==FALSE,
           na.rm=TRUE) # false positives from det2
 
 adj_c <- fp2/pp2
@@ -452,7 +468,9 @@ snrDetFun.vglm <- fitDetFun(adjudicated, modelType = "vglm", yColNames = observe
 
 results.vglm <- cde(Nc=Nc, capHistTab = ch, snrDetFun = snrDetFun.vglm,
                    SL = SL, TL = TL, A = A, modelType = 'vglm',
-                   groundTruthCol = "groundTruth2", observerCol = "detect_observer2")
+                   groundTruthCol = "groundTruth", observerCol = "detect_observer2",
+                   signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+                   noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
 
 ```
 
@@ -503,7 +521,7 @@ snrDetFun.vglm2@extra$whichObserver <- other_observer
  
 # Ground truth from simulation
 truth <- data.frame(
-  SNR   = c(simDet2$snr,      capHistTab$snr1),
+  SNR   = c(simDet2$snr,      capHistTab$snr_observer1),
   p_det = c(simDet2$p_det,    capHistTab$p_det1),
   group = c(rep("Observer 2", nrow(simDet2)),
             rep("Observer 1", nrow(capHistTab)))
