@@ -215,11 +215,20 @@ test_that("cde default path is untouched by the guard", {
   skip_on_cran()
   d <- make_capture_history(n = 2e3)
   TL <- tlSpherical(rangeStep = 5000)
+  # simsTocaptureHistoryTable() no longer auto-computes a consolidated SNR/
+  # signalRMSdB/noiseRMSdB -- signalCol/noiseCol point cde() at the
+  # per-observer suffixed columns it actually has; SNR (used by
+  # falseDiscoveryRate()'s own snrTruncationThreshold handling, a separate
+  # mechanism from chtToSNRinfo()'s signalCol/noiseCol averaging) still
+  # needs to exist explicitly.
+  d$capHistTab$SNR <- rowMeans(d$capHistTab[, c("snr_table1", "snr_table2")], na.rm = TRUE)
 
   expect_no_error(
     suppressWarnings(suppressMessages(
       cde(Nc = d$Nc, capHistTab = d$capHistTab, SL = d$SL, TL = TL,
-          T = d$Time, A = d$A, NL = d$NL, outerloop = 2)
+          T = d$Time, A = d$A, NL = d$NL, outerloop = 2,
+          signalCol = c("signalRMSdB_table1", "signalRMSdB_table2"),
+          noiseCol  = c("noiseRMSdB_table1",  "noiseRMSdB_table2"))
     ))
   )
 })
@@ -246,6 +255,7 @@ test_that("truncated cde returns all-call density, not above-threshold density",
   trueDet2 <- fitLogisticDetector(function(snr) plogis(snr, location = 2, scale = 4))
 
   ch <- d$capHistTab
+  ch$SNR <- rowMeans(ch[, c("snr_table1", "snr_table2")], na.rm = TRUE)
   NcTrunc <- sum(ch$detect_table2 & ch$SNR >= theta, na.rm = TRUE)
 
   fit <- suppressWarnings(suppressMessages(
@@ -254,7 +264,9 @@ test_that("truncated cde returns all-call density, not above-threshold density",
         snrDetFun = trueDet2,
         snrTruncationThreshold = theta,
         NcIsTruncated = TRUE,
-        outerloop = 10)
+        outerloop = 10,
+        signalCol = c("signalRMSdB_table1", "signalRMSdB_table2"),
+        noiseCol  = c("noiseRMSdB_table1",  "noiseRMSdB_table2"))
   ))
 
   DcFraction <- fit$Dc / d$trueDc

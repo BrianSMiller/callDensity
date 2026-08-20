@@ -32,10 +32,15 @@ test_that("CR capHistTab with a raw observer as detect_table1 gives the wrong c"
   d  <- make_capture_history(n = 2e4, seed = 7, det1location = 1, det1scale = 1,
                              det2location = 2, det2scale = 4, fdr = 0)
   ch <- d$capHistTab
+  # falseDiscoveryRate()'s default snrColName='SNR' is read whenever
+  # snrTruncationThreshold is non-NULL (even -Inf, which filters nothing) --
+  # simsTocaptureHistoryTable() no longer auto-computes this consolidated
+  # column, so it needs to exist explicitly here.
+  ch$SNR <- rowMeans(ch[, c("snr_table1", "snr_table2")], na.rm = TRUE)
 
   # fdr = 0 in simulation: there are no genuine false positives anywhere, so
   # the TRUE false discovery rate for detector 2 is exactly 0.
-  trueFdr <- sum(ch$detect_table2 & !ch$groundTruth2) / sum(ch$detect_table2)
+  trueFdr <- sum(ch$detect_table2 & !ch$groundTruth_table2) / sum(ch$detect_table2)
   expect_equal(trueFdr, 0)
 
   # WRONG construction: detect_table1 is left as the raw first observer, not
@@ -45,7 +50,7 @@ test_that("CR capHistTab with a raw observer as detect_table1 gives the wrong c"
 
   # RIGHT construction: detect_table1 overwritten with genuine ground truth.
   chRight <- ch
-  chRight$detect_table1 <- chRight$groundTruth2
+  chRight$detect_table1 <- chRight$groundTruth_table2
   fdrRight <- falseDiscoveryRate(chRight, "year", -Inf)
   expect_equal(fdrRight$c, 0, tolerance = 1e-8)
 })
@@ -55,23 +60,34 @@ test_that("cde() gives the wrong Dc for CR data unless detect_table1 is the adju
   d  <- make_capture_history(n = 2e4, seed = 7, det1location = 1, det1scale = 1,
                              det2location = 2, det2scale = 4, fdr = 0)
   ch <- d$capHistTab
+  ch$SNR <- rowMeans(ch[, c("snr_table1", "snr_table2")], na.rm = TRUE)
   TL <- tlSpherical(rangeStep = 5000)
-
   adj <- subset(ch, detect_table1 | detect_table2)
+  # simsTocaptureHistoryTable() no longer auto-computes a consolidated SNR --
+  # that's chtToSNRinfo()'s job now, via signalCol/noiseCol averaging. This
+  # test calls fitSNRvglm() directly rather than going through
+  # chtToSNRinfo(), so it needs its own SNR column.
+  adj$SNR <- rowMeans(adj[, c("snr_table1", "snr_table2")], na.rm = TRUE)
   fit <- suppressWarnings(fitSNRvglm(adj, c("detect_table1", "detect_table2"),
                                      whichObserver = "detect_table2"))
   Nc  <- sum(ch$detect_table2)
 
   resultWrong <- suppressWarnings(suppressMessages(
     cde(Nc = Nc, capHistTab = ch, snrDetFun = fit,
-        SL = d$SL, TL = TL, NL = d$NL, T = d$Time, A = d$A, outerloop = 5)
+        SL = d$SL, TL = TL, NL = d$NL, T = d$Time, A = d$A, outerloop = 5,
+        timeCol = "datetime",
+        signalCol = c("signalRMSdB_table1", "signalRMSdB_table2"),
+        noiseCol  = c("noiseRMSdB_table1",  "noiseRMSdB_table2"))
   ))
 
   chRight <- ch
-  chRight$detect_table1 <- chRight$groundTruth2
+  chRight$detect_table1 <- chRight$groundTruth_table2
   resultRight <- suppressWarnings(suppressMessages(
     cde(Nc = Nc, capHistTab = chRight, snrDetFun = fit,
-        SL = d$SL, TL = TL, NL = d$NL, T = d$Time, A = d$A, outerloop = 5)
+        SL = d$SL, TL = TL, NL = d$NL, T = d$Time, A = d$A, outerloop = 5,
+        timeCol = "datetime",
+        signalCol = c("signalRMSdB_table1", "signalRMSdB_table2"),
+        noiseCol  = c("noiseRMSdB_table1",  "noiseRMSdB_table2"))
   ))
 
   # The wrong construction inflates c (comparing two fallible observers, not
