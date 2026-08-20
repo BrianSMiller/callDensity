@@ -31,6 +31,8 @@ cde(
   groundTruthCol = "detect_table1",
   observerCol = "detect_table2",
   snrColName = "SNR",
+  signalCol = "signalRMSdB",
+  noiseCol = "noiseRMSdB",
   timeCol = NULL,
   returnDetFun = FALSE,
   returnPdetDetail = FALSE
@@ -189,6 +191,18 @@ evaluation, forwarded the same way as \code{groundTruthCol}. Default
 original behaviour -- raw simulation/detection tables typically carry
 lowercase \code{snr} instead (see \code{notes/cde_pipeline_handover.md}'s
 "column-name trap"), so pass \code{snrColName = 'snr'} for those.}
+
+\item{signalCol, noiseCol}{Column(s) in \code{capHistTab} holding signal
+and noise level, forwarded to \code{\link{chtToSNRinfo}}. Default
+\code{'signalRMSdB'}/\code{'noiseRMSdB'}, matching original behaviour --
+a single, already-consolidated column per table. A genuine matchbox-
+native (or \code{\link{simsTocaptureHistoryTable}}-built) table instead
+carries one such column \emph{per observer}, suffixed
+(\code{signalRMSdB_observer1}, \code{signalRMSdB_observer2}, ...) --
+pass the relevant observers' columns as a vector, e.g.
+\code{signalCol = c('signalRMSdB_observer1', 'signalRMSdB_observer2')},
+and \code{chtToSNRinfo()} averages them per event the same way it
+already does for any other multi-observer signal/noise input.}
 
 \item{timeCol}{Column in \code{capHistTab} to derive time/season from,
 forwarded to \code{\link{chtToSNRinfo}}. Default \code{NULL}
