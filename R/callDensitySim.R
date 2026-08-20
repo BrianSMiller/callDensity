@@ -239,67 +239,139 @@ subsampleSimInTime <- function(sim,
   return(sim)
 }
 
-#' Merge two simulated detectors into a capture history table
+#' Merge N simulated detectors into a matchbox-native capture history table
 #'
-#' @param subsampleDet1,subsampleDet2 Output of \code{\link{simulateDetector}}
-#'   for each of the two simulated detectors.
-#' @param observerSuffix Character vector of length 2 giving the suffix
-#'   used for the two detection-flag columns in the output. Default
-#'   \code{c('observer1', 'observer2')} -- matchbox-native, matching
-#'   \code{\link{chtToSNRinfo}}'s own default \code{observers} naming, so a
-#'   simulated capture history table needs no renaming before use. Pass
-#'   \code{c('table1', 'table2')} for the older
-#'   \code{detect_table1}/\code{detect_table2} shape.
+#' @description
+#' Generalizes the original two-detector merge to any number N >= 2 of
+#' simulated detectors, and aligns the output columns with matchbox's own
+#' canonical convention (\code{key}, \code{t0}/\code{tEnd},
+#' \code{detect_observerK}, \code{<col>_observerK} for every other column,
+#' suffixed and \code{NA} where that detector missed the event) -- rather
+#' than the ad hoc consolidated (\code{SNR}, \code{signalRMSdB}, ...)
+#' columns this function used to build to match a now-superseded MATLAB
+#' format. Downstream consolidation across observers (e.g. averaging SNR)
+#' is \code{\link{chtToSNRinfo}}'s job, via its own \code{signalCol}/
+#' \code{noiseCol} vector-averaging support -- not this function's.
 #'
-#'   Only the two detection-flag columns are affected. The per-observer
-#'   \code{groundTruth}/\code{snr}/\code{signalRMSdB}/\code{noiseRMSdB}
-#'   columns keep their existing \code{1}/\code{2} numbering regardless --
-#'   they're simulation-only ground-truth/diagnostic columns with no
-#'   equivalent in real matchbox output (which carries one shared
-#'   \code{signalRMSdB}/\code{noiseRMSdB} per matched event, already
-#'   consolidated below, and no ground truth at all), so there's no
-#'   matchbox convention for \code{observerSuffix} to align them to.
+#' Detectors are matched by exact \code{datetime} equality, not the
+#' temporal-overlap clustering real matchbox tables use for actual bounded
+#' detections. This is deliberate, not a shortcut: every detector here runs
+#' against the same underlying simulated call population (via
+#' \code{\link{simulateDetector}}), so a true positive's \code{datetime} is
+#' bit-identical across every detector that examined it, while each
+#' detector's own false positives get independently random \code{datetime}s
+#' with a negligible chance of colliding with anyone else's. Real acoustic
+#' detections need fuzzy overlap-based matching precisely because their
+#' bounds are imprecise; these simulated point-in-time detections don't
+#' have that problem to begin with.
+#'
+#' \code{fLow}/\code{fHigh} (matchbox's frequency-envelope columns) are
+#' deliberately omitted: this simulation pipeline never models frequency at
+#' all, so there is nothing real to put there. The result is a plain
+#' data.frame, so add them yourself later if a specific analysis needs them.
+#'
+#' @param ... Two or more data.frames, each the output of
+#'   \code{\link{simulateDetector}} for one simulated detector, sharing a
+#'   \code{datetime} column.
+#' @param observerSuffix Character vector, one name per detector in
+#'   \code{...}, used to suffix every one of that detector's own columns
+#'   (\code{detect_<suffix>}, \code{snr_<suffix>}, \code{groundTruth_<suffix>},
+#'   etc.) in the output. Default \code{paste0('observer', seq_along(list(...)))}
+#'   -- matchbox-native, matching \code{\link{chtToSNRinfo}}'s own default
+#'   \code{observers} naming, so a simulated capture history table needs no
+#'   renaming before use. Pass e.g. \code{c('table1','table2')} for the
+#'   older \code{detect_table1}/\code{detect_table2} shape some existing
+#'   tests and fixtures still key on.
+#'
+#' @returns A data.frame with one row per matched event: \code{key}
+#'   (sequential event id), \code{t0}/\code{tEnd} (both the shared event
+#'   time, as a genuine MATLAB datenum via \code{\link{Rdate2mat}} -- matching
+#'   real matchbox's own \code{t0}/\code{tEnd} encoding, so
+#'   \code{chtToSNRinfo()}'s default \code{timeCol='t0'} and \code{cde()}'s
+#'   \code{timeCol=NULL} auto-detection both work unmodified on this table),
+#'   \code{datetime} (the original, exact POSIXct, kept for anyone who wants
+#'   a directly readable time rather than a datenum), \code{detect_<suffix>}
+#'   (logical, per detector, \code{FALSE} where that detector examined the
+#'   event and missed it), \code{groundTruth} (coalesced across detectors --
+#'   see Details -- present only when the inputs have their own
+#'   \code{groundTruth} column, as \code{\link{simulateDetector}}'s output
+#'   does), and every other column from each detector's own output, suffixed
+#'   \code{_<suffix>} and \code{NA} wherever that detector has no row for
+#'   the event at all (this includes a per-observer
+#'   \code{groundTruth_<suffix>} alongside the coalesced \code{groundTruth}).
+#'
 #' @export
-simsTocaptureHistoryTable <- function(subsampleDet1, subsampleDet2,
-                                      observerSuffix = c('observer1','observer2')){
-  capHistTab <- merge(x=subsampleDet1, y=subsampleDet2, all=TRUE,
-                      by = c('datetime'), suffixes = c('1','2'))
+simsTocaptureHistoryTable <- function(..., observerSuffix = NULL) {
 
-  # Missed detections will be NA by default. Make them 0 instead.
-  capHistTab$detect_table1[is.na(capHistTab$detect_table1)]<-0
-  capHistTab$detect_table2[is.na(capHistTab$detect_table2)]<-0
+  detectors <- list(...)
+  n <- length(detectors)
+  if (n < 2) {
+    stop("simsTocaptureHistoryTable: need at least two detectors.", call. = FALSE)
+  }
 
-  # groundtruth and group columns will have NA by default, so need to copy them
-  # from other detector. TODO:Look into powerjoin, dplyr::coalesce and
-  # coalesce_join (https://alistaire.rbind.io/blog/coalescing-joins/) for more
-  # elegant solutions
-  capHistTab$groundTruth1[is.na(capHistTab$groundTruth1)]<-
-    capHistTab$groundTruth2[is.na(capHistTab$groundTruth1)]
-  capHistTab$groundTruth2[is.na(capHistTab$groundTruth2)]<-
-    capHistTab$groundTruth1[is.na(capHistTab$groundTruth2)]
+  if (is.null(observerSuffix)) {
+    observerSuffix <- paste0('observer', seq_len(n))
+  }
+  if (length(observerSuffix) != n) {
+    stop("simsTocaptureHistoryTable: observerSuffix must have one entry per ",
+         "detector (", n, " detectors, ", length(observerSuffix),
+         " suffixes given).", call. = FALSE)
+  }
 
-  capHistTab$group1[is.na(capHistTab$group1)]<-
-    capHistTab$group2[is.na(capHistTab$group1)]
-  capHistTab$group2[is.na(capHistTab$group2)]<-
-    capHistTab$group1[is.na(capHistTab$group2)]
+  # Suffix every column except the join key before merging, so an N-way
+  # Reduce(merge, ...) needs no per-step suffixes= (merge() only supports a
+  # suffix pair for exactly two tables at a time, which doesn't generalize).
+  suffixed <- lapply(seq_len(n), function(i) {
+    d <- detectors[[i]]
+    isKey <- names(d) == 'datetime'
+    names(d)[!isKey] <- paste0(names(d)[!isKey], '_', observerSuffix[i])
+    d
+  })
 
-  # Consolidate some columns to match format of previous Matlab capHistTab
-  capHistTab$SNR <- rowMeans(capHistTab[,c('snr1','snr2')],na.rm = TRUE)
-  capHistTab$t <- capHistTab$datetime
-  capHistTab$season <- time2season(capHistTab$t)
-  capHistTab$month <- time2monthCode(capHistTab$t)
-  capHistTab$noiseRMSdB <- rowMeans(capHistTab[,c('noiseRMSdB1','noiseRMSdB2')],
-                                    na.rm = TRUE)
-  capHistTab$signalRMSdB <- rowMeans(capHistTab[,c('signalRMSdB1','signalRMSdB2')],
-                                     na.rm = TRUE)
+  cht <- Reduce(function(a, b) merge(a, b, by = 'datetime', all = TRUE), suffixed)
 
-  # Rename the two detection-flag columns last, so every intermediate step
-  # above works against the fixed table1/table2 names merge() actually
-  # produces, regardless of what the caller requested.
-  names(capHistTab)[names(capHistTab)=='detect_table1'] <- paste0('detect_', observerSuffix[1])
-  names(capHistTab)[names(capHistTab)=='detect_table2'] <- paste0('detect_', observerSuffix[2])
+  # detect_<suffix>: always clean TRUE/FALSE, matching real matchbox's own
+  # contract for this column specifically (every other column is left as
+  # NA where missing, per matchbox's "NaN where missed" convention for
+  # those -- only the detect flag itself is guaranteed non-NA).
+  for (i in seq_len(n)) {
+    rawDetectCol <- paste0('detect_table_', observerSuffix[i])
+    newDetectCol <- paste0('detect_', observerSuffix[i])
+    names(cht)[names(cht) == rawDetectCol] <- newDetectCol
+    cht[[newDetectCol]][is.na(cht[[newDetectCol]])] <- FALSE
+    cht[[newDetectCol]] <- as.logical(cht[[newDetectCol]])
+  }
 
-  return (capHistTab)
+  # groundTruth is unique among the per-detector columns: it's a property
+  # of the event itself (is this a real call at all), not a per-observer
+  # measurement like snr/signalRMSdB, or a per-observer outcome like group
+  # (a detector's own TruePositive/FalseNegative label, which legitimately
+  # does differ between detectors for the same event and is correctly left
+  # suffixed-only). Every contributing detector's own copy of groundTruth
+  # agrees whenever more than one is present, since they're all evaluating
+  # the same underlying simulated event -- so unlike every other column,
+  # it's both safe and useful to coalesce into one event-level column here,
+  # rather than leaving NA on any event only one detector's own table had a
+  # row for (that detector's own fabricated false positive). Kept alongside
+  # the per-observer groundTruth_<suffix> columns, not instead of them.
+  gtCols <- paste0('groundTruth_', observerSuffix)
+  if (all(gtCols %in% names(cht))) {
+    cht$groundTruth <- Reduce(function(a, b) ifelse(is.na(a), b, a), cht[gtCols])
+  }
+
+  cht <- cht[order(cht$datetime), ]
+  cht$key  <- seq_len(nrow(cht))
+  # Genuine MATLAB datenum, matching real matchbox's actual t0/tEnd encoding
+  # -- not a same-named POSIXct, which chtToSNRinfo()'s default timeCol='t0'
+  # and cde()'s timeCol=NULL auto-detection would both misinterpret (they
+  # unconditionally run mat2Rdate() on anything named t0). datetime (POSIXct,
+  # exact) is left untouched above this point for the merge/matching logic,
+  # and remains in the output for anyone who wants a plain readable time.
+  cht$t0   <- Rdate2mat(cht$datetime)
+  cht$tEnd <- Rdate2mat(cht$datetime)
+
+  rownames(cht) <- NULL
+  cht
 }
 
 #' SNR histogram of true & false positives, and false negatives for callDensity simulation

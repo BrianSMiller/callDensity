@@ -13,6 +13,23 @@
 mat2Rdate <- function (x){ as.POSIXct((x - 719529)*86400, origin = "1970-01-01",
                                      tz = "UTC")}
 
+#' Convert R POSIXct to matlab datenum
+#'
+#' @description
+#' Inverse of \code{\link{mat2Rdate}}. Real matchbox capture history tables
+#' store \code{t0}/\code{tEnd} as MATLAB datenums (days since year 0), which
+#' is what \code{chtToSNRinfo()}'s default \code{timeCol='t0'} and
+#' \code{cde()}'s \code{timeCol=NULL} auto-detection both assume for any
+#' column literally named \code{t0}. Simulated data is naturally POSIXct, so
+#' \code{\link{simsTocaptureHistoryTable}} uses this to produce a genuinely
+#' matchbox-compatible \code{t0}/\code{tEnd}, rather than a same-named column
+#' that looks right but isn't the format those defaults expect.
+#'
+#' @param x POSIXct vector.
+#' @returns Numeric vector of MATLAB datenums.
+#' @export
+Rdate2mat <- function (x){ as.numeric(x) / 86400 + 719529 }
+
 #' Lookup the season for a given POSIXct, x.
 #'
 #' @description

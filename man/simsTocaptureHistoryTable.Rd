@@ -2,35 +2,69 @@
 % Please edit documentation in R/callDensitySim.R
 \name{simsTocaptureHistoryTable}
 \alias{simsTocaptureHistoryTable}
-\title{Merge two simulated detectors into a capture history table}
+\title{Merge N simulated detectors into a matchbox-native capture history table}
 \usage{
-simsTocaptureHistoryTable(
-  subsampleDet1,
-  subsampleDet2,
-  observerSuffix = c("observer1", "observer2")
-)
+simsTocaptureHistoryTable(..., observerSuffix = NULL)
 }
 \arguments{
-\item{subsampleDet1, subsampleDet2}{Output of \code{\link{simulateDetector}}
-for each of the two simulated detectors.}
+\item{...}{Two or more data.frames, each the output of
+\code{\link{simulateDetector}} for one simulated detector, sharing a
+\code{datetime} column.}
 
-\item{observerSuffix}{Character vector of length 2 giving the suffix
-used for the two detection-flag columns in the output. Default
-\code{c('observer1', 'observer2')} -- matchbox-native, matching
-\code{\link{chtToSNRinfo}}'s own default \code{observers} naming, so a
-simulated capture history table needs no renaming before use. Pass
-\code{c('table1', 'table2')} for the older
-\code{detect_table1}/\code{detect_table2} shape.
-
-Only the two detection-flag columns are affected. The per-observer
-\code{groundTruth}/\code{snr}/\code{signalRMSdB}/\code{noiseRMSdB}
-columns keep their existing \code{1}/\code{2} numbering regardless --
-they're simulation-only ground-truth/diagnostic columns with no
-equivalent in real matchbox output (which carries one shared
-\code{signalRMSdB}/\code{noiseRMSdB} per matched event, already
-consolidated below, and no ground truth at all), so there's no
-matchbox convention for \code{observerSuffix} to align them to.}
+\item{observerSuffix}{Character vector, one name per detector in
+\code{...}, used to suffix every one of that detector's own columns
+(\code{detect_<suffix>}, \code{snr_<suffix>}, \code{groundTruth_<suffix>},
+etc.) in the output. Default \code{paste0('observer', seq_along(list(...)))}
+-- matchbox-native, matching \code{\link{chtToSNRinfo}}'s own default
+\code{observers} naming, so a simulated capture history table needs no
+renaming before use. Pass e.g. \code{c('table1','table2')} for the
+older \code{detect_table1}/\code{detect_table2} shape some existing
+tests and fixtures still key on.}
+}
+\value{
+A data.frame with one row per matched event: \code{key}
+(sequential event id), \code{t0}/\code{tEnd} (both the shared event
+time, as a genuine MATLAB datenum via \code{\link{Rdate2mat}} -- matching
+real matchbox's own \code{t0}/\code{tEnd} encoding, so
+\code{chtToSNRinfo()}'s default \code{timeCol='t0'} and \code{cde()}'s
+\code{timeCol=NULL} auto-detection both work unmodified on this table),
+\code{datetime} (the original, exact POSIXct, kept for anyone who wants
+a directly readable time rather than a datenum), \code{detect_<suffix>}
+(logical, per detector, \code{FALSE} where that detector examined the
+event and missed it), \code{groundTruth} (coalesced across detectors --
+see Details -- present only when the inputs have their own
+\code{groundTruth} column, as \code{\link{simulateDetector}}'s output
+does), and every other column from each detector's own output, suffixed
+\code{_<suffix>} and \code{NA} wherever that detector has no row for
+the event at all (this includes a per-observer
+\code{groundTruth_<suffix>} alongside the coalesced \code{groundTruth}).
 }
 \description{
-Merge two simulated detectors into a capture history table
+Generalizes the original two-detector merge to any number N >= 2 of
+simulated detectors, and aligns the output columns with matchbox's own
+canonical convention (\code{key}, \code{t0}/\code{tEnd},
+\code{detect_observerK}, \code{<col>_observerK} for every other column,
+suffixed and \code{NA} where that detector missed the event) -- rather
+than the ad hoc consolidated (\code{SNR}, \code{signalRMSdB}, ...)
+columns this function used to build to match a now-superseded MATLAB
+format. Downstream consolidation across observers (e.g. averaging SNR)
+is \code{\link{chtToSNRinfo}}'s job, via its own \code{signalCol}/
+\code{noiseCol} vector-averaging support -- not this function's.
+
+Detectors are matched by exact \code{datetime} equality, not the
+temporal-overlap clustering real matchbox tables use for actual bounded
+detections. This is deliberate, not a shortcut: every detector here runs
+against the same underlying simulated call population (via
+\code{\link{simulateDetector}}), so a true positive's \code{datetime} is
+bit-identical across every detector that examined it, while each
+detector's own false positives get independently random \code{datetime}s
+with a negligible chance of colliding with anyone else's. Real acoustic
+detections need fuzzy overlap-based matching precisely because their
+bounds are imprecise; these simulated point-in-time detections don't
+have that problem to begin with.
+
+\code{fLow}/\code{fHigh} (matchbox's frequency-envelope columns) are
+deliberately omitted: this simulation pipeline never models frequency at
+all, so there is nothing real to put there. The result is a plain
+data.frame, so add them yourself later if a specific analysis needs them.
 }
