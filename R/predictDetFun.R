@@ -91,6 +91,75 @@ predictDetFun.gam <- predictDetFun.glm
 #' @export
 predictDetFun.scam <- predictDetFun.glm
 
+#' Predict detection probability from a fitted vglm CR model
+#'
+#' @description
+#' Single, shared implementation of vglm/posbernoulli.t prediction, used by
+#' both \code{predictDetFun.vglm()} and \code{pDetInArea()}'s vglm branch --
+#' previously duplicated verbatim in both places, which is exactly how they
+#' could silently drift apart.
+#'
+#' Two modes:
+#' \itemize{
+#'   \item \code{whichObserver} names one modeled occasion/observer column:
+#'   returns that observer's own marginal detection probability. VGAM's
+#'   posbernoulli models are fit by conditional likelihood (conditioning on
+#'   "captured on at least one occasion", since all-zero capture histories
+#'   are unobservable), so the raw per-occasion \code{type="response"}
+#'   prediction is itself conditional on that; multiplying by
+#'   \code{type.fitted = "onempall0"} (P(captured on at least one occasion))
+#'   converts it back to an unconditional, marginal probability for that one
+#'   occasion.
+#'   \item \code{whichObserver = "any"}: returns \code{onempall0} directly --
+#'   the probability that \emph{at least one} of the modeled
+#'   occasions/detectors detects the call. This is the union detection
+#'   probability, and needs only one \code{VGAM::predict()} call rather than
+#'   two, since the per-occasion matrix and column selection aren't needed
+#'   at all.
+#' }
+#'
+#' @param model A fitted vglm object from \code{fitDetFun(modelType = "vglm")}
+#'   (or a copy of one with swapped coefficients, as \code{pDetInArea()}'s
+#'   parametric bootstrap uses).
+#' @param newdata Data.frame with a column \code{SNR}.
+#' @param whichObserver Either the name of one modeled occasion/observer
+#'   column, or \code{"any"} for the union (at-least-one) probability.
+#'   Defaults to \code{model@@extra$whichObserver} (and, matching that
+#'   existing default's own fallback, the last modeled column if that's
+#'   also \code{NULL}).
+#' @param na.action Passed to \code{VGAM::predict()}. Default
+#'   \code{stats::na.pass}, so a \code{newdata$SNR} containing \code{NA}
+#'   (as \code{pDetInArea()}'s truncated transects do) comes back as
+#'   \code{NA} in the same row rather than being dropped and silently
+#'   shifting every row after it.
+#'
+#' @return A numeric vector of detection probabilities, one per row of
+#'   \code{newdata}.
+#'
+#' @keywords internal
+vglmDetectionProb <- function(model, newdata,
+                              whichObserver = model@extra$whichObserver,
+                              na.action = stats::na.pass) {
+
+  predAny <- VGAM::predictvglm(model, type = "response", newdata = newdata,
+                               type.fitted = "onempall0", na.action = na.action)
+
+  if (identical(whichObserver, "any")) {
+    return(as.numeric(predAny))
+  }
+
+  predObs <- VGAM::predictvglm(model, type = "response", newdata = newdata,
+                               na.action = na.action)
+
+  ix <- if (is.null(whichObserver)) {
+    ncol(predObs)
+  } else {
+    which(colnames(predObs) == whichObserver)
+  }
+
+  as.numeric(predObs[, ix] * predAny)
+}
+
 #' @export
 predictDetFun.vglm <- function(model,
                                newdata = NULL,
@@ -109,22 +178,7 @@ predictDetFun.vglm <- function(model,
     )
   }
 
-  preds.any <- VGAM::predictvglm(
-    model,
-    type = "response",
-    newdata = newdata,
-    type.fitted = "onempall0"
-  )
-
-  preds.obs <- VGAM::predictvglm(
-    model,
-    type = "response",
-    newdata = newdata
-  )
-
-  ix <- match(whichObserver, colnames(preds.obs))
-
-  fit <- preds.any * preds.obs[, ix]
+  fit <- vglmDetectionProb(model, newdata, whichObserver = whichObserver)
 
   out <- data.frame(
     SNR = newdata$SNR,

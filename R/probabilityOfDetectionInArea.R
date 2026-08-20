@@ -289,15 +289,9 @@ pDetInArea <-
 
         if (inherits(detFun, 'vglm')) {
           detFun.newcoeff@coefficients <- br
-          pred0 <- VGAM::predict(detFun.newcoeff, newdata = newd, type = "response",
-                                 type.fitted = 'onempall0', na.action = na.pass)
-          predmatrix <- VGAM::predict(detFun.newcoeff, newdata = newd, type = "response",
-                                      na.action = na.pass)
-          index <- ifelse(is.null(detFun.newcoeff@extra$whichObserver),
-                          dim(predmatrix)[2],
-                          which(colnames(predmatrix) == detFun.newcoeff@extra$whichObserver))
-          predmatrix <- predmatrix[, index]
-          predmatrix <- predmatrix * pred0
+          predmatrix <- vglmDetectionProb(detFun.newcoeff, newd,
+                                          whichObserver = detFun.newcoeff@extra$whichObserver,
+                                          na.action = na.pass)
         } else {
           detFun.newcoeff$coefficients <- br
           predmatrix <- predict(detFun.newcoeff, newd, type = "response")
