@@ -208,9 +208,13 @@ predictDetFunList <- function(models,
 
   if (is.null(newdata)) {
 
+    # extractSNRinfo() (showDetFun.R) handles both S3 models (glm/gam/scam,
+    # via model.frame()) and S4 models (vglm/vgam, via @x/@extra$whichObserver)
+    # -- model.frame(m) alone fails for the S4 case with "object 'SNR' not
+    # found", since VGAM doesn't populate @model by default.
     rng <- range(unlist(
       lapply(models, function(m)
-        model.frame(m)$SNR)
+        extractSNRinfo(m)$SNR)
     ), na.rm = TRUE)
 
     newdata <- data.frame(

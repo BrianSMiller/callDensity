@@ -1344,48 +1344,35 @@ plotSNRHistogram <- function(df,
   invisible(p)
 }
 
-#' Plot probability of detection as a directional range footprint
-#'
-#' @description
-#' Renders p(det) as a function of range and azimuth as a polar heatmap
-#' centred on the recorder -- ports Brian's MATLAB \code{plotPDetRadials.m}
-#' to a native ggplot2 \code{coord_polar()} plot, rather than manually
-#' unrolling to Cartesian coordinates (\code{pcolor(x = r*cos(theta),
-#' y = r*sin(theta), z)}) the way MATLAB does. ggplot2 has a polar
-#' coordinate system built in, so that workaround isn't needed here.
-#'
-#' @param pDetResults Either the full list returned by
-#'   \code{\link{pDetInArea}} (in which case \code{$allDetFunctions} is
-#'   used), or that data.frame directly -- \code{range_m} in the first
-#'   column, one column per transect named \code{tl<angle>} (matching
-#'   \code{\link{simTLradials_20logR}}'s convention) giving p(det) at
-#'   every range along that transect.
-#' @param maxRange Optional upper limit (m) for the range axis. Default
-#'   \code{NULL} uses the full range present in the data.
-#'
-#' @details
-#' Assumes a constant range step (true of \code{simTLradials_20logR}'s
-#' output and of \code{pDetInArea}'s own \code{output.resolution.m}
-#' spacing) so each tile can use a fixed height. Irregular range bins
-#' (e.g. the log-spaced bins in \code{plotSnrRadials.m}) would need
-#' explicit per-row bin edges via \code{geom_rect} instead -- not
-#' implemented here, since nothing in the package currently produces that
-#' shape.
-#'
-#' @returns A ggplot object. Azimuth is plotted compass-style (0 = North,
-#'   increasing clockwise), matching \code{simTLradials_20logR}'s
-#'   convention -- \code{coord_polar}'s \code{start} is defined as an
-#'   offset from 12 o'clock, and \code{direction = 1} is clockwise, so
-#'   \code{start = 0, direction = 1} maps azimuth directly onto compass
-#'   bearing with no rotation needed. Verified by rendering a synthetic
-#'   case (known high p(det) at due north, medium at due east) and
-#'   visually confirming the bright/grey wedges land where expected,
-#'   rather than assumed from the parameter names alone.
-#' @importFrom ggplot2 ggplot aes geom_tile coord_polar scale_x_continuous
-#'   scale_fill_gradient labs theme_minimal
-#' @export
-plotPDetRadials <- function(pDetResults, maxRange = NULL) {
+## Draft rewrite of plotPDetRadials -- Cartesian wedge/raster version.
+## Internal helpers first, exported function last. Tested standalone here
+## before folding back into callDensitySupport.R.
 
+#' Convert (range, compass azimuth) to Cartesian (x, y)
+#'
+#' @param range_km Numeric vector of ranges (km).
+#' @param azimuth_deg Numeric vector of compass bearings in degrees,
+#'   0 = true north, increasing clockwise.
+#'
+#' @return A list with elements \code{x} and \code{y}, in the same units as
+#'   \code{range_km}.
+#'
+#' @keywords internal
+compassToCartesian <- function(range_km, azimuth_deg) {
+  theta <- azimuth_deg * pi / 180
+  list(x = range_km * sin(theta), y = range_km * cos(theta))
+}
+
+#' Pivot a pDetInArea result into long (range, azimuth, pDet) form
+#'
+#' @param pDetResults Either the full list returned by \code{pDetInArea}, or
+#'   the \code{allDetFunctions} data.frame directly.
+#' @param maxRange Optional upper limit (m) for the range axis.
+#'
+#' @return A data.frame with columns \code{range_km}, \code{azimuth}, \code{pDet}.
+#'
+#' @keywords internal
+pdetToLong <- function(pDetResults, maxRange = NULL) {
   pdet <- if (!is.null(pDetResults$allDetFunctions)) {
     pDetResults$allDetFunctions
   } else {
@@ -1411,33 +1398,210 @@ plotPDetRadials <- function(pDetResults, maxRange = NULL) {
     pDet     = unlist(pdet[transectCols], use.names = FALSE)
   )
 
-  # Wraparound: duplicate the smallest-azimuth transect's data at
-  # az + 360, so the polar tile grid closes seamlessly rather than
-  # leaving a wedge-shaped gap between the last and first transect --
-  # the same fix MATLAB's manual az=360 duplicate column applies.
-  az0  <- min(az)
-  wrap <- long[long$azimuth == az0, ]
-  wrap$azimuth <- az0 + 360
-  long <- rbind(long, wrap)
-
   if (!is.null(maxRange)) {
     long <- long[long$range_km <= maxRange / 1e3, ]
   }
 
-  angleStep <- if (length(az) > 1) min(diff(sort(unique(az)))) else 360
-  rangeStep <- if (nrow(pdet) > 1) {
-    min(diff(sort(unique(pdet$range_m)))) / 1e3
-  } else {
-    max(pdet$range_m) / 1e3
+  long
+}
+
+#' Build annular-sector polygon patches for each (range, azimuth) cell
+#'
+#' The exact ggplot2 equivalent of MATLAB's
+#' \code{pcolor(x = r*cos(theta), y = r*sin(theta), z)}: every sampled cell
+#' becomes a quadrilateral (or, with \code{arcPoints > 2}, a many-sided
+#' patch) at its true Cartesian position. No values are interpolated.
+#'
+#' @param long Data.frame from \code{pdetToLong}.
+#' @param rangeStep Range bin width (km).
+#' @param angleStep Azimuth bin width (degrees).
+#' @param arcPoints Number of vertices used for the inner/outer arc of each
+#'   cell. \code{NULL} auto-selects: dense (5 degree steps) when there are 8
+#'   or fewer azimuths, so coarse wedges still render with a curved outer
+#'   edge; straight chords (\code{arcPoints = 2}) once azimuths are already
+#'   fine enough to look round regardless.
+#'
+#' @return A data.frame with columns \code{x}, \code{y}, \code{cellID},
+#'   \code{pDet}, one row per polygon vertex.
+#'
+#' @keywords internal
+pdetPolygonGrid <- function(long, rangeStep, angleStep, arcPoints = NULL) {
+  numAz <- length(unique(long$azimuth))
+
+  if (is.null(arcPoints)) {
+    arcPoints <- if (numAz <= 8) max(2, ceiling(angleStep / 5) + 1) else 2
   }
 
-  ggplot2::ggplot(long, ggplot2::aes(x = azimuth, y = range_km, fill = pDet)) +
-    ggplot2::geom_tile(width = angleStep, height = rangeStep) +
-    ggplot2::coord_polar(theta = "x", start = 0, direction = 1) +
-    ggplot2::scale_x_continuous(breaks = seq(0, 270, 90),
-                                labels = c("N", "E", "S", "W")) +
-    ggplot2::scale_fill_gradient(low = "black", high = "white",
-                                 limits = c(0, 1), name = "P(det)") +
-    ggplot2::labs(x = NULL, y = "Range (km)") +
-    ggplot2::theme_minimal()
+  rIn  <- pmax(0, long$range_km - rangeStep / 2)
+  rOut <- long$range_km + rangeStep / 2
+  azLo <- long$azimuth - angleStep / 2
+  azHi <- long$azimuth + angleStep / 2
+
+  n <- nrow(long)
+  cellID <- seq_len(n)
+
+  # One arc sequence (0..1) reused for every cell via outer(), then scaled
+  # to that cell's [azLo, azHi] -- avoids a per-cell R-level loop.
+  arcFrac <- seq(0, 1, length.out = arcPoints)
+
+  azOuter <- azLo + outer(azHi - azLo, arcFrac)          # n x arcPoints, outer arc az
+  azInner <- azLo + outer(azHi - azLo, rev(arcFrac))     # n x arcPoints, inner arc az (reversed)
+
+  rOuterMat <- matrix(rOut, nrow = n, ncol = arcPoints)
+  rInnerMat <- matrix(rIn,  nrow = n, ncol = arcPoints)
+
+  xyOuter <- compassToCartesian(rOuterMat, azOuter)
+  xyInner <- compassToCartesian(rInnerMat, azInner)
+
+  x <- cbind(xyOuter$x, xyInner$x)
+  y <- cbind(xyOuter$y, xyInner$y)
+
+  data.frame(
+    x      = as.vector(t(x)),
+    y      = as.vector(t(y)),
+    cellID = rep(cellID, each = 2 * arcPoints),
+    pDet   = rep(long$pDet, each = 2 * arcPoints)
+  )
+}
+
+#' Resample (range, azimuth) cells onto a fine square Cartesian grid
+#'
+#' Nearest-neighbour resampling, not interpolation: every output pixel takes
+#' the value of its nearest (range, azimuth) sample. Assumes a constant
+#' range step and constant angle step (true of \code{pDetInArea}'s output),
+#' which is what makes the nearest-cell lookup a closed-form index
+#' calculation rather than a search.
+#'
+#' @param long Data.frame from \code{pdetToLong}.
+#' @param rangeStep Range bin width (km).
+#' @param angleStep Azimuth bin width (degrees).
+#' @param rasterRes Number of pixels along each axis of the square output
+#'   grid.
+#'
+#' @return A data.frame with columns \code{x}, \code{y}, \code{pDet}, one row
+#'   per pixel (pixels outside the sampled disc have \code{pDet = NA}).
+#'
+#' @keywords internal
+pdetRasterGrid <- function(long, rangeStep, angleStep, rasterRes = 400) {
+  rMax    <- max(long$range_km) + rangeStep / 2
+  rangeMin<- min(long$range_km)
+  azSorted<- sort(unique(long$azimuth))
+  az0     <- azSorted[1]
+  numAz   <- length(azSorted)
+  numR    <- length(unique(long$range_km))
+
+  # long is ordered range-major (see pdetToLong: range_km repeats fastest),
+  # so reshape straight into an (range x azimuth) matrix.
+  pdetMat <- matrix(long$pDet, nrow = numR, ncol = numAz)
+
+  grid <- expand.grid(
+    x = seq(-rMax, rMax, length.out = rasterRes),
+    y = seq(-rMax, rMax, length.out = rasterRes)
+  )
+  grid$r     <- sqrt(grid$x^2 + grid$y^2)
+  grid$theta <- (atan2(grid$x, grid$y) * 180 / pi) %% 360
+
+  rIdx  <- round((grid$r - rangeMin) / rangeStep) + 1
+  azIdx <- (round(((grid$theta - az0) %% 360) / angleStep) %% numAz) + 1
+
+  inDisc <- grid$r <= rMax & rIdx >= 1 & rIdx <= numR
+  grid$pDet <- NA_real_
+  grid$pDet[inDisc] <- pdetMat[cbind(rIdx[inDisc], azIdx[inDisc])]
+
+  grid[, c("x", "y", "pDet")]
+}
+
+#' Compass-label positions for a radial plot
+#'
+#' @param rMax Outer radius (km) of the plotted disc.
+#' @param inset Fractional distance beyond \code{rMax} at which to place the
+#'   labels. Default \code{0.08} (8% beyond the edge).
+#'
+#' @return A data.frame with columns \code{x}, \code{y}, \code{label}.
+#'
+#' @keywords internal
+compassLabelsDF <- function(rMax, inset = 0.08) {
+  r <- rMax * (1 + inset)
+  data.frame(
+    label = c("N", "E", "S", "W"),
+    x     = c(0,  r,  0, -r),
+    y     = c(r,  0, -r,  0)
+  )
+}
+
+#' Plot probability of detection as a directional range footprint
+#'
+#' @description
+#' Renders p(det) as a function of range and azimuth around the recorder, in
+#' Cartesian coordinates -- the direct ggplot2 equivalent of Brian's MATLAB
+#' \code{plotPDetRadials.m}, which builds the same picture via
+#' \code{pcolor(x = r*cos(theta), y = r*sin(theta), z)}. Uses the same
+#' default ggplot2 colour scale and theme as \code{\link{plotSpatialDetections}}.
+#'
+#' @param pDetResults Either the full list returned by
+#'   \code{\link{pDetInArea}} (in which case \code{$allDetFunctions} is
+#'   used), or that data.frame directly -- \code{range_m} in the first
+#'   column, one column per transect named \code{tl<angle>} (matching
+#'   \code{\link{simTLradials_20logR}}'s convention) giving p(det) at every
+#'   range along that transect. \code{angle} is a compass bearing, 0 = true
+#'   north, increasing clockwise.
+#' @param maxRange Optional upper limit (m) for the range axis. Default
+#'   \code{NULL} uses the full range present in the data.
+#' @param method \code{"polygon"} (default) draws each cell as an exact
+#'   annular-sector patch -- no interpolation, the direct equivalent of
+#'   MATLAB's \code{pcolor}. \code{"raster"} nearest-neighbour-resamples
+#'   onto a fine square grid instead, which can look smoother at very coarse
+#'   azimuthal resolution but is drawing resampled, not sampled, pixels.
+#' @param arcPoints Only used when \code{method = "polygon"}. Number of
+#'   vertices used for each cell's inner/outer arc. \code{NULL} (default)
+#'   auto-selects based on the number of azimuths present -- see
+#'   \code{\link{pdetPolygonGrid}}. Set explicitly to override, e.g. to force
+#'   straight chords (\code{arcPoints = 2}) even at coarse azimuthal
+#'   resolution.
+#' @param rasterRes Only used when \code{method = "raster"}. Number of
+#'   pixels along each axis of the output grid. Default \code{400}.
+#'
+#' @details
+#' Assumes a constant range step and constant azimuth step (true of
+#' \code{simTLradials_20logR}'s output and of \code{pDetInArea}'s own
+#' \code{output.resolution.m} spacing).
+#'
+#' @returns A ggplot object.
+#'
+#' @importFrom ggplot2 ggplot aes geom_polygon geom_raster geom_text
+#'   coord_equal labs
+#' @export
+plotPDetRadials <- function(pDetResults, maxRange = NULL,
+                             method = c("polygon", "raster"),
+                             arcPoints = NULL,
+                             rasterRes = 400) {
+  method <- match.arg(method)
+
+  long <- pdetToLong(pDetResults, maxRange)
+
+  az        <- sort(unique(long$azimuth))
+  angleStep <- if (length(az) > 1) min(diff(az)) else 360
+  ranges    <- sort(unique(long$range_km))
+  rangeStep <- if (length(ranges) > 1) min(diff(ranges)) else ranges[1]
+
+  if (method == "polygon") {
+    grid <- pdetPolygonGrid(long, rangeStep, angleStep, arcPoints)
+    geomLayer <- ggplot2::geom_polygon(
+      ggplot2::aes(x = x, y = y, group = cellID, fill = pDet), colour = NA)
+  } else {
+    grid <- pdetRasterGrid(long, rangeStep, angleStep, rasterRes)
+    geomLayer <- ggplot2::geom_raster(ggplot2::aes(x = x, y = y, fill = pDet))
+  }
+
+  rMax   <- max(ranges) + rangeStep / 2
+  labels <- compassLabelsDF(rMax)
+
+  ggplot2::ggplot(grid, ggplot2::aes(x = x, y = y)) +
+    geomLayer +
+    ggplot2::geom_text(data = labels,
+                        ggplot2::aes(x = x, y = y, label = label),
+                        inherit.aes = FALSE, colour = "grey30") +
+    ggplot2::scale_fill_continuous(na.value = NA) +
+    ggplot2::coord_equal(clip = "off") +
+    ggplot2::labs(x = "X location (km)", y = "Y location (km)", fill = "P(det)")
 }

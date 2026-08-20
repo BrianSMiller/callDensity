@@ -99,17 +99,22 @@ test_that("predictDetFunList uses a shared SNR grid across models", {
 })
 
 # ---------------------------------------------------------------------------
-# Known bug: predictDetFunList calls model.frame() which fails for vglm.
-# When fixed, change expect_error() to expect_no_error().
+# predictDetFunList's default SNR grid now uses extractSNRinfo() (see
+# showDetFun.R), which handles vglm/vgam (S4) models via @x/@extra --
+# model.frame() alone doesn't work for those, since VGAM doesn't populate
+# @model by default.
 # ---------------------------------------------------------------------------
-test_that("predictDetFunList with vglm and no newdata [known bug: model.frame fails]", {
+test_that("predictDetFunList works with vglm and no newdata", {
   skip_if_not_installed("VGAM")
   d <- make_two_observer_data()
   fit_vglm <- suppressWarnings(
     fitDetFun(d, modelType = "vglm",
               yColNames = c("detect_observer1", "detect_observer2"))
   )
-  expect_error(predictDetFunList(list(vglm = fit_vglm), ci = FALSE))
+  p <- expect_no_error(predictDetFunList(list(vglm = fit_vglm), npoints = 100, ci = FALSE))
+  expect_s3_class(p, "data.frame")
+  expect_equal(as.integer(table(p$model)[["vglm"]]), 100L)
+  expect_true(all(p$fit >= 0 & p$fit <= 1, na.rm = TRUE))
 })
 
 test_that("nlFromSnrInfo works for glm", {
