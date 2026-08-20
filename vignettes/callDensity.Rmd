@@ -182,7 +182,7 @@ det1params = data.frame(
   location=3,    # AKA intercept?
   scale=2,       # AKA slope?
   func='plogis', # logistic function
-  c=0.1,         # False discovery rate (1-precision)
+  c=0.3,         # False discovery rate (1-precision)
   fpMean = 0,    # mean SNR of false positive distribution (dB)
   fpSD = 4       # Standard deviation of false positive distribution (dB)
 )
@@ -206,12 +206,9 @@ Nc <- sum(sim$detect_table)
 # sure that this actually matters though.
 
 # SNR Distribution
-ggplot(data=sim, aes(x=snr, group=group, fill=group) )+
-  geom_histogram(position = position_stack())
 
-ggplot(data=sim, aes(x=snr, group=group, fill=group) )+
-  geom_histogram(position = position_identity())+
-  facet_wrap(group~., ncol=1,scales="free_y")
+plotDetectionDistribution(sim)
+
 
 sim <- sim[order(sim$datetime),]
 
@@ -273,7 +270,7 @@ snrDetFun.glm <- callDensity::fitDetFun(SNRinfo, modelType = "glm")
 
 ```{r GLM show detfun, warning=FALSE, message=FALSE}
 
-showDetFun(snrDetFun.glm, SNRinfo, distribution = "density")
+showDetFun(snrDetFun.glm, SNRinfo=SNRinfo, distribution = "density")
 
 ```
 
@@ -287,7 +284,7 @@ showDetFun(snrDetFun.glm, SNRinfo, distribution = "density")
 # rather than a genuine effect of model choice.
 results.glm <- cde(Nc=Nc, capHistTab = subsample, snrDetFun = snrDetFun.glm,
                    SL = SL, TL = TL, NL = NLsamp, k = k, T = Time, A = A,
-                   modelType = 'glm', truncationDistance = R, outerloop = 100,
+                   modelType = 'glm', truncationDistance = R, outerloop = 10,
                    groundTruthCol = "groundTruth", observerCol = "detect_table",
                    snrColName = "snr", timeCol = "datetime",
                    returnDetFun = TRUE, returnPdetDetail = TRUE)
@@ -296,22 +293,6 @@ results.glm[, c("Dc","Nc","c","pa","CV.Dc","CV.pa","CV.c")]
 
 ```
 
-The probability-of-detection-vs-range plot now comes from `attr(results.glm, "pDetResults")` -- the same detail `pDetInArea()` always computed, just no longer requiring a second, separate call to get at it.
-
-```{r GLM range plot, warning=FALSE, message=FALSE}
-
-ggplot(data=attr(results.glm, "pDetResults")$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
-  geom_point(alpha=0.1, size=0.1)+
-  xlab("Range (km)")+
-  ylab("Probability of detection\n(Mean across all transects)")+
-  scale_x_log10(limits=c(0.1,1000),
-                labels=label_log(),
-                breaks=10^(-1:7),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
-  annotation_logticks(sides='') +
-  theme_bw()
-
-```
 
 ### b) GAM fit to SNR detection function
 
@@ -323,7 +304,7 @@ snrDetFun.gam <- callDensity::fitDetFun(SNRinfo, modelType = "gam", numKnots = 3
 
 results.gam <- cde(Nc=Nc, capHistTab = subsample, snrDetFun = snrDetFun.gam,
                    SL = SL, TL = TL, NL = NLsamp, k = k, T = Time, A = A,
-                   modelType = 'gam', truncationDistance = R, outerloop = 100,
+                   modelType = 'gam', truncationDistance = R, outerloop = 10,
                    groundTruthCol = "groundTruth", observerCol = "detect_table",
                    snrColName = "snr", timeCol = "datetime",
                    returnDetFun = TRUE, returnPdetDetail = TRUE)
@@ -342,7 +323,7 @@ snrDetFun.scam <- callDensity::fitDetFun(SNRinfo, modelType = "scam", numKnots =
 
 results.scam <- cde(Nc=Nc, capHistTab = subsample, snrDetFun = snrDetFun.scam,
                    SL = SL, TL = TL, NL = NLsamp, k = k, T = Time, A = A,
-                   modelType = 'scam', truncationDistance = R, outerloop = 100,
+                   modelType = 'scam', truncationDistance = R, outerloop = 10,
                    groundTruthCol = "groundTruth", observerCol = "detect_table",
                    snrColName = "snr", timeCol = "datetime",
                    returnDetFun = TRUE, returnPdetDetail = TRUE)
@@ -357,7 +338,8 @@ results.scam[, c("Dc","Nc","c","pa","CV.Dc","CV.pa","CV.c")]
 
 ```{r compare detfuns, warning=FALSE, message=FALSE}
 
-showDetFun(list(glm = snrDetFun.glm, gam = snrDetFun.gam, scam = snrDetFun.scam))
+showDetFun(list(glm = snrDetFun.glm, gam = snrDetFun.gam, scam = snrDetFun.scam),
+           distribution='density',rug=FALSE)
 
 ```
 

@@ -339,11 +339,6 @@ results.true = data.frame(season='year',    siteCode='',  Nc=n, c=det2params$c,
                           SLmean=SL$mean, SLsd=SL$sd, NLmean=NL$mean, NLsd=NL$sd,
                           modelType='true', CV.Nc=0, CV.c=0, CV.pa=0, 
                           Dc=TrueCallDensity,  CV.Dc=0)
-# results.true = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
-#                      NLmean = NL$mean, NLsd = NL$sd,            # Noise
-#                      model=det2params$func, c = det2params$c, # Detector params
-#                      Pa = mean(simDet2$p_det,na.rm=TRUE), 
-#                      row.names='Truth')
 
 results<-rbind( results.true, results.glm)
 res <- subset(results,select=c('Dc','Nc','A','NLmean','NLsd','modelType','c',
@@ -505,7 +500,7 @@ other_observer  <- setdiff(
   snrDetFun.vglm@extra$whichObserver
 )[1]
 snrDetFun.vglm2@extra$whichObserver <- other_observer
-
+ 
 # Ground truth from simulation
 truth <- data.frame(
   SNR   = c(simDet2$snr,      capHistTab$snr1),
@@ -513,7 +508,7 @@ truth <- data.frame(
   group = c(rep("Observer 2", nrow(simDet2)),
             rep("Observer 1", nrow(capHistTab)))
 )
-
+ 
 models <- list(
   "GLM"          = snrDetFun.glm,
   "VGLM obs1"    = snrDetFun.vglm,
@@ -521,14 +516,27 @@ models <- list(
 )
 names(models)[2] <- paste0("VGLM (", snrDetFun.vglm@extra$whichObserver, ")")
 names(models)[3] <- paste0("VGLM (", other_observer, ")")
-
-showDetFun(models) +
-  ggplot2::geom_line(data=truth, alpha = 1, inherit.aes = FALSE, linewidth=.75,
-                     ggplot2::aes(x = SNR, y = p_det, linetype = group))+
+ 
+# xlim built in here -- top/main/bottom panels (and the fitted curves'
+# own prediction grid) are all constructed from this one shared range,
+# so they can't drift the way they would if the range were only changed
+# on the main panel after compositing.
+p <- showDetFun(models, distribution = 'density', rug = TRUE, xlim = c(-20, 20))
+ 
+# geom_line()/scale_linetype_manual()/theme()/labs() still need to target
+# the main panel explicitly -- patchwork's "+" applies non-xlim layers to
+# whichever panel was added LAST (the bottom "Missed" panel here), not the
+# visual middle one. xlim no longer needs to be in this chain at all.
+p <- p +
+  ggplot2::geom_line(data = truth, alpha = 1, inherit.aes = FALSE, linewidth = .75,
+                     ggplot2::aes(x = SNR, y = p_det, linetype = group)) +
   scale_linetype_manual(values = c("Observer 2" = "dashed",
-                                   "Observer 1" = "dotted") )+
-  ggplot2::xlim(-20,20)+
-  ggplot2::theme(legend.position="right")+labs(color="Model",linetype="Truth")
+                                   "Observer 1" = "dotted")) +
+  ggplot2::theme(legend.position = "right") +
+  labs(color = "Model", linetype = "Truth")
+ 
+p 
+
 ```
 
 # References
