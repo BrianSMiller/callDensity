@@ -4,44 +4,54 @@
 \alias{plotPDetRadials}
 \title{Plot probability of detection as a directional range footprint}
 \usage{
-plotPDetRadials(pDetResults, maxRange = NULL)
+plotPDetRadials(
+  pDetResults,
+  maxRange = NULL,
+  method = c("polygon", "raster"),
+  arcPoints = NULL,
+  rasterRes = 400
+)
 }
 \arguments{
 \item{pDetResults}{Either the full list returned by
 \code{\link{pDetInArea}} (in which case \code{$allDetFunctions} is
 used), or that data.frame directly -- \code{range_m} in the first
 column, one column per transect named \code{tl<angle>} (matching
-\code{\link{simTLradials_20logR}}'s convention) giving p(det) at
-every range along that transect.}
+\code{\link{simTLradials_20logR}}'s convention) giving p(det) at every
+range along that transect. \code{angle} is a compass bearing, 0 = true
+north, increasing clockwise.}
 
 \item{maxRange}{Optional upper limit (m) for the range axis. Default
 \code{NULL} uses the full range present in the data.}
+
+\item{method}{\code{"polygon"} (default) draws each cell as an exact
+annular-sector patch -- no interpolation, the direct equivalent of
+MATLAB's \code{pcolor}. \code{"raster"} nearest-neighbour-resamples
+onto a fine square grid instead, which can look smoother at very coarse
+azimuthal resolution but is drawing resampled, not sampled, pixels.}
+
+\item{arcPoints}{Only used when \code{method = "polygon"}. Number of
+vertices used for each cell's inner/outer arc. \code{NULL} (default)
+auto-selects based on the number of azimuths present -- see
+\code{\link{pdetPolygonGrid}}. Set explicitly to override, e.g. to force
+straight chords (\code{arcPoints = 2}) even at coarse azimuthal
+resolution.}
+
+\item{rasterRes}{Only used when \code{method = "raster"}. Number of
+pixels along each axis of the output grid. Default \code{400}.}
 }
 \value{
-A ggplot object. Azimuth is plotted compass-style (0 = North,
-increasing clockwise), matching \code{simTLradials_20logR}'s
-convention -- \code{coord_polar}'s \code{start} is defined as an
-offset from 12 o'clock, and \code{direction = 1} is clockwise, so
-\code{start = 0, direction = 1} maps azimuth directly onto compass
-bearing with no rotation needed. Verified by rendering a synthetic
-case (known high p(det) at due north, medium at due east) and
-visually confirming the bright/grey wedges land where expected,
-rather than assumed from the parameter names alone.
+A ggplot object.
 }
 \description{
-Renders p(det) as a function of range and azimuth as a polar heatmap
-centred on the recorder -- ports Brian's MATLAB \code{plotPDetRadials.m}
-to a native ggplot2 \code{coord_polar()} plot, rather than manually
-unrolling to Cartesian coordinates (\code{pcolor(x = r*cos(theta),
-y = r*sin(theta), z)}) the way MATLAB does. ggplot2 has a polar
-coordinate system built in, so that workaround isn't needed here.
+Renders p(det) as a function of range and azimuth around the recorder, in
+Cartesian coordinates -- the direct ggplot2 equivalent of Brian's MATLAB
+\code{plotPDetRadials.m}, which builds the same picture via
+\code{pcolor(x = r*cos(theta), y = r*sin(theta), z)}. Uses the same
+default ggplot2 colour scale and theme as \code{\link{plotSpatialDetections}}.
 }
 \details{
-Assumes a constant range step (true of \code{simTLradials_20logR}'s
-output and of \code{pDetInArea}'s own \code{output.resolution.m}
-spacing) so each tile can use a fixed height. Irregular range bins
-(e.g. the log-spaced bins in \code{plotSnrRadials.m}) would need
-explicit per-row bin edges via \code{geom_rect} instead -- not
-implemented here, since nothing in the package currently produces that
-shape.
+Assumes a constant range step and constant azimuth step (true of
+\code{simTLradials_20logR}'s output and of \code{pDetInArea}'s own
+\code{output.resolution.m} spacing).
 }

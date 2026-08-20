@@ -7,15 +7,24 @@
 showDetFun(model, ...)
 }
 \arguments{
-\item{model}{Fitted detection model from fitDetFun().}
+\item{model}{A single fitted detection model from \code{fitDetFun()}, or
+a \emph{named} list of them (names become the legend/colour labels).}
 
-\item{SNRinfo}{Data frame used to fit the model. Must contain columns
-\code{SNR} and \code{Detected} (logical or 0/1).}
+\item{...}{Passed to \code{showDetFun.detFun()} or \code{showDetFun.list()}.}
+
+\item{SNRinfo}{Data frame used to fit the model(s). Must contain columns
+\code{SNR} and \code{Detected} (logical or 0/1). Optional: if omitted
+(\code{NULL}, the default), it's recovered directly from each fitted
+model, since that's what it was fit on anyway. For the list form,
+this can also be a named list of data frames, one per model (matched
+by name) -- use this only if you want to show \emph{different} data than
+what a model was actually fit on. A single shared data.frame is used
+for every model otherwise.}
 
 \item{distribution}{One of \code{"none"} (default), \code{"density"}, or
-\code{"histogram"}. Controls whether a mirrored distribution is drawn
-above y=1 (detected) and below y=0 (missed). A rug is always drawn
-unless \code{rug = FALSE}.}
+\code{"histogram"}. Adds detected/missed SNR distributions above/below
+the main panel. For the list form, one histogram/density per model is
+overlaid, coloured to match its curve.}
 
 \item{rug}{Logical. If \code{TRUE} (default), draws tick marks along the
 y=1 line for detected events and along y=0 for missed events.
@@ -24,23 +33,83 @@ For large datasets, a random subsample of \code{rug.max} points is used.}
 \item{rug.max}{Maximum number of rug ticks per group. Default 500.
 Set to \code{Inf} to show all points (slow for n > 2000).}
 
-\item{mirror.height}{Maximum height of mirrored distributions as a
-fraction of the y-axis range. Distributions sit outside the [0,1] box.
-Default 0.20.}
-
 \item{rug.alpha}{Alpha for rug ticks. Default 0.4.}
 
-\item{npoints}{Number of SNR grid points for the fitted curve. Default 300.}
+\item{panel.heights}{Relative heights of the top/main/bottom panels when
+\code{distribution != "none"}. Default \code{c(1, 4, 1)}.}
 
-\item{show.counts}{Logical. If \code{TRUE} (default), adds a subtitle
-reporting the number of detections out of total observations.}
+\item{hist.alpha}{Fill alpha for histogram/density panels. Default 0.4
+for a single model; for a list of models, default \code{1/length(model)}
+so overlapping fills stay legible.}
+
+\item{palette}{Optional named vector of colours, one per model (list form
+only). Default \code{NULL} uses ggplot2's default discrete palette,
+applied identically across all three panels so a model's line,
+histogram, and rug always match -- even if that model has, say, zero
+missed events and would otherwise be silently dropped from just the
+bottom panel's own colour scale.}
+
+\item{npoints}{Number of SNR grid points for the fitted curve(s). Default 300.}
+
+\item{xlim}{Optional length-2 numeric vector restricting the SNR range
+shown. Applied consistently to every panel (and to the fitted curve's
+own prediction grid) at construction time, so the top/main/bottom
+panels can't drift out of sync the way they would if a scale were
+changed on just one panel after the fact -- see Details.}
+
+\item{show.counts}{Logical, default \code{TRUE}. For a single model, adds
+a subtitle reporting the number of detections out of total
+observations. For a list of models, a subtitle doesn't scale past one
+model, so instead each legend entry gets its own \code{(detections/events)}
+count appended, with the legend titled accordingly -- e.g. "GLM (62/800)"
+under a "Model (# detections / # events)" legend title.}
 }
 \value{
-A ggplot object.
+A ggplot object, or a patchwork object when \code{distribution != "none"}.
 }
 \description{
-Visualises a fitted SNR detection function together with the distribution
-of detected and missed events. By default draws a rug along the y=1
-(detected) and y=0 (missed) reference lines. Optionally overlays mirrored
-density curves or histograms above and below those lines.
+Visualises one or more fitted SNR detection functions together with the
+distribution of detected and missed events. Dispatches on the class of
+\code{model}: a single fitted model (glm/gam/scam/vglm/vgam) draws one
+curve (\code{showDetFun.detFun}); a named list of fitted models overlays
+all of them, each in its own colour (\code{showDetFun.list}).
+
+By default draws a rug along the y=1 (detected) and y=0 (missed)
+reference lines. Optionally overlays density curves or histograms of the
+detected/missed SNR distribution above and below the main panel, via
+\pkg{patchwork}.
+}
+\details{
+When \code{distribution != "none"}, the return value is a
+\pkg{patchwork} object made of three independently-built ggplot panels
+(top/main/bottom) sharing one x-range fixed at construction time --
+patchwork doesn't keep panel axes "linked" the way, say, MATLAB's
+\code{linkaxes} does; each panel is just a static plot glued to its
+neighbours at render time. So rescaling only one panel after the fact
+(e.g. \code{p[[2]] <- p[[2]] + xlim(...)}) only affects that one panel,
+and the others silently keep their original range. Pass \code{xlim}
+here instead, so every panel is built from the same range to begin with.
+
+Adding a plain ggplot layer (\code{geom_line()}, \code{theme()}, etc) to
+that patchwork object with \code{+} applies it to whichever panel was
+supplied \emph{last} to \code{patchwork::wrap_plots()} -- which is
+deliberately the main panel here (supplied after top and bottom, then
+placed back in the visual middle via a \code{design} string), since
+that's almost always the panel people want to add curves/annotations to.
+So \code{p + geom_line(...)} lands on the main panel directly -- no
+indexing needed. To target the top or bottom panel specifically instead,
+index it directly by its position in \code{wrap_plots()}'s argument list
+(which is top, bottom, main -- \emph{not} their top-to-bottom visual
+order): \code{p[[1]] <- p[[1]] + ...} for the top panel, or
+\code{p[[2]] <- p[[2]] + ...} for the bottom one.
+
+\code{+} only ever reaches that one last-supplied panel, regardless of
+what's being added -- there's no way to make some additions (like a
+post-hoc \code{xlim()}) broadcast to all three panels while others stay
+targeted at just the main one, using \code{+} for both. For anything
+that should apply to every panel at once (an \code{xlim()} change
+included), use patchwork's own broadcast operator \code{&} instead:
+\code{p & ggplot2::xlim(-10, 10)}. That said, changing the range post hoc
+this way re-clips already-built panels rather than rebuilding them, so
+prefer passing \code{xlim} up front where possible.
 }

@@ -60,7 +60,13 @@ cde(
   NcIsTruncated = FALSE,
   siteCode = "",
   densityResultsFile = NULL,
-  parallel = FALSE
+  parallel = FALSE,
+  groundTruthCol = "detect_table1",
+  observerCol = "detect_table2",
+  snrColName = "SNR",
+  timeCol = NULL,
+  returnDetFun = FALSE,
+  returnPdetDetail = FALSE
 )
 ```
 
@@ -245,6 +251,60 @@ cde(
   functions (`modelType='vglm'`) and `parallel=FALSE` (the default) for
   everything else.
 
+- groundTruthCol:
+
+  Column in `capHistTab` treated as ground truth, forwarded to
+  [`falseDiscoveryRate()`](https://briansmiller.github.io/callDensity/reference/falseDiscoveryRate.md)
+  and
+  [`chtToSNRinfo`](https://briansmiller.github.io/callDensity/reference/chtToSNRinfo.md).
+  Default `'detect_table1'`, matching original behaviour. For a native
+  matchbox table with adjudicated verdicts, pass `'verdict'` (or
+  `'detect_verdict'` – both resolve the same column).
+
+- observerCol:
+
+  Column in `capHistTab` for the detector under evaluation, forwarded
+  the same way as `groundTruthCol`. Default `'detect_table2'`.
+
+- snrColName:
+
+  Column in `capHistTab` holding SNR, forwarded to
+  [`falseDiscoveryRate()`](https://briansmiller.github.io/callDensity/reference/falseDiscoveryRate.md).
+  Default `'SNR'` (uppercase), matching original behaviour – raw
+  simulation/detection tables typically carry lowercase `snr` instead
+  (see `notes/cde_pipeline_handover.md`'s "column-name trap"), so pass
+  `snrColName = 'snr'` for those.
+
+- timeCol:
+
+  Column in `capHistTab` to derive time/season from, forwarded to
+  [`chtToSNRinfo`](https://briansmiller.github.io/callDensity/reference/chtToSNRinfo.md).
+  Default `NULL` auto-detects `'t0'` (matchbox-native) else `'t'`
+  (legacy), matching original behaviour. Raw simulation tables carry
+  `'datetime'` instead of either – pass `timeCol = 'datetime'` for
+  those, rather than relying on the auto-detection growing a third
+  implicit guess.
+
+- returnDetFun:
+
+  Logical, default `FALSE`. If `TRUE`, the detection function actually
+  used to compute `pa`/`Dc` – whichever was passed in as `snrDetFun`, or
+  the one `cde()` fit internally when `snrDetFun=NULL` – is attached to
+  the returned data.frame as the `"detFun"` attribute (retrieve with
+  `attr(result, "detFun")`). Off by default so this is purely opt-in:
+  the return value's shape and content are unchanged for every existing
+  caller unless they ask for this.
+
+- returnPdetDetail:
+
+  Logical, default `FALSE`. If `TRUE`, the full result of the internal
+  [`pDetInArea()`](https://briansmiller.github.io/callDensity/reference/pDetInArea.md)
+  call – including the per-transect detail (`$meanOfAllTransects`)
+  needed to plot probability of detection as a function of range, not
+  just the single `pa` value `cde()` itself returns – is attached as the
+  `"pDetResults"` attribute. Off by default, same reasoning as
+  `returnDetFun`.
+
   Requires the future.apply package. If not installed, falls back to
   serial execution with a warning.
 
@@ -252,7 +312,10 @@ cde(
 
 `cde` returns a data.frame containing the results of the call density
 estimate \\\hat{D}\_c\\, intermediate results such as \\p_a, c\\,
-coefficient of variation of these terms, and the input parameters.
+coefficient of variation of these terms, and the input parameters. If
+`returnDetFun`/`returnPdetDetail` are set, the corresponding extra
+objects are attached as attributes on this same data.frame (see those
+parameters) rather than changing its shape.
 
 ## Details
 

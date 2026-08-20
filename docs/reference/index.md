@@ -67,6 +67,8 @@ capture-recapture.
   : Predict probability of detection from a VGLM SNR-detection function
 - [`showSNRdetectionFunc()`](https://briansmiller.github.io/callDensity/reference/showSNRdetectionFunc.md)
   : Plot an SNR detection function with mirrored SNR distributions
+- [`plotPDetRadials()`](https://briansmiller.github.io/callDensity/reference/plotPDetRadials.md)
+  : Plot probability of detection as a directional range footprint
 
 ## Probability of detection and the sonar equation
 
@@ -104,16 +106,17 @@ Building and reshaping the tables cde() and the detection-function
 functions expect, including the adjudicated-verdict convention CR
 analyses require.
 
+- [`chtToSNRinfo()`](https://briansmiller.github.io/callDensity/reference/chtToSNRinfo.md)
+  : Convert a capture history table to SNRinfo format
 - [`capHist2snrInfo()`](https://briansmiller.github.io/callDensity/reference/capHist2snrInfo.md)
   : Convert a capture history table into an SNRinfo data.frame
 - [`capHistTosnrInfo()`](https://briansmiller.github.io/callDensity/reference/capHistTosnrInfo.md)
   : Convert capture history DATA.FRAME into the 'SNRinfo' format used by
-  the callDensity package capHistTosnrInfo
+  the callDensity package
 - [`readCapHist()`](https://briansmiller.github.io/callDensity/reference/readCapHist.md)
   : Read a capture history csv file (e.g. created in Matlab)
 - [`simsTocaptureHistoryTable()`](https://briansmiller.github.io/callDensity/reference/simsTocaptureHistoryTable.md)
-  : Create a capture history table from the two simulated detection
-  tables
+  : Merge two simulated detectors into a capture history table
 - [`mchToCR()`](https://briansmiller.github.io/callDensity/reference/mchToCR.md)
   : Convert a multi-observer capture history table to a two-observer CR
   table

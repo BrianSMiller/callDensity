@@ -57,7 +57,7 @@ function
 
     <a class="navbar-brand me-2" href="../index.html">callDensity</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -144,7 +144,13 @@ function</p></li>
 <span>  NcIsTruncated <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  siteCode <span class="op">=</span> <span class="st">""</span>,</span>
 <span>  densityResultsFile <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  parallel <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  parallel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  groundTruthCol <span class="op">=</span> <span class="st">"detect_table1"</span>,</span>
+<span>  observerCol <span class="op">=</span> <span class="st">"detect_table2"</span>,</span>
+<span>  snrColName <span class="op">=</span> <span class="st">"SNR"</span>,</span>
+<span>  timeCol <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  returnDetFun <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  returnPdetDetail <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -321,7 +327,61 @@ dispatching to and collecting from parallel workers, and
 execution.</p>
 <p>As a rule of thumb: use <code>parallel=TRUE</code> for VGLM-based detection
 functions (<code>modelType='vglm'</code>) and <code>parallel=FALSE</code>
-(the default) for everything else.</p>
+(the default) for everything else.</p></dd>
+
+
+<dt id="arg-groundtruthcol">groundTruthCol<a class="anchor" aria-label="anchor" href="#arg-groundtruthcol"></a></dt>
+<dd><p>Column in <code>capHistTab</code> treated as ground
+truth, forwarded to <code><a href="falseDiscoveryRate.html">falseDiscoveryRate()</a></code> and
+<code><a href="chtToSNRinfo.html">chtToSNRinfo</a></code>. Default <code>'detect_table1'</code>, matching
+original behaviour. For a native matchbox table with adjudicated
+verdicts, pass <code>'verdict'</code> (or <code>'detect_verdict'</code> –
+both resolve the same column).</p></dd>
+
+
+<dt id="arg-observercol">observerCol<a class="anchor" aria-label="anchor" href="#arg-observercol"></a></dt>
+<dd><p>Column in <code>capHistTab</code> for the detector under
+evaluation, forwarded the same way as <code>groundTruthCol</code>. Default
+<code>'detect_table2'</code>.</p></dd>
+
+
+<dt id="arg-snrcolname">snrColName<a class="anchor" aria-label="anchor" href="#arg-snrcolname"></a></dt>
+<dd><p>Column in <code>capHistTab</code> holding SNR, forwarded to
+<code><a href="falseDiscoveryRate.html">falseDiscoveryRate()</a></code>. Default <code>'SNR'</code> (uppercase), matching
+original behaviour – raw simulation/detection tables typically carry
+lowercase <code>snr</code> instead (see <code>notes/cde_pipeline_handover.md</code>'s
+"column-name trap"), so pass <code>snrColName = 'snr'</code> for those.</p></dd>
+
+
+<dt id="arg-timecol">timeCol<a class="anchor" aria-label="anchor" href="#arg-timecol"></a></dt>
+<dd><p>Column in <code>capHistTab</code> to derive time/season from,
+forwarded to <code><a href="chtToSNRinfo.html">chtToSNRinfo</a></code>. Default <code>NULL</code>
+auto-detects <code>'t0'</code> (matchbox-native) else <code>'t'</code> (legacy),
+matching original behaviour. Raw simulation tables carry
+<code>'datetime'</code> instead of either – pass <code>timeCol = 'datetime'</code>
+for those, rather than relying on the auto-detection growing a third
+implicit guess.</p></dd>
+
+
+<dt id="arg-returndetfun">returnDetFun<a class="anchor" aria-label="anchor" href="#arg-returndetfun"></a></dt>
+<dd><p>Logical, default <code>FALSE</code>. If <code>TRUE</code>, the
+detection function actually used to compute <code>pa</code>/<code>Dc</code> –
+whichever was passed in as <code>snrDetFun</code>, or the one <code>cde()</code>
+fit internally when <code>snrDetFun=NULL</code> – is attached to the
+returned data.frame as the <code>"detFun"</code> attribute (retrieve with
+<code>attr(result, "detFun")</code>). Off by default so this is purely
+opt-in: the return value's shape and content are unchanged for every
+existing caller unless they ask for this.</p></dd>
+
+
+<dt id="arg-returnpdetdetail">returnPdetDetail<a class="anchor" aria-label="anchor" href="#arg-returnpdetdetail"></a></dt>
+<dd><p>Logical, default <code>FALSE</code>. If <code>TRUE</code>,
+the full result of the internal <code><a href="pDetInArea.html">pDetInArea()</a></code> call – including
+the per-transect detail (<code>$meanOfAllTransects</code>) needed to plot
+probability of detection as a function of range, not just the single
+<code>pa</code> value <code>cde()</code> itself returns – is attached as the
+<code>"pDetResults"</code> attribute. Off by default, same reasoning as
+<code>returnDetFun</code>.</p>
 <p>Requires the <span class="pkg">future.apply</span> package. If not installed, falls back
 to serial execution with a warning.</p></dd>
 
@@ -330,7 +390,10 @@ to serial execution with a warning.</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p><code>cde</code> returns a data.frame containing the results of the call
 density estimate \(\hat{D}_c\), intermediate results such as \(p_a,
-  c\), coefficient of variation of these terms, and the input parameters.</p>
+  c\), coefficient of variation of these terms, and the input parameters.
+If <code>returnDetFun</code>/<code>returnPdetDetail</code> are set, the
+corresponding extra objects are attached as attributes on this same
+data.frame (see those parameters) rather than changing its shape.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

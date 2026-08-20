@@ -21,8 +21,12 @@
 <url><loc>https://briansmiller.github.io/callDensity/reference/capHistTosnrInfo.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/cde.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/cdeFromParamFile.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/chtToSNRinfo.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/ciFromCV.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/clippedDensity.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/collectDensityResults.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/compassLabelsDF.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/compassToCartesian.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/computeSNRLims.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/countDetections.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/c_CV.html</loc></url>
@@ -35,6 +39,10 @@
 <url><loc>https://briansmiller.github.io/callDensity/reference/deploymentDurationFromsoundFolderCsv.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/detectionRateCorrectedPlot.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/detectionRatePlot.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/detMissSNR.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/distTheme.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/evenBreaks.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/extractSNRinfo.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/falseDiscoveryCV.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/falseDiscoveryRate.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/falseDiscoveryRateFromNth.html</loc></url>
@@ -57,8 +65,12 @@
 <url><loc>https://briansmiller.github.io/callDensity/reference/pa_CV.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/pDetGivenNL.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/pDetInArea.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/pdetPolygonGrid.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/pdetRasterGrid.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/pdetToLong.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/pivotSNR.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/plotDetectionDistribution.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/plotPDetRadials.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/plotSNRHistogram.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/plotSNRTimeSeries.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/plotSpatialDetections.html</loc></url>
@@ -69,6 +81,7 @@
 <url><loc>https://briansmiller.github.io/callDensity/reference/predVglmPDet.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/readCapHist.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/resolveColumns.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/resolveSNRinfoList.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/showDetFun.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/showSNRdetectionFunc.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/simCallAcoustics.html</loc></url>
@@ -77,6 +90,7 @@
 <url><loc>https://briansmiller.github.io/callDensity/reference/simTLradials_20logR.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/simulateDetector.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/studyArea.html</loc></url>
+<url><loc>https://briansmiller.github.io/callDensity/reference/subsampleRug.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/subsampleSimInTime.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/subsetByTimeCode.html</loc></url>
 <url><loc>https://briansmiller.github.io/callDensity/reference/tidyeval.html</loc></url>

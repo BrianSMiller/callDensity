@@ -241,42 +241,6 @@ between detectors).*
 capHistTab<- simsTocaptureHistoryTable(subsampleDet1,subsampleDet2)
 capHistTabt<- simsTocaptureHistoryTable(subsampleDet1t,subsampleDet2t)
 
-# Total number of true positive detections for detector1 OR detector2
-nTrueDetectedSubset <- with(capHistTab,sum(detect_table1 & groundTruth1 |   
-                                        detect_table2 & groundTruth2) )
-nTrueDetectedSubsett <- with(capHistTabt,sum(detect_table1 & groundTruth1 |   
-                                        detect_table2 & groundTruth2) )
-
-# Total number of positive detections for detector1 OR detector2
-nPositiveSubset <- with(capHistTab,sum(detect_table1 | detect_table2))
-nPositiveSubsett <- with(capHistTabt,sum(detect_table1 | detect_table2))
-```
-
-Convert this capture history table into an SNRinfo table, and treat
-detector1 as ground truth.
-
-``` r
-
-
-# Convert capture history into SNRinfo format (removing detections )
-SNRinfo <- capHistTosnrInfo(capHistTab)
-SNRinfot<- capHistTosnrInfo(capHistTabt)
-
-# Detector 2 true & false positives
-n_p_subsampleDet2 <- sum(capHistTab$detect_table2)
-n_p_subsampleDet2t <- sum(capHistTabt$detect_table2) 
-
-# Detectir 2 false positives (Positive on detector 2, but not on 1)
-n_fp_subsample <- sum(capHistTab$detect_table2 & !capHistTab$detect_table1)
-n_fp_subsamplet <- sum(capHistTabt$detect_table2 & !capHistTabt$detect_table1)
-
-# False discovery rate is number.false.positives/number.predicted.positive
-c_subsample <- n_fp_subsample/n_p_subsampleDet2
-c_subsamplet<- n_fp_subsamplet/n_p_subsampleDet2t
-
-n_subsample <- dim(SNRinfo)[1]  # Number positive detections in SUBset
-n_subsamplet <- dim(SNRinfot)[1]  # Number positive detections in SUBset
-
 truncationDistances <- R 
 
 # Number positive detections in FULL set
@@ -320,23 +284,14 @@ will let happen by accident.
 #### Detection function via VGLM (adjudicated capture-recapture)
 
 Capture-recapture with two fallible observers means neither
-`detect_table1` nor `detect_table2` is ground truth on its own.
-[`cde()`](https://briansmiller.github.io/callDensity/reference/cde.md)’s
-internal
-[`falseDiscoveryRate()`](https://briansmiller.github.io/callDensity/reference/falseDiscoveryRate.md)/[`capHist2snrInfo()`](https://briansmiller.github.io/callDensity/reference/capHist2snrInfo.md)
-calls always read `detect_table1` as ground truth regardless – this is
-not something
+`detect_observer1` nor `detect_observer2` is ground truth on its own.
 [`cde()`](https://briansmiller.github.io/callDensity/reference/cde.md)
-lets a caller override – so that assumption has to be satisfied by
-construction before the table reaches
-[`cde()`](https://briansmiller.github.io/callDensity/reference/cde.md).
-The fix is the same one the actual Common Ground manuscript’s own
-analysis script uses
-([`mchToCR()`](https://briansmiller.github.io/callDensity/reference/mchToCR.md)):
-overwrite `detect_table1` with the adjudicator’s verdict. Skipping this
-does not error – it silently computes a false discovery rate for one
-observer against the other, which is not a meaningful quantity and will
-not match the truth.
+accepts `groundTruthCol`/`observerCol` directly, so whichever column
+actually holds the adjudicated truth – here, the simulated
+`groundTruth2` – can be pointed to without renaming anything in the
+table itself. Skipping this does not error – it silently computes a
+false discovery rate for one observer against the other, which is not a
+meaningful quantity and will not match the truth.
 
 ``` r
 
@@ -344,44 +299,43 @@ library(VGAM)
 
 adjudicated <- subset(capHistTab,
                 (capHistTab$groundTruth1 | capHistTab$groundTruth2) &
-                (capHistTab$detect_table1 | capHistTab$detect_table2))
+                (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 adjudicatedt <- subset(capHistTabt,
                 (capHistTabt$groundTruth1 | capHistTabt$groundTruth2) &
-                (capHistTabt$detect_table1 | capHistTabt$detect_table2))
+                (capHistTabt$detect_observer1 | capHistTabt$detect_observer2))
 adjudicatedt$SNR <- rowMeans(
   subset(adjudicatedt, select = c("snr1", "snr2")), na.rm = TRUE)
 
-observerNames  <- c("detect_table1", "detect_table2")
+observerNames  <- c("detect_observer1", "detect_observer2")
 
 # Fit on the sample matching each analysis's own threshold, so the curve and
 # the rest of the calculation describe the same set of detections -- the
 # untruncated fit is exactly the one that extrapolates into the low-SNR
 # desert with no recaptures, and the truncated fit is exactly the one that
 # does not.
-snrDetFun.vglmNone  <- fitSNRvglm(adjudicated,  observerNames,
-                                  whichObserver = "detect_table2")
-snrDetFun.vglmt <- fitSNRvglm(adjudicatedt, observerNames,
-                              whichObserver = "detect_table2")
+snrDetFun.vglmNone  <- fitDetFun(adjudicated, modelType = "vglm", yColNames = observerNames,
+                                  whichObserver = "detect_observer2")
+snrDetFun.vglmt <- fitDetFun(adjudicatedt, modelType = "vglm", yColNames = observerNames,
+                              whichObserver = "detect_observer2")
 
-# detect_table1 overwritten with the true simulated status -- the synthetic
-# equivalent of a judge's adjudication -- so cde()'s ground-truth assumption
-# is satisfied. Only affects the copy handed to cde(); the vglm fits above
-# already used the genuine two-observer columns.
-capHistTabForCde  <- capHistTab
-capHistTabForCde$detect_table1  <- capHistTabForCde$groundTruth2
-capHistTabtForCde <- capHistTabt
-capHistTabtForCde$detect_table1 <- capHistTabtForCde$groundTruth2
-
-cr.none <- cde(Nc = Nc, capHistTab = capHistTabForCde, snrDetFun = snrDetFun.vglmNone,
+# groundTruthCol/observerCol point cde() at the simulated ground truth
+# directly -- the synthetic equivalent of a judge's adjudication -- so no
+# copy of capHistTab with a renamed column is needed. The vglm fits above
+# already used the genuine two-observer columns; this only affects what
+# cde() itself treats as ground truth for its false-discovery-rate
+# calculation.
+cr.none <- cde(Nc = Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.vglmNone,
                SL = SL, TL = TL, NL = NL, T = Time, A = A, k = k,
                outerloop = 10, truncationDistance = R,
-               snrTruncationThreshold = -Inf)
+               snrTruncationThreshold = -Inf,
+               groundTruthCol = "groundTruth2", observerCol = "detect_observer2")
 
-cr.trunc <- cde(Nc = Nct, capHistTab = capHistTabtForCde, snrDetFun = snrDetFun.vglmt,
+cr.trunc <- cde(Nc = Nct, capHistTab = capHistTabt, snrDetFun = snrDetFun.vglmt,
                 SL = SL, TL = TL, NL = NL, T = Time, A = A, k = k,
                 outerloop = 10, truncationDistance = R,
                 snrTruncationThreshold = snrTruncationThreshold,
-                NcIsTruncated = TRUE)
+                NcIsTruncated = TRUE,
+                groundTruthCol = "groundTruth2", observerCol = "detect_observer2")
 
 resultsTrue <- data.frame(Dc = TrueCallDensity, Nc = n,
                           pa = mean(simDet2$p_det, na.rm = TRUE),
@@ -563,7 +517,7 @@ estimated:
 # Recapture coverage: the SNR range over which BOTH observers contribute
 # detections. Not where the sample reaches; where the agreement reaches.
 recaptureCoverage <- function(ch, breaks = seq(-20, 20, by = 2),
-                              obs1 = "detect_table1", obs2 = "detect_table2",
+                              obs1 = "detect_observer1", obs2 = "detect_observer2",
                               snrCol = "SNR") {
   # Only calls somebody flagged are in the capture-recapture sample.
   ch  <- ch[ch[[obs1]] | ch[[obs2]], ]
@@ -694,35 +648,31 @@ runCell <- function(theta, det1scale, seed, n = 5e4, outerloop = 10) {
   # Capture-recapture: the adjudicated set is every call at least one observer
   # flagged, with false positives removed by the judge.
   adj <- subset(ch, (ch$groundTruth1 | ch$groundTruth2) &
-                    (ch$detect_table1 | ch$detect_table2))
+                    (ch$detect_observer1 | ch$detect_observer2))
   if (is.finite(theta)) adj <- subset(adj, adj$SNR >= theta)
 
-  fit <- fitSNRvglm(adj, c("detect_table1", "detect_table2"),
-                    whichObserver = "detect_table2")
+  fit <- fitDetFun(adj, modelType = "vglm", yColNames = c("detect_observer1", "detect_observer2"),
+                    whichObserver = "detect_observer2")
 
   # Nc must be truncated in step with p_a. cde() cannot do this itself -- it
   # receives Nc as a number and never sees the detections -- so it must be
   # confirmed via NcIsTruncated.
-  Nc <- sum(ch$detect_table2 & (if (is.finite(theta)) ch$SNR >= theta else TRUE),
+  Nc <- sum(ch$detect_observer2 & (if (is.finite(theta)) ch$SNR >= theta else TRUE),
             na.rm = TRUE)
 
-  # cde()'s internal falseDiscoveryRate()/capHist2snrInfo() calls always read
-  # capHistTab$detect_table1 as ground truth and detect_table2 as the detector
-  # under test. Neither raw observer in a genuine two-observer capture-
-  # recapture setup IS ground truth, so build a copy with detect_table1
-  # overwritten by the simulated ground truth (groundTruth2), matching the
-  # real Common Ground manuscript's mchToCR() convention -- see the GLM/VGLM
-  # sections above for the same construction and its explanation.
-  chForCde <- ch
-  chForCde$detect_table1 <- chForCde$groundTruth2
-
+  # groundTruthCol/observerCol point cde() at the simulated ground truth
+  # (groundTruth2) directly -- the synthetic equivalent of a judge's
+  # adjudication -- matching the real Common Ground manuscript's own
+  # ground-truth convention, without needing a renamed copy of ch. See the
+  # GLM/VGLM sections above for the same construction and its explanation.
   result <- suppressWarnings(suppressMessages(
-    cde(Nc = Nc, capHistTab = chForCde, snrDetFun = fit,
+    cde(Nc = Nc, capHistTab = ch, snrDetFun = fit,
         SL = d$SL, TL = TL, NL = d$NL, T = d$Time, A = d$A, k = 1,
         outerloop = outerloop,
         truncationDistance = d$R,
         snrTruncationThreshold = theta,
-        NcIsTruncated = is.finite(theta))
+        NcIsTruncated = is.finite(theta),
+        groundTruthCol = "groundTruth2", observerCol = "detect_observer2")
   ))
 
   pa <- result$pa

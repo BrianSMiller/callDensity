@@ -324,16 +324,6 @@ time).
 ``` r
 
 
-plotSpatialDetections <- function(sim){
-  
-  # Spatial distribution (excludes false positives)
-  ggplot(data=sim, aes(x=x/1e3, y=y/1e3, weight=detect_table) )+
-    geom_bin_2d(alpha=1,binwidth=c(10,10))+
-    coord_equal()+
-    xlab("X location (km)")+
-    ylab("Y location (km)")
-}
-
 sp1 <- plotSpatialDetections(simDet1)+ggtitle('Detector 1')
 sp2 <- plotSpatialDetections(simDet2)+ggtitle('Detector 2')
 gridExtra::grid.arrange(sp1,sp2,nrow=1)
@@ -436,7 +426,7 @@ Code used to merge simulated detections into a capture history table:
 
 ``` r
 
-function (subsampleDet1, subsampleDet2) 
+function (subsampleDet1, subsampleDet2, observerSuffix = c("observer1", "observer2")) 
 {
     capHistTab <- merge(x = subsampleDet1, y = subsampleDet2, all = TRUE, by = c("datetime"), suffixes = c("1", "2"))
     capHistTab$detect_table1[is.na(capHistTab$detect_table1)] <- 0
@@ -451,6 +441,8 @@ function (subsampleDet1, subsampleDet2)
     capHistTab$month <- time2monthCode(capHistTab$t)
     capHistTab$noiseRMSdB <- rowMeans(capHistTab[, c("noiseRMSdB1", "noiseRMSdB2")], na.rm = TRUE)
     capHistTab$signalRMSdB <- rowMeans(capHistTab[, c("signalRMSdB1", "signalRMSdB2")], na.rm = TRUE)
+    names(capHistTab)[names(capHistTab) == "detect_table1"] <- paste0("detect_", observerSuffix[1])
+    names(capHistTab)[names(capHistTab) == "detect_table2"] <- paste0("detect_", observerSuffix[2])
     return(capHistTab)
 }
 ```
@@ -465,11 +457,11 @@ detector1 as ground truth.
 # ground truth. This is an observer ground (OG) so includes false positives from
 # detector1, but does not include detections from detector2 not detected on
 # detector1
-SNRinfo <- capHistTosnrInfo(capHistTab)
+SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2", timeCol = "t")
 
 # Positive on detector 2, but not on 1
-n_fp_subsample <- sum(capHistTab$detect_table2 & !capHistTab$detect_table1)
-n_p_subsampleDet2 <- sum(capHistTab$detect_table2) 
+n_fp_subsample <- sum(capHistTab$detect_observer2 & !capHistTab$detect_observer1)
+n_p_subsampleDet2 <- sum(capHistTab$detect_observer2) 
 
 # False discovery rate is number.false.positives/number.predicted.positive
 c_subsample <- n_fp_subsample/n_p_subsampleDet2
@@ -510,27 +502,37 @@ A GAM or SCAM should also be able to provide a good fit to a logistic
 function, but to keep this concise we leave fitting those as an exercise
 for the reader (see callDensity vignette).
 
-The callDensity package provides a convenience function
-fitSNRdetectionFunc to fit GLM, GAM, and SCAM models:
-`fitSNRdetectionFunc <-`
+The callDensity package provides a convenience function fitDetFun to fit
+GLM, GAM, and SCAM models: `fitDetFun <-`
 
 ``` r
 
-function (SNRinfo, modelType = "gam", numKnots = 3) 
+function (SNRinfo, modelType = c("gam", "glm", "scam", "vglm"), numKnots = 3, yColNames = c("detect_observer1", "detect_observer2"), whichObserver = NULL) 
 {
-    .Deprecated("fitDetFun")
-    fitDetFun(SNRinfo = SNRinfo, modelType = modelType, numKnots = numKnots)
+    modelType <- match.arg(modelType)
+    res <- switch(modelType, glm = stats::glm(Detected ~ SNR, data = SNRinfo, family = stats::binomial()), gam = mgcv::gam(Detected ~ s(SNR, k = numKnots), data = SNRinfo, family = stats::binomial()), scam = scam::scam(Detected ~ s(SNR, k = numKnots, bs = "mpi"), data = SNRinfo, family = stats::binomial()), vglm = {
+        fit <- VGAM::vglm(as.matrix(SNRinfo[, yColNames]) ~ SNR, VGAM::posbernoulli.t(parallel.t = TRUE ~ 0), data = SNRinfo)
+        if (is.null(whichObserver)) whichObserver <- tail(yColNames, 1)
+        fit@extra$whichObserver <- whichObserver
+        fit@extra$yColNames <- yColNames
+        fit
+    })
+    attr(res, "modelType") <- modelType
+    if (!isS4(res)) {
+        class(res) <- c("detFun", class(res))
+    }
+    res
 }
 ```
 
 ``` r
 
 
-snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
-                                              modelType = "glm")
+snrDetFun.glm <- callDensity::fitDetFun(SNRinfo, modelType = "glm")
 
 results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
-                   SL = SL, TL = TL, NL=NLsamp, A = A, modelType = 'glm')
+                   SL = SL, TL = TL, NL=NLsamp, A = A, modelType = 'glm',
+                   groundTruthCol = "detect_observer1", observerCol = "detect_observer2")
 ```
 
 ### Results
@@ -546,11 +548,6 @@ results.true = data.frame(season='year',    siteCode='',  Nc=n, c=det2params$c,
                           SLmean=SL$mean, SLsd=SL$sd, NLmean=NL$mean, NLsd=NL$sd,
                           modelType='true', CV.Nc=0, CV.c=0, CV.pa=0, 
                           Dc=TrueCallDensity,  CV.Dc=0)
-# results.true = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
-#                      NLmean = NL$mean, NLsd = NL$sd,            # Noise
-#                      model=det2params$func, c = det2params$c, # Detector params
-#                      Pa = mean(simDet2$p_det,na.rm=TRUE), 
-#                      row.names='Truth')
 
 results<-rbind( results.true, results.glm)
 res <- subset(results,select=c('Dc','Nc','A','NLmean','NLsd','modelType','c',
@@ -603,7 +600,8 @@ function, SL, and TL.
 NLind <- callDensity::nlFromDetections(SNRinfo, snrDetFun.glm, SL, TL)
 
 results.NLind <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
-                   SL = SL, TL = TL, NL=NLind, A = A, modelType = 'glm')
+                   SL = SL, TL = TL, NL=NLind, A = A, modelType = 'glm',
+                   groundTruthCol = "detect_observer1", observerCol = "detect_observer2")
 ```
 
 CallDensity package code for correcting NL distribution bias that occurs
@@ -681,31 +679,23 @@ VGAM package with the function ‘vglm’ (Yee et al. 2015).
 library(VGAM)
 
 #VGLMs work a bit differently. We still pass in a capture history table. But now
-#the ground-truth column is in a column separate from detect_table1 (here
+#the ground-truth column is in a column separate from detect_observer1 (here
 #groundTruth2). we want to include in our CH table all predicted positive
 #detections from either detector, not just the ground-truth. We fit the vglm
 #detection function outside of the call to cde, and pass it in as a parameter.
 #For the vglm fit, we want only adjudicated positive detections (no false
-#positives). Then we rename all the   columns from detector1 (i.e. that end in
-#1) to something that won't conflict. Finally, we rename our ground-truth column
-#to detect_table1, since that is what the cde function expects to be
-#ground-truth. 
-#
-#TODO: Change the column name in the capture history table to groundtruth or
-#make this an explicit parameter.
+#positives). cde()'s groundTruthCol/observerCol arguments point it directly at
+#groundTruth2/detect_observer2, on a capHistTab restricted to rows flagged by
+#at least one detector -- the union filter here is not just for the vglm
+#fit's own sample; cde()'s NL estimate is sensitive to it too, so it is kept
+#as a real step, not folded away with the renaming it used to be tangled up
+#with.
 
-ch <- subset(capHistTab,
-                      (capHistTab$detect_table1 | capHistTab$detect_table2))
-# Rename all detector 1 to something that won't conflict e.g. i
-names(ch) <- gsub('1','i',names(capHistTab))
-
-# Rename adjudicated to detect_table1
-names(ch)[names(ch)=='groundTruth2']<-'detect_table1'
-
+ch <- subset(capHistTab, (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 
 ### Adjudicated positive for VGLM capture recapture model
 adjudicated <- subset(capHistTab,capHistTab$groundTruth1 &
-                (capHistTab$detect_table1 | capHistTab$detect_table2))
+                (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 
 summary(adjudicated$group1)
 #> FalsePositive  TruePositive FalseNegative 
@@ -719,21 +709,22 @@ n_adj <- dim(adjudicated)[1]
 
 # Subset used for calculating false discovery rate of detector 2. Actually, we
 # use the fact that the false discovery rate is equal to (1-precision). 
-pp2 = sum(capHistTab$detect_table2==TRUE,na.rm=TRUE) # Predicted positive det2
-fp2 = sum(capHistTab$detect_table2==TRUE & capHistTab$groundTruth2==FALSE,
+pp2 = sum(capHistTab$detect_observer2==TRUE,na.rm=TRUE) # Predicted positive det2
+fp2 = sum(capHistTab$detect_observer2==TRUE & capHistTab$groundTruth2==FALSE,
           na.rm=TRUE) # false positives from det2
 
 adj_c <- fp2/pp2
 
 
-observerNames = c("detect_table1", "detect_table2")
-snrDetFun.vglm <- fitSNRvglm(adjudicated, observerNames, 
-                             whichObserver = "detect_table2")
+observerNames = c("detect_observer1", "detect_observer2")
+snrDetFun.vglm <- fitDetFun(adjudicated, modelType = "vglm", yColNames = observerNames,
+                            whichObserver = "detect_observer2")
 # Best estimate of NL 
 # NLadj <- nlFromSnrInfo(adjudicated, snrDetFun.vglm)
 
 results.vglm <- cde(Nc=Nc, capHistTab = ch, snrDetFun = snrDetFun.vglm,
-                   SL = SL, TL = TL, A = A, modelType = 'vglm')
+                   SL = SL, TL = TL, A = A, modelType = 'vglm',
+                   groundTruthCol = "groundTruth2", observerCol = "detect_observer2")
 ```
 
 ``` r
@@ -796,7 +787,7 @@ other_observer  <- setdiff(
   snrDetFun.vglm@extra$whichObserver
 )[1]
 snrDetFun.vglm2@extra$whichObserver <- other_observer
-
+ 
 # Ground truth from simulation
 truth <- data.frame(
   SNR   = c(simDet2$snr,      capHistTab$snr1),
@@ -804,7 +795,7 @@ truth <- data.frame(
   group = c(rep("Observer 2", nrow(simDet2)),
             rep("Observer 1", nrow(capHistTab)))
 )
-
+ 
 models <- list(
   "GLM"          = snrDetFun.glm,
   "VGLM obs1"    = snrDetFun.vglm,
@@ -812,14 +803,26 @@ models <- list(
 )
 names(models)[2] <- paste0("VGLM (", snrDetFun.vglm@extra$whichObserver, ")")
 names(models)[3] <- paste0("VGLM (", other_observer, ")")
-
-showDetFun(models) +
-  ggplot2::geom_line(data=truth, alpha = 1, inherit.aes = FALSE, linewidth=.75,
-                     ggplot2::aes(x = SNR, y = p_det, linetype = group))+
+ 
+# xlim built in here -- top/main/bottom panels (and the fitted curves'
+# own prediction grid) are all constructed from this one shared range,
+# so they can't drift the way they would if the range were only changed
+# on the main panel after compositing.
+p <- showDetFun(models, distribution = 'density', rug = TRUE, xlim = c(-20, 20))
+ 
+# geom_line()/scale_linetype_manual()/theme()/labs() still need to target
+# the main panel explicitly -- patchwork's "+" applies non-xlim layers to
+# whichever panel was added LAST (the bottom "Missed" panel here), not the
+# visual middle one. xlim no longer needs to be in this chain at all.
+p <- p +
+  ggplot2::geom_line(data = truth, alpha = 1, inherit.aes = FALSE, linewidth = .75,
+                     ggplot2::aes(x = SNR, y = p_det, linetype = group)) +
   scale_linetype_manual(values = c("Observer 2" = "dashed",
-                                   "Observer 1" = "dotted") )+
-  ggplot2::xlim(-20,20)+
-  ggplot2::theme(legend.position="right")+labs(color="Model",linetype="Truth")
+                                   "Observer 1" = "dotted")) +
+  ggplot2::theme(legend.position = "right") +
+  labs(color = "Model", linetype = "Truth")
+ 
+p 
 ```
 
 ![](callDensity_CommonGround_files/figure-html/compare%20snr%20detection%20functions-1.png)

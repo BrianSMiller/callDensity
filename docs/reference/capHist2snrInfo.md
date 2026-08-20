@@ -1,11 +1,20 @@
 # Convert a capture history table into an SNRinfo data.frame
 
-Convert a capture history table into an SNRinfo data.frame
+**Deprecated.** A thin wrapper around
+[`chtToSNRinfo`](https://briansmiller.github.io/callDensity/reference/chtToSNRinfo.md),
+kept so the published Common Ground and Beyond Counting Calls analyses
+keep reproducing exactly against current `main`. New code should call
+`chtToSNRinfo` directly.
 
 ## Usage
 
 ``` r
-capHist2snrInfo(snr, season = "year")
+capHist2snrInfo(
+  snr,
+  season = "year",
+  groundTruthCol = "detect_table1",
+  detectedCol = "detect_table2"
+)
 ```
 
 ## Arguments
@@ -32,6 +41,16 @@ capHist2snrInfo(snr, season = "year")
 
   A timeCode corresponding to months, seasons, or 'year' (the default,
   which returns all rows).
+
+- groundTruthCol:
+
+  Column name treated as ground truth. Default `'detect_table1'`,
+  matching original behaviour.
+
+- detectedCol:
+
+  Column name for the detector under evaluation. Default
+  `'detect_table2'`, matching original behaviour.
 
 ## Value
 

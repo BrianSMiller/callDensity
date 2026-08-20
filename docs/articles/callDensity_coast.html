@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">callDensity</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -203,7 +203,7 @@ area) portions of the transects where the animals cannot be located
 <span><span class="co"># Loop over each radial. find the range at which it encounters the coast, and</span></span>
 <span><span class="co"># truncate (i.e. Distances beyond this range will be excluded from the analysis)</span></span>
 <span><span class="kw">for</span> <span class="op">(</span><span class="va">i</span> <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">radials</span><span class="op">)</span><span class="op">)</span><span class="op">{</span> </span>
-<span>  <span class="va">rangeIx</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Trig.html" class="external-link">sin</a></span><span class="op">(</span><span class="va">radials</span><span class="op">[</span><span class="va">i</span><span class="op">]</span><span class="op">*</span><span class="va">pi</span><span class="op">/</span><span class="fl">180</span><span class="op">)</span><span class="op">*</span><span class="va">range_m</span> <span class="op">&lt;=</span> <span class="va">coast</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
+<span>  <span class="va">rangeIx</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Trig.html" class="external-link">cos</a></span><span class="op">(</span><span class="va">radials</span><span class="op">[</span><span class="va">i</span><span class="op">]</span><span class="op">*</span><span class="va">pi</span><span class="op">/</span><span class="fl">180</span><span class="op">)</span><span class="op">*</span><span class="va">range_m</span> <span class="op">&lt;=</span> <span class="va">coast</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
 <span>  <span class="va">truncDist</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/ifelse.html" class="external-link">ifelse</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">rangeIx</span><span class="op">)</span>,<span class="va">R</span>,<span class="va">range_m</span><span class="op">[</span><span class="va">rangeIx</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span></span>
@@ -316,11 +316,11 @@ matched between detectors).</em></p>
 <span><span class="va">capHistTab</span><span class="op">&lt;-</span> <span class="fu"><a href="../reference/simsTocaptureHistoryTable.html">simsTocaptureHistoryTable</a></span><span class="op">(</span><span class="va">subsampleDet1</span>,<span class="va">subsampleDet2</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Total number of true positive detections for detector1 OR detector2</span></span>
-<span><span class="va">nDetectedSubset</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/with.html" class="external-link">with</a></span><span class="op">(</span><span class="va">capHistTab</span>,<span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">detect_table1</span> <span class="op">&amp;</span> <span class="va">groundTruth1</span> <span class="op">|</span>   </span>
-<span>                                        <span class="va">detect_table2</span> <span class="op">&amp;</span> <span class="va">groundTruth2</span><span class="op">)</span> <span class="op">)</span></span>
+<span><span class="va">nDetectedSubset</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/with.html" class="external-link">with</a></span><span class="op">(</span><span class="va">capHistTab</span>,<span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">detect_observer1</span> <span class="op">&amp;</span> <span class="va">groundTruth1</span> <span class="op">|</span>   </span>
+<span>                                        <span class="va">detect_observer2</span> <span class="op">&amp;</span> <span class="va">groundTruth2</span><span class="op">)</span> <span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Total number of positive detections for detector1 OR detector2</span></span>
-<span><span class="va">nPositiveSubset</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/with.html" class="external-link">with</a></span><span class="op">(</span><span class="va">capHistTab</span>,<span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">detect_table1</span> <span class="op">|</span> <span class="va">detect_table2</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">nPositiveSubset</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/with.html" class="external-link">with</a></span><span class="op">(</span><span class="va">capHistTab</span>,<span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">detect_observer1</span> <span class="op">|</span> <span class="va">detect_observer2</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Number positive detections in FULL set</span></span>
 <span><span class="va">Nc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">simDet2</span><span class="op">$</span><span class="va">detect_table</span><span class="op">)</span>       </span>
@@ -329,7 +329,7 @@ matched between detectors).</em></p>
 <span><span class="co"># ground truth. This is an observer ground (OG) so includes false positives from</span></span>
 <span><span class="co"># detector1, but does not include detections from detector2 not detected on</span></span>
 <span><span class="co"># detector1</span></span>
-<span><span class="va">SNRinfo</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/capHistTosnrInfo.html">capHistTosnrInfo</a></span><span class="op">(</span><span class="va">capHistTab</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">SNRinfo</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/chtToSNRinfo.html">chtToSNRinfo</a></span><span class="op">(</span><span class="va">capHistTab</span>, groundTruth <span class="op">=</span> <span class="st">"observer1"</span>, observers <span class="op">=</span> <span class="st">"observer2"</span>, timeCol <span class="op">=</span> <span class="st">"t"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="calculate-call-densities-using-calldensity-package">Calculate call densities using callDensity package<a class="anchor" aria-label="anchor" href="#calculate-call-densities-using-calldensity-package"></a>
@@ -339,79 +339,64 @@ VGAM package with the function ‘vglm’ <span class="citation">(Yee et al.
 2015)</span>.</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span></span>
-<span><span class="va">snrDetFun.glm</span> <span class="op">&lt;-</span> <span class="fu">callDensity</span><span class="fu">::</span><span class="fu"><a href="../reference/fitSNRdetectionFunc.html">fitSNRdetectionFunc</a></span><span class="op">(</span><span class="va">SNRinfo</span>,</span>
-<span>                                              modelType <span class="op">=</span> <span class="st">"glm"</span><span class="op">)</span></span>
+<span><span class="va">snrDetFun.glm</span> <span class="op">&lt;-</span> <span class="fu">callDensity</span><span class="fu">::</span><span class="fu"><a href="../reference/fitDetFun.html">fitDetFun</a></span><span class="op">(</span><span class="va">SNRinfo</span>, modelType <span class="op">=</span> <span class="st">"glm"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">results.glm</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cde.html">cde</a></span><span class="op">(</span>Nc<span class="op">=</span><span class="va">Nc</span>, capHistTab <span class="op">=</span> <span class="va">capHistTab</span>, snrDetFun <span class="op">=</span> <span class="va">snrDetFun.glm</span>,</span>
-<span>                   SL <span class="op">=</span> <span class="va">SL</span>, TL <span class="op">=</span> <span class="va">TL</span>, A <span class="op">=</span> <span class="va">A</span>, modelType <span class="op">=</span> <span class="st">'glm'</span>, </span>
-<span>                   truncationDistance <span class="op">=</span> <span class="va">truncDist</span><span class="op">)</span></span></code></pre></div>
+<span>                   SL <span class="op">=</span> <span class="va">SL</span>, TL <span class="op">=</span> <span class="va">TL</span>, A <span class="op">=</span> <span class="va">A</span>, k <span class="op">=</span> <span class="va">k</span>, T <span class="op">=</span> <span class="va">Time</span>, modelType <span class="op">=</span> <span class="st">'glm'</span>, </span>
+<span>                   truncationDistance <span class="op">=</span> <span class="va">truncDist</span>,</span>
+<span>                   groundTruthCol <span class="op">=</span> <span class="st">"detect_observer1"</span>, observerCol <span class="op">=</span> <span class="st">"detect_observer2"</span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span></span>
 <span><span class="co">### Adjudicated capture recapture model</span></span>
 <span><span class="va">adjudicated</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">capHistTab</span>,<span class="va">capHistTab</span><span class="op">$</span><span class="va">groundTruth1</span> <span class="op">&amp;</span></span>
-<span>                <span class="op">(</span><span class="va">capHistTab</span><span class="op">$</span><span class="va">detect_table1</span> <span class="op">|</span> <span class="va">capHistTab</span><span class="op">$</span><span class="va">detect_table2</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Number of adjudicated positive detections</span></span>
-<span><span class="va">n_adj</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">adjudicated</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
+<span>                <span class="op">(</span><span class="va">capHistTab</span><span class="op">$</span><span class="va">detect_observer1</span> <span class="op">|</span> <span class="va">capHistTab</span><span class="op">$</span><span class="va">detect_observer2</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Combine SNR of both detectors (shouldn't be necessary unless we've somehow</span></span>
 <span><span class="co"># made them different)</span></span>
 <span><span class="va">adjudicated</span><span class="op">$</span><span class="va">SNR</span> <span class="op">&lt;-</span>   <span class="fu"><a href="https://rdrr.io/r/base/colSums.html" class="external-link">rowMeans</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">adjudicated</span>,select<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">'snr1'</span>,<span class="st">'snr2'</span><span class="op">)</span><span class="op">)</span> ,na.rm<span class="op">=</span><span class="cn">T</span><span class="op">)</span> <span class="co">#dB</span></span>
 <span></span>
-<span><span class="co"># Subset used for calculating false discovery rate of detector 2. Actually, we</span></span>
-<span><span class="co"># use the fact that the false discovery rate is equal to (1-precision). </span></span>
-<span><span class="va">tp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">capHistTab</span>, <span class="fu"><a href="https://rdrr.io/r/base/logical.html" class="external-link">as.logical</a></span><span class="op">(</span><span class="va">capHistTab</span><span class="op">$</span><span class="va">detect_table2</span><span class="op">)</span>, </span>
-<span>              select <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">'groundTruth2'</span><span class="op">)</span> <span class="op">)</span></span>
-<span><span class="va">precision</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">tp</span><span class="op">)</span><span class="op">/</span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">tp</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
-<span><span class="va">adj_c</span> <span class="op">&lt;-</span> <span class="fl">1</span><span class="op">-</span><span class="va">precision</span></span>
-<span></span>
-<span><span class="va">observerNames</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"detect_table1"</span>, <span class="st">"detect_table2"</span><span class="op">)</span></span>
-<span><span class="va">snrDetFun.vglm</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fitSNRvglm.html">fitSNRvglm</a></span><span class="op">(</span><span class="va">adjudicated</span>, <span class="va">observerNames</span>, </span>
-<span>                             whichObserver <span class="op">=</span> <span class="st">"detect_table2"</span><span class="op">)</span></span>
+<span><span class="va">observerNames</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"detect_observer1"</span>, <span class="st">"detect_observer2"</span><span class="op">)</span></span>
+<span><span class="va">snrDetFun.vglm</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fitDetFun.html">fitDetFun</a></span><span class="op">(</span><span class="va">adjudicated</span>, modelType <span class="op">=</span> <span class="st">"vglm"</span>, yColNames <span class="op">=</span> <span class="va">observerNames</span>,</span>
+<span>                             whichObserver <span class="op">=</span> <span class="st">"detect_observer2"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Best estimate of NL </span></span>
-<span><span class="va">NLadj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nlFromSnrInfo.html">nlFromSnrInfo</a></span><span class="op">(</span><span class="fu"><a href="../reference/capHistTosnrInfo.html">capHistTosnrInfo</a></span><span class="op">(</span><span class="va">capHistTab</span><span class="op">)</span>, <span class="va">snrDetFun.vglm</span><span class="op">)</span></span>
+<span><span class="va">NLadj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nlFromSnrInfo.html">nlFromSnrInfo</a></span><span class="op">(</span><span class="fu"><a href="../reference/chtToSNRinfo.html">chtToSNRinfo</a></span><span class="op">(</span><span class="va">capHistTab</span>, groundTruth <span class="op">=</span> <span class="st">"observer1"</span>, observers <span class="op">=</span> <span class="st">"observer2"</span>, timeCol <span class="op">=</span> <span class="st">"t"</span><span class="op">)</span>, <span class="va">snrDetFun.vglm</span><span class="op">)</span></span>
 <span></span>
-<span></span>
-<span><span class="va">Pa.vglm</span> <span class="op">&lt;-</span> <span class="fu">callDensity</span><span class="fu">::</span><span class="fu"><a href="../reference/pDetInArea.html">pDetInArea</a></span><span class="op">(</span><span class="va">snrDetFun.vglm</span>, SL<span class="op">=</span><span class="va">SL</span>, TLlookup <span class="op">=</span> <span class="va">TL</span>, NL<span class="op">=</span><span class="va">NLadj</span>,</span>
-<span>           output.resolution.m<span class="op">=</span><span class="fl">100</span>,</span>
-<span>           outerloop <span class="op">=</span> <span class="fl">100</span>,</span>
-<span>           truncationDistance<span class="op">=</span><span class="va">truncDist</span>, <span class="co"># in m</span></span>
-<span>           snrTruncationThreshold <span class="op">=</span> <span class="op">-</span><span class="cn">Inf</span><span class="op">)</span></span>
-<span><span class="va">pa.vglm</span> <span class="op">&lt;-</span> <span class="va">Pa.vglm</span><span class="op">$</span><span class="va">overall</span></span>
-<span></span>
-<span><span class="co"># Density estimation equation</span></span>
-<span><span class="va">Dc.vglm</span> <span class="op">&lt;-</span> <span class="op">(</span><span class="va">Nc</span> <span class="op">*</span> <span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="va">adj_c</span><span class="op">)</span> <span class="op">)</span><span class="op">/</span><span class="op">(</span> <span class="va">k</span> <span class="op">*</span> <span class="va">Atrunc</span> <span class="op">*</span> <span class="va">pa.vglm</span> <span class="op">*</span> <span class="va">Time</span> <span class="op">)</span></span>
-<span></span>
-<span><span class="va">results.vglm</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Dc<span class="op">=</span><span class="va">Dc.vglm</span>, SampleSize<span class="op">=</span><span class="va">n_adj</span>, A <span class="op">=</span> <span class="va">Atrunc</span>,<span class="co"># Environment</span></span>
-<span>                      NLmean <span class="op">=</span> <span class="va">NLadj</span><span class="op">$</span><span class="va">mean</span>, NLsd <span class="op">=</span> <span class="va">NLadj</span><span class="op">$</span><span class="va">sd</span>,<span class="co"># Noise</span></span>
-<span>                      <span class="co"># Detector params</span></span>
-<span>                        model<span class="op">=</span><span class="st">'vglm'</span>, c<span class="op">=</span><span class="va">adj_c</span>, Pa<span class="op">=</span><span class="va">pa.vglm</span>,  </span>
-<span>                      row.names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">'ACR'</span>,<span class="va">numTransects</span>, <span class="st">"radial transects"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co"># groundTruthCol/observerCol point cde() at the simulated ground truth</span></span>
+<span><span class="co"># (groundTruth2) directly, matching the manual fp/precision calculation</span></span>
+<span><span class="co"># this replaces (fp/(fp+tp), the same definition falseDiscoveryRate()</span></span>
+<span><span class="co"># already computes internally) -- no separate pDetInArea() call or</span></span>
+<span><span class="co"># hand-derived Dc formula needed. returnPdetDetail=TRUE keeps the</span></span>
+<span><span class="co"># per-transect detail available below for the same diagnostic plots</span></span>
+<span><span class="co"># pDetInArea() itself would have given.</span></span>
+<span><span class="va">results.vglm</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cde.html">cde</a></span><span class="op">(</span>Nc<span class="op">=</span><span class="va">Nc</span>, capHistTab <span class="op">=</span> <span class="va">capHistTab</span>, snrDetFun <span class="op">=</span> <span class="va">snrDetFun.vglm</span>,</span>
+<span>                   SL <span class="op">=</span> <span class="va">SL</span>, TL <span class="op">=</span> <span class="va">TL</span>, NL <span class="op">=</span> <span class="va">NLadj</span>, A <span class="op">=</span> <span class="va">Atrunc</span>, k <span class="op">=</span> <span class="va">k</span>, T <span class="op">=</span> <span class="va">Time</span>,</span>
+<span>                   modelType <span class="op">=</span> <span class="st">'vglm'</span>, truncationDistance <span class="op">=</span> <span class="va">truncDist</span>,</span>
+<span>                   groundTruthCol <span class="op">=</span> <span class="st">"groundTruth2"</span>, observerCol <span class="op">=</span> <span class="st">"detect_observer2"</span>,</span>
+<span>                   returnPdetDetail <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span></span>
-<span><span class="va">results</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Dc <span class="op">=</span> <span class="va">TrueCallDensity</span>, SampleSize <span class="op">=</span> <span class="va">n</span>, A <span class="op">=</span> <span class="va">A</span>,<span class="co"># Environment </span></span>
-<span>                      NLmean <span class="op">=</span> <span class="va">NL</span><span class="op">$</span><span class="va">mean</span>, NLsd <span class="op">=</span> <span class="va">NL</span><span class="op">$</span><span class="va">sd</span>,            <span class="co"># Noise</span></span>
-<span>                      model<span class="op">=</span><span class="va">det2params</span><span class="op">$</span><span class="va">func</span>, c <span class="op">=</span> <span class="va">det2params</span><span class="op">$</span><span class="va">c</span>, <span class="co"># Detector params</span></span>
-<span>                      Pa <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">simDet2</span><span class="op">$</span><span class="va">p_det</span>,na.rm<span class="op">=</span><span class="cn">TRUE</span><span class="op">)</span>, </span>
-<span>                      row.names<span class="op">=</span><span class="st">'Truth'</span><span class="op">)</span></span>
+<span><span class="va">resultsTrue</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>season<span class="op">=</span><span class="st">'year'</span>, siteCode<span class="op">=</span><span class="st">''</span>, Nc<span class="op">=</span><span class="va">n</span>, c<span class="op">=</span><span class="va">det2params</span><span class="op">$</span><span class="va">c</span>,</span>
+<span>                          k<span class="op">=</span><span class="va">k</span>, T<span class="op">=</span><span class="va">Time</span>, A<span class="op">=</span><span class="va">A</span>, pa<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">simDet2</span><span class="op">$</span><span class="va">p_det</span>,na.rm<span class="op">=</span><span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>                          SLmean<span class="op">=</span><span class="va">SL</span><span class="op">$</span><span class="va">mean</span>, SLsd<span class="op">=</span><span class="va">SL</span><span class="op">$</span><span class="va">sd</span>, NLmean<span class="op">=</span><span class="va">NL</span><span class="op">$</span><span class="va">mean</span>, NLsd<span class="op">=</span><span class="va">NL</span><span class="op">$</span><span class="va">sd</span>,</span>
+<span>                          modelType<span class="op">=</span><span class="va">det2params</span><span class="op">$</span><span class="va">func</span>, CV.Nc<span class="op">=</span><span class="fl">0</span>, CV.c<span class="op">=</span><span class="fl">0</span>, CV.pa<span class="op">=</span><span class="fl">0</span>,</span>
+<span>                          Dc<span class="op">=</span><span class="va">TrueCallDensity</span>, CV.Dc<span class="op">=</span><span class="fl">0</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">results</span><span class="op">&lt;-</span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span> <span class="va">results</span>, <span class="va">results.vglm</span><span class="op">)</span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span><span class="va">resultsTrue</span>, <span class="va">results.glm</span>, <span class="va">results.vglm</span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu">kableExtra</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/kableExtra/man/kbl.html" class="external-link">kbl</a></span><span class="op">(</span><span class="va">results</span>, digits <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4</span>,<span class="fl">3</span>,<span class="fl">0</span>,<span class="fl">1</span>, <span class="fl">2</span>, <span class="cn">NA</span>, <span class="fl">3</span>, <span class="fl">4</span><span class="op">)</span>, </span>
-<span>                col.names<span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">'Dc'</span>,<span class="st">'(sub)Sample Size'</span>, <span class="st">'A'</span>,<span class="st">'NL_mean'</span>,<span class="st">'NL_sd'</span>,</span>
-<span>                             <span class="st">'Model'</span>,<span class="st">'c'</span>,<span class="st">'P_a'</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> </span>
+<span><span class="fu">kableExtra</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/kableExtra/man/kbl.html" class="external-link">kbl</a></span><span class="op">(</span><span class="va">results</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">'Dc'</span>,<span class="st">'Nc'</span>,<span class="st">'A'</span>,<span class="st">'NLmean'</span>,<span class="st">'NLsd'</span>,<span class="st">'modelType'</span>,<span class="st">'c'</span>,<span class="st">'pa'</span>,<span class="st">'CV.Dc'</span><span class="op">)</span><span class="op">]</span>,</span>
+<span>                digits <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4</span>,<span class="fl">0</span>,<span class="fl">0</span>,<span class="fl">1</span>,<span class="fl">2</span>,<span class="cn">NA</span>,<span class="fl">3</span>,<span class="fl">4</span>,<span class="fl">4</span><span class="op">)</span>,</span>
+<span>                col.names<span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">'Dc'</span>,<span class="st">'Sample Size'</span>,<span class="st">'A'</span>,<span class="st">'NL_mean'</span>,<span class="st">'NL_sd'</span>,</span>
+<span>                             <span class="st">'Model'</span>,<span class="st">'c'</span>,<span class="st">'P_a'</span>,<span class="st">'CV.Dc'</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> </span>
 <span>  <span class="fu">kableExtra</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/kableExtra/man/kable_classic.html" class="external-link">kable_classic</a></span><span class="op">(</span>full_width<span class="op">=</span><span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <table class="table  lightable-classic" style='font-family: "Arial Narrow", "Source Sans Pro", sans-serif; width: auto !important; margin-left: auto; margin-right: auto;'>
 <thead><tr>
-<th style="text-align:left;">
-</th>
 <th style="text-align:right;">
 Dc
 </th>
 <th style="text-align:right;">
-(sub)Sample Size
+Sample Size
 </th>
 <th style="text-align:right;">
 A
@@ -431,12 +416,12 @@ c
 <th style="text-align:right;">
 P_a
 </th>
+<th style="text-align:right;">
+CV.Dc
+</th>
 </tr></thead>
 <tbody>
 <tr>
-<td style="text-align:left;">
-Truth
-</td>
 <td style="text-align:right;">
 0.3195
 </td>
@@ -447,7 +432,7 @@ Truth
 1857798
 </td>
 <td style="text-align:right;">
-84
+84.0
 </td>
 <td style="text-align:right;">
 4.00
@@ -461,22 +446,51 @@ plogis
 <td style="text-align:right;">
 0.0768
 </td>
+<td style="text-align:right;">
+0.0000
+</td>
 </tr>
 <tr>
+<td style="text-align:right;">
+0.3146
+</td>
+<td style="text-align:right;">
+65160
+</td>
+<td style="text-align:right;">
+1857798
+</td>
+<td style="text-align:right;">
+84.2
+</td>
+<td style="text-align:right;">
+3.95
+</td>
 <td style="text-align:left;">
-ACR 8 radial transects
+glm
 </td>
 <td style="text-align:right;">
-0.3321
+0.443
 </td>
 <td style="text-align:right;">
-1687
+0.0622
+</td>
+<td style="text-align:right;">
+0.4567
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+0.3330
+</td>
+<td style="text-align:right;">
+65160
 </td>
 <td style="text-align:right;">
 2004230
 </td>
 <td style="text-align:right;">
-84
+84.0
 </td>
 <td style="text-align:right;">
 3.95
@@ -488,52 +502,22 @@ vglm
 0.298
 </td>
 <td style="text-align:right;">
-0.0689
+0.0687
+</td>
+<td style="text-align:right;">
+0.4313
 </td>
 </tr>
 </tbody>
 </table>
 <p>The estimate of Dc derived from the vglm model is very close to the
-true value for this simulation. The spatial exclusions and differing
-slopes of the detectors appear to have been modelled with acceptable
-accuracy.</p>
+true value for this simulation.</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">SNR</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="op">-</span><span class="fl">20</span>,<span class="fl">20</span>,<span class="fl">0.5</span><span class="op">)</span>;</span>
-<span><span class="va">snrs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span><span class="va">SNR</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">cols</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/colorRamp.html" class="external-link">colorRampPalette</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">'#EDB120'</span>,<span class="st">'#D95319'</span>,<span class="st">'#0072BD'</span>,<span class="st">'#7E2F8E'</span>,<span class="st">'#77AC30'</span>,</span>
-<span>                        <span class="st">'#4DBEEE'</span>,<span class="st">'#A2142F'</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co"># preds.glm= predict(snrDetFun.glm, type='response',newdata=snrs)</span></span>
-<span><span class="va">preds.vglm</span><span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">snrDetFun.vglm</span>,type<span class="op">=</span><span class="st">'response'</span>,newdata<span class="op">=</span><span class="va">snrs</span><span class="op">)</span></span>
-<span><span class="va">preds.vglm0</span><span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">snrDetFun.vglm</span>,type<span class="op">=</span><span class="st">'response'</span>,newdata<span class="op">=</span><span class="va">snrs</span>,</span>
-<span>                    type.fitted<span class="op">=</span><span class="st">'onempall0'</span><span class="op">)</span><span class="co"># One minus probability of all zeros</span></span>
-<span><span class="va">pr</span> <span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="va">preds.vglm</span><span class="op">[</span>,<span class="fl">2</span><span class="op">]</span>,<span class="va">preds.vglm0</span><span class="op">)</span>,<span class="fl">1</span>,<span class="va">prod</span><span class="op">)</span></span>
-<span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/par.html" class="external-link">par</a></span><span class="op">(</span>cex<span class="op">=</span><span class="fl">0.8</span>,mar<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3.1</span>,<span class="fl">3.1</span>,<span class="fl">0.25</span>,<span class="fl">0</span><span class="op">)</span>,mgp<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2.1</span>,<span class="fl">1</span>,<span class="fl">0</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">snrs</span><span class="op">$</span><span class="va">SNR</span>, xlim<span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">5</span>,<span class="fl">10</span><span class="op">)</span>,  ylim<span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>,<span class="fl">1</span><span class="op">)</span>,</span>
-<span>     xlab<span class="op">=</span><span class="st">"SNR"</span>, ylab <span class="op">=</span> <span class="st">"P(Detection)"</span>, type<span class="op">=</span><span class="st">'n'</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/grid.html" class="external-link">grid</a></span><span class="op">(</span>nx <span class="op">=</span> <span class="cn">NULL</span>, ny <span class="op">=</span> <span class="cn">NULL</span>, lty <span class="op">=</span> <span class="fl">2</span>, col <span class="op">=</span> <span class="st">"gray"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
-<span><span class="co"># lines(snrs$SNR,preds.glm,col=cols(7)[4],lwd=2)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/lines.html" class="external-link">lines</a></span><span class="op">(</span><span class="va">snrs</span><span class="op">$</span><span class="va">SNR</span>,<span class="va">preds.vglm</span><span class="op">[</span>,<span class="fl">1</span><span class="op">]</span>,col<span class="op">=</span><span class="fu">cols</span><span class="op">(</span><span class="fl">7</span><span class="op">)</span><span class="op">[</span><span class="fl">5</span><span class="op">]</span>,lwd<span class="op">=</span><span class="fl">2</span><span class="op">)</span> <span class="co"># Percep bias detector1</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/lines.html" class="external-link">lines</a></span><span class="op">(</span><span class="va">snrs</span><span class="op">$</span><span class="va">SNR</span>,<span class="va">preds.vglm</span><span class="op">[</span>,<span class="fl">2</span><span class="op">]</span>,col<span class="op">=</span><span class="fu">cols</span><span class="op">(</span><span class="fl">7</span><span class="op">)</span><span class="op">[</span><span class="fl">6</span><span class="op">]</span>,lwd<span class="op">=</span><span class="fl">2</span><span class="op">)</span> <span class="co"># Percep bias detector2</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/lines.html" class="external-link">lines</a></span><span class="op">(</span><span class="va">snrs</span><span class="op">$</span><span class="va">SNR</span>,<span class="va">preds.vglm0</span>,col<span class="op">=</span><span class="fu">cols</span><span class="op">(</span><span class="fl">7</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span>,lwd<span class="op">=</span><span class="fl">2</span><span class="op">)</span> <span class="co"># 1-</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/lines.html" class="external-link">lines</a></span><span class="op">(</span><span class="va">snrs</span><span class="op">$</span><span class="va">SNR</span>,<span class="va">pr</span>,col<span class="op">=</span><span class="fu">cols</span><span class="op">(</span><span class="fl">7</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>,lwd<span class="op">=</span><span class="fl">2</span><span class="op">)</span>    <span class="co"># vglm 1-p(all zero)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/points.html" class="external-link">points</a></span><span class="op">(</span><span class="va">simDet2</span><span class="op">$</span><span class="va">snr</span>,<span class="va">simDet2</span><span class="op">$</span><span class="va">p_det</span>,pch<span class="op">=</span><span class="st">'.'</span><span class="op">)</span>     <span class="co"># Actual probability of detection</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/legend.html" class="external-link">legend</a></span><span class="op">(</span> <span class="st">"bottomright"</span>, </span>
-<span>        legend <span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Detection function TRUE"</span>,</span>
-<span>                  <span class="co">#"Detection function GLM",</span></span>
-<span>                  <span class="st">"Detection function VGLM"</span>,</span>
-<span>                  <span class="st">"Perception bias: detector1 (VGLM)"</span>,</span>
-<span>                  <span class="st">"Perception bias: detector2 (VGLM)"</span>,</span>
-<span>                  <span class="st">"1-p(all zeros) (VGLM)"</span></span>
-<span>                  <span class="op">)</span>,</span>
-<span>        col<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">'black'</span>, <span class="co">#cols(7)[4],</span></span>
-<span>              <span class="fu">cols</span><span class="op">(</span><span class="fl">7</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>, <span class="fu">cols</span><span class="op">(</span><span class="fl">7</span><span class="op">)</span><span class="op">[</span><span class="fl">5</span><span class="op">]</span>, <span class="fu">cols</span><span class="op">(</span><span class="fl">7</span><span class="op">)</span><span class="op">[</span><span class="fl">6</span><span class="op">]</span>, <span class="fu">cols</span><span class="op">(</span><span class="fl">7</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span><span class="op">)</span>, </span>
-<span>        lty<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="st">'solid'</span>,<span class="fl">6</span><span class="op">)</span>,</span>
-<span>        lwd<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">2</span>,<span class="fl">6</span><span class="op">)</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p><img src="callDensity_coast_files/figure-html/compare%20snr%20detection%20functions-1.png" class="r-plt" alt="" width="576"></p>
+<code class="sourceCode R"><span></span>
+<span><span class="fu"><a href="../reference/plotPDetRadials.html">plotPDetRadials</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">results.vglm</span>, <span class="st">"pDetResults"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="callDensity_coast_files/figure-html/pdet%20radial-1.png" class="r-plt" alt="" width="576"></p>
+<p>The spatial exclusions and differing slopes of the detectors appear
+to have been modelled with acceptable accuracy.</p>
 </div>
 </div>
 <div class="section level2">

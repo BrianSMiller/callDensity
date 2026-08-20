@@ -86,6 +86,35 @@ pDetInArea(
   Requires the future.apply package to be installed when TRUE; falls
   back to serial with a warning if not available.
 
+## Value
+
+A list with four elements:
+
+- overall:
+
+  Single overall probability of detection across the whole area (the
+  `pa` value used by
+  [`cde`](https://briansmiller.github.io/callDensity/reference/cde.md)).
+
+- perTransectMeanSD:
+
+  Mean and SD of p(det) per transect, plus an overall row (see
+  [`pa_CV`](https://briansmiller.github.io/callDensity/reference/pa_CV.md)).
+
+- meanOfAllTransects:
+
+  data.frame with `range_m` and `pDet`, averaged across transects – a 1D
+  detection function vs. range, ignoring azimuth.
+
+- allDetFunctions:
+
+  data.frame with `range_m` and one column per transect (named to match
+  `TLlookup`, e.g. `tl0`, `tl90`, ...) giving p(det) at every range
+  along every transect – the full 2D grid `meanOfAllTransects` was
+  averaged down from. Feed this to
+  [`plotPDetRadials`](https://briansmiller.github.io/callDensity/reference/plotPDetRadials.md)
+  for a directional detection-range footprint plot.
+
 ## Details
 
 \(3\) The outer loop (to be run 1000 times): (a) Generate a possible

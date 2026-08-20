@@ -1,0 +1,13 @@
+# Blank theme for the top/bottom distribution panels
+
+Keeps everything void (no ticks, text, or gridlines) except the y-axis
+title, so "Detected"/"Missed" render as a normal rotated axis title
+anchored to the same left-hand column as the main panel's own y-axis
+title – not off on the right edge, where its position would drift with
+legend width (as it did with plot.tag positioning).
+
+## Usage
+
+``` r
+distTheme()
+```

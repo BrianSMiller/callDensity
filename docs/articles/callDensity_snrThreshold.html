@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">callDensity</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -288,38 +288,6 @@ matched between detectors).</em></p>
 <span><span class="va">capHistTab</span><span class="op">&lt;-</span> <span class="fu"><a href="../reference/simsTocaptureHistoryTable.html">simsTocaptureHistoryTable</a></span><span class="op">(</span><span class="va">subsampleDet1</span>,<span class="va">subsampleDet2</span><span class="op">)</span></span>
 <span><span class="va">capHistTabt</span><span class="op">&lt;-</span> <span class="fu"><a href="../reference/simsTocaptureHistoryTable.html">simsTocaptureHistoryTable</a></span><span class="op">(</span><span class="va">subsampleDet1t</span>,<span class="va">subsampleDet2t</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Total number of true positive detections for detector1 OR detector2</span></span>
-<span><span class="va">nTrueDetectedSubset</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/with.html" class="external-link">with</a></span><span class="op">(</span><span class="va">capHistTab</span>,<span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">detect_table1</span> <span class="op">&amp;</span> <span class="va">groundTruth1</span> <span class="op">|</span>   </span>
-<span>                                        <span class="va">detect_table2</span> <span class="op">&amp;</span> <span class="va">groundTruth2</span><span class="op">)</span> <span class="op">)</span></span>
-<span><span class="va">nTrueDetectedSubsett</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/with.html" class="external-link">with</a></span><span class="op">(</span><span class="va">capHistTabt</span>,<span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">detect_table1</span> <span class="op">&amp;</span> <span class="va">groundTruth1</span> <span class="op">|</span>   </span>
-<span>                                        <span class="va">detect_table2</span> <span class="op">&amp;</span> <span class="va">groundTruth2</span><span class="op">)</span> <span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Total number of positive detections for detector1 OR detector2</span></span>
-<span><span class="va">nPositiveSubset</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/with.html" class="external-link">with</a></span><span class="op">(</span><span class="va">capHistTab</span>,<span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">detect_table1</span> <span class="op">|</span> <span class="va">detect_table2</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">nPositiveSubsett</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/with.html" class="external-link">with</a></span><span class="op">(</span><span class="va">capHistTabt</span>,<span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">detect_table1</span> <span class="op">|</span> <span class="va">detect_table2</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p>Convert this capture history table into an SNRinfo table, and treat
-detector1 as ground truth.</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span></span>
-<span><span class="co"># Convert capture history into SNRinfo format (removing detections )</span></span>
-<span><span class="va">SNRinfo</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/capHistTosnrInfo.html">capHistTosnrInfo</a></span><span class="op">(</span><span class="va">capHistTab</span><span class="op">)</span></span>
-<span><span class="va">SNRinfot</span><span class="op">&lt;-</span> <span class="fu"><a href="../reference/capHistTosnrInfo.html">capHistTosnrInfo</a></span><span class="op">(</span><span class="va">capHistTabt</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Detector 2 true &amp; false positives</span></span>
-<span><span class="va">n_p_subsampleDet2</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">capHistTab</span><span class="op">$</span><span class="va">detect_table2</span><span class="op">)</span></span>
-<span><span class="va">n_p_subsampleDet2t</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">capHistTabt</span><span class="op">$</span><span class="va">detect_table2</span><span class="op">)</span> </span>
-<span></span>
-<span><span class="co"># Detectir 2 false positives (Positive on detector 2, but not on 1)</span></span>
-<span><span class="va">n_fp_subsample</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">capHistTab</span><span class="op">$</span><span class="va">detect_table2</span> <span class="op">&amp;</span> <span class="op">!</span><span class="va">capHistTab</span><span class="op">$</span><span class="va">detect_table1</span><span class="op">)</span></span>
-<span><span class="va">n_fp_subsamplet</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">capHistTabt</span><span class="op">$</span><span class="va">detect_table2</span> <span class="op">&amp;</span> <span class="op">!</span><span class="va">capHistTabt</span><span class="op">$</span><span class="va">detect_table1</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># False discovery rate is number.false.positives/number.predicted.positive</span></span>
-<span><span class="va">c_subsample</span> <span class="op">&lt;-</span> <span class="va">n_fp_subsample</span><span class="op">/</span><span class="va">n_p_subsampleDet2</span></span>
-<span><span class="va">c_subsamplet</span><span class="op">&lt;-</span> <span class="va">n_fp_subsamplet</span><span class="op">/</span><span class="va">n_p_subsampleDet2t</span></span>
-<span></span>
-<span><span class="va">n_subsample</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">SNRinfo</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>  <span class="co"># Number positive detections in SUBset</span></span>
-<span><span class="va">n_subsamplet</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">SNRinfot</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>  <span class="co"># Number positive detections in SUBset</span></span>
-<span></span>
 <span><span class="va">truncationDistances</span> <span class="op">&lt;-</span> <span class="va">R</span> </span>
 <span></span>
 <span><span class="co"># Number positive detections in FULL set</span></span>
@@ -359,61 +327,56 @@ longer something <code><a href="../reference/cde.html">cde()</a></code> will let
 <h4 id="detection-function-via-vglm-adjudicated-capture-recapture">Detection function via VGLM (adjudicated capture-recapture)<a class="anchor" aria-label="anchor" href="#detection-function-via-vglm-adjudicated-capture-recapture"></a>
 </h4>
 <p>Capture-recapture with two fallible observers means neither
-<code>detect_table1</code> nor <code>detect_table2</code> is ground
-truth on its own. <code><a href="../reference/cde.html">cde()</a></code>’s internal
-<code><a href="../reference/falseDiscoveryRate.html">falseDiscoveryRate()</a></code>/<code><a href="../reference/capHist2snrInfo.html">capHist2snrInfo()</a></code> calls
-always read <code>detect_table1</code> as ground truth regardless – this
-is not something <code><a href="../reference/cde.html">cde()</a></code> lets a caller override – so that
-assumption has to be satisfied by construction before the table reaches
-<code><a href="../reference/cde.html">cde()</a></code>. The fix is the same one the actual Common Ground
-manuscript’s own analysis script uses (<code><a href="../reference/mchToCR.html">mchToCR()</a></code>):
-overwrite <code>detect_table1</code> with the adjudicator’s verdict.
-Skipping this does not error – it silently computes a false discovery
-rate for one observer against the other, which is not a meaningful
-quantity and will not match the truth.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code>detect_observer1</code> nor <code>detect_observer2</code> is
+ground truth on its own. <code><a href="../reference/cde.html">cde()</a></code> accepts
+<code>groundTruthCol</code>/<code>observerCol</code> directly, so
+whichever column actually holds the adjudicated truth – here, the
+simulated <code>groundTruth2</code> – can be pointed to without renaming
+anything in the table itself. Skipping this does not error – it silently
+computes a false discovery rate for one observer against the other,
+which is not a meaningful quantity and will not match the truth.</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://www.stat.auckland.ac.nz/~yee/VGAM/" class="external-link">VGAM</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">adjudicated</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">capHistTab</span>,</span>
 <span>                <span class="op">(</span><span class="va">capHistTab</span><span class="op">$</span><span class="va">groundTruth1</span> <span class="op">|</span> <span class="va">capHistTab</span><span class="op">$</span><span class="va">groundTruth2</span><span class="op">)</span> <span class="op">&amp;</span></span>
-<span>                <span class="op">(</span><span class="va">capHistTab</span><span class="op">$</span><span class="va">detect_table1</span> <span class="op">|</span> <span class="va">capHistTab</span><span class="op">$</span><span class="va">detect_table2</span><span class="op">)</span><span class="op">)</span></span>
+<span>                <span class="op">(</span><span class="va">capHistTab</span><span class="op">$</span><span class="va">detect_observer1</span> <span class="op">|</span> <span class="va">capHistTab</span><span class="op">$</span><span class="va">detect_observer2</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">adjudicatedt</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">capHistTabt</span>,</span>
 <span>                <span class="op">(</span><span class="va">capHistTabt</span><span class="op">$</span><span class="va">groundTruth1</span> <span class="op">|</span> <span class="va">capHistTabt</span><span class="op">$</span><span class="va">groundTruth2</span><span class="op">)</span> <span class="op">&amp;</span></span>
-<span>                <span class="op">(</span><span class="va">capHistTabt</span><span class="op">$</span><span class="va">detect_table1</span> <span class="op">|</span> <span class="va">capHistTabt</span><span class="op">$</span><span class="va">detect_table2</span><span class="op">)</span><span class="op">)</span></span>
+<span>                <span class="op">(</span><span class="va">capHistTabt</span><span class="op">$</span><span class="va">detect_observer1</span> <span class="op">|</span> <span class="va">capHistTabt</span><span class="op">$</span><span class="va">detect_observer2</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">adjudicatedt</span><span class="op">$</span><span class="va">SNR</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colSums.html" class="external-link">rowMeans</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">adjudicatedt</span>, select <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"snr1"</span>, <span class="st">"snr2"</span><span class="op">)</span><span class="op">)</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">observerNames</span>  <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"detect_table1"</span>, <span class="st">"detect_table2"</span><span class="op">)</span></span>
+<span><span class="va">observerNames</span>  <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"detect_observer1"</span>, <span class="st">"detect_observer2"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Fit on the sample matching each analysis's own threshold, so the curve and</span></span>
 <span><span class="co"># the rest of the calculation describe the same set of detections -- the</span></span>
 <span><span class="co"># untruncated fit is exactly the one that extrapolates into the low-SNR</span></span>
 <span><span class="co"># desert with no recaptures, and the truncated fit is exactly the one that</span></span>
 <span><span class="co"># does not.</span></span>
-<span><span class="va">snrDetFun.vglmNone</span>  <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fitSNRvglm.html">fitSNRvglm</a></span><span class="op">(</span><span class="va">adjudicated</span>,  <span class="va">observerNames</span>,</span>
-<span>                                  whichObserver <span class="op">=</span> <span class="st">"detect_table2"</span><span class="op">)</span></span>
-<span><span class="va">snrDetFun.vglmt</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fitSNRvglm.html">fitSNRvglm</a></span><span class="op">(</span><span class="va">adjudicatedt</span>, <span class="va">observerNames</span>,</span>
-<span>                              whichObserver <span class="op">=</span> <span class="st">"detect_table2"</span><span class="op">)</span></span>
+<span><span class="va">snrDetFun.vglmNone</span>  <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fitDetFun.html">fitDetFun</a></span><span class="op">(</span><span class="va">adjudicated</span>, modelType <span class="op">=</span> <span class="st">"vglm"</span>, yColNames <span class="op">=</span> <span class="va">observerNames</span>,</span>
+<span>                                  whichObserver <span class="op">=</span> <span class="st">"detect_observer2"</span><span class="op">)</span></span>
+<span><span class="va">snrDetFun.vglmt</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fitDetFun.html">fitDetFun</a></span><span class="op">(</span><span class="va">adjudicatedt</span>, modelType <span class="op">=</span> <span class="st">"vglm"</span>, yColNames <span class="op">=</span> <span class="va">observerNames</span>,</span>
+<span>                              whichObserver <span class="op">=</span> <span class="st">"detect_observer2"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># detect_table1 overwritten with the true simulated status -- the synthetic</span></span>
-<span><span class="co"># equivalent of a judge's adjudication -- so cde()'s ground-truth assumption</span></span>
-<span><span class="co"># is satisfied. Only affects the copy handed to cde(); the vglm fits above</span></span>
-<span><span class="co"># already used the genuine two-observer columns.</span></span>
-<span><span class="va">capHistTabForCde</span>  <span class="op">&lt;-</span> <span class="va">capHistTab</span></span>
-<span><span class="va">capHistTabForCde</span><span class="op">$</span><span class="va">detect_table1</span>  <span class="op">&lt;-</span> <span class="va">capHistTabForCde</span><span class="op">$</span><span class="va">groundTruth2</span></span>
-<span><span class="va">capHistTabtForCde</span> <span class="op">&lt;-</span> <span class="va">capHistTabt</span></span>
-<span><span class="va">capHistTabtForCde</span><span class="op">$</span><span class="va">detect_table1</span> <span class="op">&lt;-</span> <span class="va">capHistTabtForCde</span><span class="op">$</span><span class="va">groundTruth2</span></span>
-<span></span>
-<span><span class="va">cr.none</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cde.html">cde</a></span><span class="op">(</span>Nc <span class="op">=</span> <span class="va">Nc</span>, capHistTab <span class="op">=</span> <span class="va">capHistTabForCde</span>, snrDetFun <span class="op">=</span> <span class="va">snrDetFun.vglmNone</span>,</span>
+<span><span class="co"># groundTruthCol/observerCol point cde() at the simulated ground truth</span></span>
+<span><span class="co"># directly -- the synthetic equivalent of a judge's adjudication -- so no</span></span>
+<span><span class="co"># copy of capHistTab with a renamed column is needed. The vglm fits above</span></span>
+<span><span class="co"># already used the genuine two-observer columns; this only affects what</span></span>
+<span><span class="co"># cde() itself treats as ground truth for its false-discovery-rate</span></span>
+<span><span class="co"># calculation.</span></span>
+<span><span class="va">cr.none</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cde.html">cde</a></span><span class="op">(</span>Nc <span class="op">=</span> <span class="va">Nc</span>, capHistTab <span class="op">=</span> <span class="va">capHistTab</span>, snrDetFun <span class="op">=</span> <span class="va">snrDetFun.vglmNone</span>,</span>
 <span>               SL <span class="op">=</span> <span class="va">SL</span>, TL <span class="op">=</span> <span class="va">TL</span>, NL <span class="op">=</span> <span class="va">NL</span>, T <span class="op">=</span> <span class="va">Time</span>, A <span class="op">=</span> <span class="va">A</span>, k <span class="op">=</span> <span class="va">k</span>,</span>
 <span>               outerloop <span class="op">=</span> <span class="fl">10</span>, truncationDistance <span class="op">=</span> <span class="va">R</span>,</span>
-<span>               snrTruncationThreshold <span class="op">=</span> <span class="op">-</span><span class="cn">Inf</span><span class="op">)</span></span>
+<span>               snrTruncationThreshold <span class="op">=</span> <span class="op">-</span><span class="cn">Inf</span>,</span>
+<span>               groundTruthCol <span class="op">=</span> <span class="st">"groundTruth2"</span>, observerCol <span class="op">=</span> <span class="st">"detect_observer2"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">cr.trunc</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cde.html">cde</a></span><span class="op">(</span>Nc <span class="op">=</span> <span class="va">Nct</span>, capHistTab <span class="op">=</span> <span class="va">capHistTabtForCde</span>, snrDetFun <span class="op">=</span> <span class="va">snrDetFun.vglmt</span>,</span>
+<span><span class="va">cr.trunc</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cde.html">cde</a></span><span class="op">(</span>Nc <span class="op">=</span> <span class="va">Nct</span>, capHistTab <span class="op">=</span> <span class="va">capHistTabt</span>, snrDetFun <span class="op">=</span> <span class="va">snrDetFun.vglmt</span>,</span>
 <span>                SL <span class="op">=</span> <span class="va">SL</span>, TL <span class="op">=</span> <span class="va">TL</span>, NL <span class="op">=</span> <span class="va">NL</span>, T <span class="op">=</span> <span class="va">Time</span>, A <span class="op">=</span> <span class="va">A</span>, k <span class="op">=</span> <span class="va">k</span>,</span>
 <span>                outerloop <span class="op">=</span> <span class="fl">10</span>, truncationDistance <span class="op">=</span> <span class="va">R</span>,</span>
 <span>                snrTruncationThreshold <span class="op">=</span> <span class="va">snrTruncationThreshold</span>,</span>
-<span>                NcIsTruncated <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>                NcIsTruncated <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>                groundTruthCol <span class="op">=</span> <span class="st">"groundTruth2"</span>, observerCol <span class="op">=</span> <span class="st">"detect_observer2"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">resultsTrue</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Dc <span class="op">=</span> <span class="va">TrueCallDensity</span>, Nc <span class="op">=</span> <span class="va">n</span>,</span>
 <span>                          pa <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">simDet2</span><span class="op">$</span><span class="va">p_det</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
@@ -703,12 +666,12 @@ threshold is close to a worst case.</p>
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>θ</mi><annotation encoding="application/x-tex">\theta</annotation></semantics></math>
 where the recaptures run out. That is measurable directly from the
 capture history table, before any call density is estimated:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span></span>
 <span><span class="co"># Recapture coverage: the SNR range over which BOTH observers contribute</span></span>
 <span><span class="co"># detections. Not where the sample reaches; where the agreement reaches.</span></span>
 <span><span class="va">recaptureCoverage</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">ch</span>, <span class="va">breaks</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="op">-</span><span class="fl">20</span>, <span class="fl">20</span>, by <span class="op">=</span> <span class="fl">2</span><span class="op">)</span>,</span>
-<span>                              <span class="va">obs1</span> <span class="op">=</span> <span class="st">"detect_table1"</span>, <span class="va">obs2</span> <span class="op">=</span> <span class="st">"detect_table2"</span>,</span>
+<span>                              <span class="va">obs1</span> <span class="op">=</span> <span class="st">"detect_observer1"</span>, <span class="va">obs2</span> <span class="op">=</span> <span class="st">"detect_observer2"</span>,</span>
 <span>                              <span class="va">snrCol</span> <span class="op">=</span> <span class="st">"SNR"</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="co"># Only calls somebody flagged are in the capture-recapture sample.</span></span>
 <span>  <span class="va">ch</span>  <span class="op">&lt;-</span> <span class="va">ch</span><span class="op">[</span><span class="va">ch</span><span class="op">[[</span><span class="va">obs1</span><span class="op">]</span><span class="op">]</span> <span class="op">|</span> <span class="va">ch</span><span class="op">[[</span><span class="va">obs2</span><span class="op">]</span><span class="op">]</span>, <span class="op">]</span></span>
@@ -781,7 +744,7 @@ by the reciprocal. Truncating removes the extrapolated region and the
 bias goes away, while
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>D</mi><mi>c</mi></msub><annotation encoding="application/x-tex">D_c</annotation></semantics></math>
 remains the density of all calls:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://www.stat.auckland.ac.nz/~yee/VGAM/" class="external-link">VGAM</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co">#' Simulate two detectors on the same calls, return everything needed for one</span></span>
@@ -844,35 +807,31 @@ remains the density of all calls:</p>
 <span>  <span class="co"># Capture-recapture: the adjudicated set is every call at least one observer</span></span>
 <span>  <span class="co"># flagged, with false positives removed by the judge.</span></span>
 <span>  <span class="va">adj</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">ch</span>, <span class="op">(</span><span class="va">ch</span><span class="op">$</span><span class="va">groundTruth1</span> <span class="op">|</span> <span class="va">ch</span><span class="op">$</span><span class="va">groundTruth2</span><span class="op">)</span> <span class="op">&amp;</span></span>
-<span>                    <span class="op">(</span><span class="va">ch</span><span class="op">$</span><span class="va">detect_table1</span> <span class="op">|</span> <span class="va">ch</span><span class="op">$</span><span class="va">detect_table2</span><span class="op">)</span><span class="op">)</span></span>
+<span>                    <span class="op">(</span><span class="va">ch</span><span class="op">$</span><span class="va">detect_observer1</span> <span class="op">|</span> <span class="va">ch</span><span class="op">$</span><span class="va">detect_observer2</span><span class="op">)</span><span class="op">)</span></span>
 <span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/is.finite.html" class="external-link">is.finite</a></span><span class="op">(</span><span class="va">theta</span><span class="op">)</span><span class="op">)</span> <span class="va">adj</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">adj</span>, <span class="va">adj</span><span class="op">$</span><span class="va">SNR</span> <span class="op">&gt;=</span> <span class="va">theta</span><span class="op">)</span></span>
 <span></span>
-<span>  <span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fitSNRvglm.html">fitSNRvglm</a></span><span class="op">(</span><span class="va">adj</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"detect_table1"</span>, <span class="st">"detect_table2"</span><span class="op">)</span>,</span>
-<span>                    whichObserver <span class="op">=</span> <span class="st">"detect_table2"</span><span class="op">)</span></span>
+<span>  <span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fitDetFun.html">fitDetFun</a></span><span class="op">(</span><span class="va">adj</span>, modelType <span class="op">=</span> <span class="st">"vglm"</span>, yColNames <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"detect_observer1"</span>, <span class="st">"detect_observer2"</span><span class="op">)</span>,</span>
+<span>                    whichObserver <span class="op">=</span> <span class="st">"detect_observer2"</span><span class="op">)</span></span>
 <span></span>
 <span>  <span class="co"># Nc must be truncated in step with p_a. cde() cannot do this itself -- it</span></span>
 <span>  <span class="co"># receives Nc as a number and never sees the detections -- so it must be</span></span>
 <span>  <span class="co"># confirmed via NcIsTruncated.</span></span>
-<span>  <span class="va">Nc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">ch</span><span class="op">$</span><span class="va">detect_table2</span> <span class="op">&amp;</span> <span class="op">(</span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/is.finite.html" class="external-link">is.finite</a></span><span class="op">(</span><span class="va">theta</span><span class="op">)</span><span class="op">)</span> <span class="va">ch</span><span class="op">$</span><span class="va">SNR</span> <span class="op">&gt;=</span> <span class="va">theta</span> <span class="kw">else</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  <span class="va">Nc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">ch</span><span class="op">$</span><span class="va">detect_observer2</span> <span class="op">&amp;</span> <span class="op">(</span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/is.finite.html" class="external-link">is.finite</a></span><span class="op">(</span><span class="va">theta</span><span class="op">)</span><span class="op">)</span> <span class="va">ch</span><span class="op">$</span><span class="va">SNR</span> <span class="op">&gt;=</span> <span class="va">theta</span> <span class="kw">else</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
 <span>            na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
-<span>  <span class="co"># cde()'s internal falseDiscoveryRate()/capHist2snrInfo() calls always read</span></span>
-<span>  <span class="co"># capHistTab$detect_table1 as ground truth and detect_table2 as the detector</span></span>
-<span>  <span class="co"># under test. Neither raw observer in a genuine two-observer capture-</span></span>
-<span>  <span class="co"># recapture setup IS ground truth, so build a copy with detect_table1</span></span>
-<span>  <span class="co"># overwritten by the simulated ground truth (groundTruth2), matching the</span></span>
-<span>  <span class="co"># real Common Ground manuscript's mchToCR() convention -- see the GLM/VGLM</span></span>
-<span>  <span class="co"># sections above for the same construction and its explanation.</span></span>
-<span>  <span class="va">chForCde</span> <span class="op">&lt;-</span> <span class="va">ch</span></span>
-<span>  <span class="va">chForCde</span><span class="op">$</span><span class="va">detect_table1</span> <span class="op">&lt;-</span> <span class="va">chForCde</span><span class="op">$</span><span class="va">groundTruth2</span></span>
-<span></span>
+<span>  <span class="co"># groundTruthCol/observerCol point cde() at the simulated ground truth</span></span>
+<span>  <span class="co"># (groundTruth2) directly -- the synthetic equivalent of a judge's</span></span>
+<span>  <span class="co"># adjudication -- matching the real Common Ground manuscript's own</span></span>
+<span>  <span class="co"># ground-truth convention, without needing a renamed copy of ch. See the</span></span>
+<span>  <span class="co"># GLM/VGLM sections above for the same construction and its explanation.</span></span>
 <span>  <span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/warning.html" class="external-link">suppressWarnings</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressMessages</a></span><span class="op">(</span></span>
-<span>    <span class="fu"><a href="../reference/cde.html">cde</a></span><span class="op">(</span>Nc <span class="op">=</span> <span class="va">Nc</span>, capHistTab <span class="op">=</span> <span class="va">chForCde</span>, snrDetFun <span class="op">=</span> <span class="va">fit</span>,</span>
+<span>    <span class="fu"><a href="../reference/cde.html">cde</a></span><span class="op">(</span>Nc <span class="op">=</span> <span class="va">Nc</span>, capHistTab <span class="op">=</span> <span class="va">ch</span>, snrDetFun <span class="op">=</span> <span class="va">fit</span>,</span>
 <span>        SL <span class="op">=</span> <span class="va">d</span><span class="op">$</span><span class="va">SL</span>, TL <span class="op">=</span> <span class="va">TL</span>, NL <span class="op">=</span> <span class="va">d</span><span class="op">$</span><span class="va">NL</span>, T <span class="op">=</span> <span class="va">d</span><span class="op">$</span><span class="va">Time</span>, A <span class="op">=</span> <span class="va">d</span><span class="op">$</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>        outerloop <span class="op">=</span> <span class="va">outerloop</span>,</span>
 <span>        truncationDistance <span class="op">=</span> <span class="va">d</span><span class="op">$</span><span class="va">R</span>,</span>
 <span>        snrTruncationThreshold <span class="op">=</span> <span class="va">theta</span>,</span>
-<span>        NcIsTruncated <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/is.finite.html" class="external-link">is.finite</a></span><span class="op">(</span><span class="va">theta</span><span class="op">)</span><span class="op">)</span></span>
+<span>        NcIsTruncated <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/is.finite.html" class="external-link">is.finite</a></span><span class="op">(</span><span class="va">theta</span><span class="op">)</span>,</span>
+<span>        groundTruthCol <span class="op">=</span> <span class="st">"groundTruth2"</span>, observerCol <span class="op">=</span> <span class="st">"detect_observer2"</span><span class="op">)</span></span>
 <span>  <span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span>  <span class="va">pa</span> <span class="op">&lt;-</span> <span class="va">result</span><span class="op">$</span><span class="va">pa</span></span>
@@ -1118,7 +1077,7 @@ outright rather than trusting an unsupported continuation. Drawing the
 truncated curve extending below its own threshold, as if it had an
 opinion about that region, would misrepresent what the model was fit on
 and what the calculation actually does with it.</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fullGrid</span>  <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>SNR <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="op">-</span><span class="fl">20</span>, <span class="fl">20</span>, <span class="fl">0.5</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">truncGrid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>SNR <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="va">snrTruncationThreshold</span>, <span class="fl">20</span>, <span class="fl">0.5</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>

@@ -228,7 +228,7 @@ det1params = data.frame(
   location=3,    # AKA intercept?
   scale=2,       # AKA slope?
   func='plogis', # logistic function
-  c=0.1,         # False discovery rate (1-precision)
+  c=0.3,         # False discovery rate (1-precision)
   fpMean = 0,    # mean SNR of false positive distribution (dB)
   fpSD = 4       # Standard deviation of false positive distribution (dB)
 )
@@ -251,8 +251,8 @@ Nc <- sum(sim$detect_table)
 # sure that this actually matters though.
 
 # SNR Distribution
-ggplot(data=sim, aes(x=snr, group=group, fill=group) )+
-  geom_histogram(position = position_stack())
+
+plotDetectionDistribution(sim)
 ```
 
 ![](callDensity_files/figure-html/view.detection.snr.histograms-1.png)
@@ -260,18 +260,23 @@ ggplot(data=sim, aes(x=snr, group=group, fill=group) )+
 ``` r
 
 
-ggplot(data=sim, aes(x=snr, group=group, fill=group) )+
-  geom_histogram(position = position_identity())+
-  facet_wrap(group~., ncol=1,scales="free_y")
+
+sim <- sim[order(sim$datetime),]
 ```
 
-![](callDensity_files/figure-html/view.detection.snr.histograms-2.png)
+Compare against the true spatial distribution shown in section 1:
+[`plotSpatialDetections()`](https://briansmiller.github.io/callDensity/reference/plotSpatialDetections.md)
+shows the same map, weighted by what was actually detected rather than
+every simulated call. The gap between the two is the spatial signature
+of the detection process itself.
 
 ``` r
 
 
-sim <- sim[order(sim$datetime),]
+plotSpatialDetections(sim)
 ```
+
+![](callDensity_files/figure-html/spatial.detections-1.png)
 
 ### 8) Subsample data for detector characterisation
 
@@ -284,26 +289,23 @@ testing.
 n_subsample <- 1e4
 
 subsample <- sim[sample(nrow(sim), n_subsample),]
-
-n_fp_subsample <- sum(subsample$groundTruth==FALSE)
-
-# False discovery rate is number.false.positives/number.predicted.positive
-c_subsample <- n_fp_subsample/sum(subsample$detect_table)
 ```
+
+[`chtToSNRinfo()`](https://briansmiller.github.io/callDensity/reference/chtToSNRinfo.md)
+builds the SNRinfo table
+[`cde()`](https://briansmiller.github.io/callDensity/reference/cde.md)
+needs downstream, filtering to real calls before fitting a detection
+function – unlike a plain column rename, this drops false-positive rows
+(which are detections by construction, so including them would bias the
+fitted curve toward “always detected”).
 
 ``` r
 
 
-SNRinfo <- with(subsample,
-                data.frame(
-                  Detected = detect_table,
-                  CallRL   = SL-TL,
-                  NoiseRL  = noiseRMSdB,
-                  SNR      = snr,
-                  t        = datetime,
-                  season   = callDensity::time2season(datetime)
-                )
-)
+subsample$CallRL <- subsample$SL - subsample$TL
+
+SNRinfo <- chtToSNRinfo(subsample, groundTruth = "groundTruth", observers = "detect_table",
+                        signalCol = "CallRL", noiseCol = "noiseRMSdB", timeCol = "datetime")
 
 # Estimate NL from detections
 NLsamp <- SNRinfo %>% dplyr::summarise(mean=mean(NoiseRL,na.rm = TRUE),
@@ -325,128 +327,139 @@ good results.
 ``` r
 
 
-snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
-                                              modelType = "glm")
-snrDetFun.glm$r.sq <- with(summary(snrDetFun.glm), 1 - deviance/null.deviance)
-
-Pa.glm <- callDensity::pDetInArea(snrDetFun.glm, SL=SL, TLlookup = TL, NL=NLsamp,
-           output.resolution.m=100,
-           outerloop = 100,
-           truncationDistance=R, # in m
-           snrTruncationThreshold =-Inf)
-pa.glm <- Pa.glm$overall
-
-
-# Density estimation equation
-Dc.glm <- (Nc * (1 - c_subsample) )/( k * A * pa.glm * Time )
-
-results.glm <- data.frame(Dc=Dc.glm, SampleSize=n_subsample, A = A,# Environment
-                      NLmean = NLsamp$mean, NLsd = NLsamp$sd,      # Noise
-                        # Detector params
-                        model='glm', c=c_subsample, Pa=pa.glm,  
-                      row.names = 'Estimate1')
-
-
-ggplot(data=Pa.glm$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
-  geom_point(alpha=0.1, size=0.1)+
-  xlab("Range (km)")+
-  ylab("Probability of detection\n(Mean across all transects)")+
-  scale_x_log10(limits=c(0.1,1000),
-                labels=label_log(),
-                breaks=10^(-1:7),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
-  annotation_logticks(sides='') +
-  theme_bw()
+snrDetFun.glm <- callDensity::fitDetFun(SNRinfo, modelType = "glm")
 ```
 
-![](callDensity_files/figure-html/GLM%20p.det-1.png)
+[`showDetFun()`](https://briansmiller.github.io/callDensity/reference/showDetFun.md)
+plots the fitted curve against the observed SNR distribution of detected
+and missed calls – worth looking at before jumping straight to a density
+estimate, since it’s the thing everything downstream depends on.
+
+``` r
+
+
+showDetFun(snrDetFun.glm, SNRinfo=SNRinfo, distribution = "density")
+```
+
+![](callDensity_files/figure-html/GLM%20show%20detfun-1.png)
+
+[`cde()`](https://briansmiller.github.io/callDensity/reference/cde.md)
+does the rest in one call: fits together `c` (false discovery rate),
+`p_a` (probability of detection in the area, via
+[`pDetInArea()`](https://briansmiller.github.io/callDensity/reference/pDetInArea.md)
+internally), and `Dc` (call density) – along with each of their
+coefficients of variation, not just a point estimate.
+`returnDetFun`/`returnPdetDetail` are opt-in extras: the fitted curve
+and
+[`pDetInArea()`](https://briansmiller.github.io/callDensity/reference/pDetInArea.md)’s
+full per-transect detail, attached as attributes rather than changing
+what
+[`cde()`](https://briansmiller.github.io/callDensity/reference/cde.md)
+normally returns.
+
+``` r
+
+
+# outerloop is the same across all three model types below (glm/gam/scam) --
+# a fair model comparison needs the same Monte Carlo precision for each, or
+# any difference in CV.Dc could just be an artefact of iteration count
+# rather than a genuine effect of model choice.
+results.glm <- cde(Nc=Nc, capHistTab = subsample, snrDetFun = snrDetFun.glm,
+                   SL = SL, TL = TL, NL = NLsamp, k = k, T = Time, A = A,
+                   modelType = 'glm', truncationDistance = R, outerloop = 10,
+                   groundTruthCol = "groundTruth", observerCol = "detect_table",
+                   snrColName = "snr", timeCol = "datetime",
+                   returnDetFun = TRUE, returnPdetDetail = TRUE)
+
+results.glm[, c("Dc","Nc","c","pa","CV.Dc","CV.pa","CV.c")]
+#>          Dc    Nc         c        pa      CV.Dc      CV.pa       CV.c
+#> 1 0.3344849 87368 0.3106796 0.0573122 0.07499507 0.05411405 0.05192234
+```
 
 #### b) GAM fit to SNR detection function
 
 A GAM should also be able to provide a good fit to a logistic function.
+Same pattern as above, just swapping `modelType`.
 
 ``` r
 
 
+snrDetFun.gam <- callDensity::fitDetFun(SNRinfo, modelType = "gam", numKnots = 3)
 
-snrDetFun.gam <- callDensity::fitSNRdetectionFunc(SNRinfo,
-                                              modelType = "gam",
-                                              numKnots = 3)
+results.gam <- cde(Nc=Nc, capHistTab = subsample, snrDetFun = snrDetFun.gam,
+                   SL = SL, TL = TL, NL = NLsamp, k = k, T = Time, A = A,
+                   modelType = 'gam', truncationDistance = R, outerloop = 10,
+                   groundTruthCol = "groundTruth", observerCol = "detect_table",
+                   snrColName = "snr", timeCol = "datetime",
+                   returnDetFun = TRUE, returnPdetDetail = TRUE)
 
-Pa.gam <- callDensity::pDetInArea(snrDetFun.gam, SL=SL, TLlookup = TL, NL=NLsamp,
-           output.resolution.m=100,
-           outerloop = 10,
-           truncationDistance=R, # in m
-           snrTruncationThreshold =-Inf)
-pa.gam <- Pa.gam$overall
-
-
-# Density estimation equation
-Dc.gam <- (Nc * (1 - c_subsample) )/( k * A * pa.gam * Time )
-
-results.gam<-data.frame(Dc=Dc.gam, SampleSize=n_subsample, A = A,# Environment
-                      NLmean = NLsamp$mean, NLsd = NLsamp$sd,    # Noise
-                        # Detector params
-                        model='gam', c=c_subsample, Pa=pa.gam,  
-                      row.names = 'Estimate2')
-
-ggplot(data=Pa.gam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
-  geom_point(alpha=0.1, size=0.1)+
-  xlab("Range (km)")+
-  ylab("Probability of detection\n(Mean across all transects)")+
-  scale_x_log10(limits=c(0.1,1000),
-                labels=label_log(),
-                breaks=10^(-1:7),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
-  annotation_logticks(sides='') +
-  theme_bw()
+results.gam[, c("Dc","Nc","c","pa","CV.Dc","CV.pa","CV.c")]
+#>          Dc    Nc         c         pa      CV.Dc      CV.pa       CV.c
+#> 1 0.3251656 87368 0.3106796 0.05895478 0.07582335 0.05525623 0.05192234
 ```
-
-![](callDensity_files/figure-html/GAM%20p.det-1.png)
 
 #### c) SCAM fit to SNR detection function
 
 Shape constrained additive models (SCAMs) should also provide a good fit
-to a logistic function.
+to a logistic function. Same pattern again.
 
 ``` r
 
 
+snrDetFun.scam <- callDensity::fitDetFun(SNRinfo, modelType = "scam", numKnots = 5)
 
-snrDetFun.scam <- callDensity::fitSNRdetectionFunc(SNRinfo,
-                                              modelType = "scam",
-                                              numKnots = 5)
+results.scam <- cde(Nc=Nc, capHistTab = subsample, snrDetFun = snrDetFun.scam,
+                   SL = SL, TL = TL, NL = NLsamp, k = k, T = Time, A = A,
+                   modelType = 'scam', truncationDistance = R, outerloop = 10,
+                   groundTruthCol = "groundTruth", observerCol = "detect_table",
+                   snrColName = "snr", timeCol = "datetime",
+                   returnDetFun = TRUE, returnPdetDetail = TRUE)
 
-Pa.scam <- callDensity::pDetInArea(snrDetFun.scam, SL=SL, TLlookup = TL, NL=NLsamp,
-           output.resolution.m=100,
-           outerloop = 100,
-           truncationDistance=R, # in m
-           snrTruncationThreshold =-Inf)
-pa.scam <- Pa.scam$overall
-
-
-# Density estimation equation
-Dc.scam <- (Nc * (1 - c_subsample) )/( k * A * pa.scam * Time )
-
-results.scam <- data.frame(Dc=Dc.scam, SampleSize=n_subsample, A = A,   # Environment
-                      NLmean = NLsamp$mean, NLsd = NLsamp$sd,# Noise
-                      # Detector params
-                        model='scam', c=c_subsample, Pa=pa.scam,  
-                      row.names = 'Estimate3')
-
-ggplot(data=Pa.scam$meanOfAllTransects, aes(x=range_m/1e3,y=pDet))+
-  geom_point(alpha=0.1, size=0.1)+
-  xlab("Range (km)")+
-  ylab("Probability of detection\n(Mean across all transects)")+
-  scale_x_log10(limits=c(0.1,1000),
-                labels=label_log(),
-                breaks=10^(-1:7),
-                minor_breaks = rep(1:9,6)*(10^rep(-2:7,each=9)))+
-  annotation_logticks(sides='') +
-  theme_bw()
+results.scam[, c("Dc","Nc","c","pa","CV.Dc","CV.pa","CV.c")]
+#>          Dc    Nc         c         pa     CV.Dc      CV.pa       CV.c
+#> 1 0.3263659 87368 0.3106796 0.05873796 0.1008904 0.08650399 0.05192234
 ```
 
-![](callDensity_files/figure-html/SCAM%20p.det-1.png)
+#### Comparing the three curves
+
+[`showDetFun()`](https://briansmiller.github.io/callDensity/reference/showDetFun.md)
+also compares multiple fitted models directly, given as a named list.
+For a detector this well-behaved – a clean logistic response, no unusual
+SNR-dependent quirks – the three curves should sit almost on top of each
+other, and so should their `Dc` estimates and `CV.Dc` above: model
+choice matters little here. That’s the point of showing all three, not
+that they diverge. (`snrThreshold.Rmd` walks through a case where the
+model choice, and more specifically the *sample* it’s fit on, matters a
+great deal.)
+
+``` r
+
+
+showDetFun(list(glm = snrDetFun.glm, gam = snrDetFun.gam, scam = snrDetFun.scam),
+           distribution='density',rug=FALSE)
+```
+
+![](callDensity_files/figure-html/compare%20detfuns-1.png)
+
+#### Directional detection footprint
+
+[`plotPDetRadials()`](https://briansmiller.github.io/callDensity/reference/plotPDetRadials.md)
+shows probability of detection as a function of both range and azimuth
+around the recorder – the spatial counterpart to the SNR-based curve
+above, and the natural bookend to the true-call and detected-call
+spatial maps in sections 1 and 7. This simulation is isotropic
+(spherical spreading, identical noise and detector at every azimuth), so
+the footprint below should come out close to circular; real,
+non-isotropic propagation (bathymetry, directional noise) would show up
+here as a genuinely lopsided footprint instead.
+
+``` r
+
+
+plotPDetRadials(attr(results.scam, "pDetResults"))
+```
+
+![](callDensity_files/figure-html/pdet%20radial-1.png)
 
 ### Results
 
@@ -457,29 +470,27 @@ type of model used to fit the SNR-detection function (glm, gam, scam).
 ``` r
 
 
-resultsTrue = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
-                      NLmean = NL$mean, NLsd = NL$sd,            # Noise
-                        # Detector params
-                        model=det1params$func, c = det1params$c, 
-                        Pa = mean(sim$p_det,na.rm = T), 
-                      row.names='Truth')
+resultsTrue <- data.frame(season='year', siteCode='', Nc=n, c=det1params$c,
+                          k=1, T=Time, A=A, pa=mean(sim$p_det,na.rm=TRUE),
+                          SLmean=SL$mean, SLsd=SL$sd, NLmean=NL$mean, NLsd=NL$sd,
+                          modelType='true', CV.Nc=0, CV.c=0, CV.pa=0,
+                          Dc=TrueCallDensity, CV.Dc=0)
 
-results<-rbind( resultsTrue, results.glm, results.gam, results.scam)
+results <- rbind(resultsTrue, results.glm, results.gam, results.scam)
 
-
-
-kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 4), 
-                col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
-                             'Model','c','P_a')) %>% 
+kableExtra::kbl(results[, c('Dc','Nc','A','NLmean','NLsd','modelType','c','pa','CV.Dc')],
+                digits = c(4,0,0,1,2,NA,3,4,4),
+                col.names= c('Dc','Sample Size','A','NL_mean','NL_sd',
+                             'Model','c','P_a','CV.Dc')) %>% 
   kableExtra::kable_classic(full_width=FALSE)
 ```
 
-|           |     Dc | (sub)Sample Size |       A | NL_mean | NL_sd | Model  |    c |    P_a |
-|:----------|-------:|-----------------:|--------:|--------:|------:|:-------|-----:|-------:|
-| Truth     | 0.3183 |            1e+06 | 3141593 |      84 |  4.00 | plogis | 0.10 | 0.0611 |
-| Estimate1 | 0.3020 |            1e+04 | 3141593 |      84 |  4.02 | glm    | 0.09 | 0.0652 |
-| Estimate2 | 0.2988 |            1e+04 | 3141593 |      84 |  4.02 | gam    | 0.09 | 0.0659 |
-| Estimate3 | 0.3023 |            1e+04 | 3141593 |      84 |  4.02 | scam   | 0.09 | 0.0651 |
+|     Dc | Sample Size |       A | NL_mean | NL_sd | Model |     c |    P_a |  CV.Dc |
+|-------:|------------:|--------:|--------:|------:|:------|------:|-------:|-------:|
+| 0.3183 |     1000000 | 3141593 |      84 |  4.00 | true  | 0.300 | 0.0611 | 0.0000 |
+| 0.3345 |       87368 | 3141593 |      84 |  4.03 | glm   | 0.311 | 0.0573 | 0.0750 |
+| 0.3252 |       87368 | 3141593 |      84 |  4.03 | gam   | 0.311 | 0.0590 | 0.0758 |
+| 0.3264 |       87368 | 3141593 |      84 |  4.03 | scam  | 0.311 | 0.0587 | 0.1009 |
 
 ## References
 

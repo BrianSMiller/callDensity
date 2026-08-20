@@ -39,3 +39,24 @@ expected by
 [`cde`](https://briansmiller.github.io/callDensity/reference/cde.md),
 with time/season columns added by
 [`capHistTimeSeason`](https://briansmiller.github.io/callDensity/reference/capHistTimeSeason.md).
+
+## Deprecated
+
+No current analysis needs this reduction.
+[`cde()`](https://briansmiller.github.io/callDensity/reference/cde.md)'s
+only use of `capHistTab` is
+[`falseDiscoveryRate()`](https://briansmiller.github.io/callDensity/reference/falseDiscoveryRate.md),
+which already accepts `gtColName`/`testColName` directly against native
+`detect_observerN` columns (once
+[`cde()`](https://briansmiller.github.io/callDensity/reference/cde.md)
+forwards them – see its own argument list).
+`fitDetFun(modelType = 'vglm')` accepts any number of native-named
+observer columns directly via `yColNames`, with no reduction to two
+required at all –
+[`VGAM::posbernoulli.t`](https://rdrr.io/pkg/VGAM/man/posbernoulli.t.html)
+is not limited to two occasions. This function's body is unchanged and
+will keep working, kept only so the published Common Ground and Beyond
+Counting Calls analysis scripts keep reproducing exactly. New work
+should skip the 2-observer reduction entirely and use
+[`chtToSNRinfo`](https://briansmiller.github.io/callDensity/reference/chtToSNRinfo.md)
+with a `observers` vector of whatever length is needed.

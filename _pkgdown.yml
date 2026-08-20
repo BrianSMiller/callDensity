@@ -81,6 +81,7 @@ reference:
   - fitSNRbySeason
   - predVglmPDet
   - showSNRdetectionFunc
+  - plotPDetRadials
 
 - title: Probability of detection and the sonar equation
   contents:
@@ -102,6 +103,7 @@ reference:
     functions expect, including the adjudicated-verdict convention CR
     analyses require.
   contents:
+  - chtToSNRinfo
   - capHist2snrInfo
   - capHistTosnrInfo
   - readCapHist

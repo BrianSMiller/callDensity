@@ -19,7 +19,7 @@ initial model does not need to be in the loop"></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">callDensity</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -145,6 +145,32 @@ is currently active (set via future::plan() before calling). If FALSE
 (default), runs serially - identical behaviour to the original
 implementation. Requires the future.apply package to be installed
 when TRUE; falls back to serial with a warning if not available.</p></dd>
+
+</dl></div>
+    <div class="section level2">
+    <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
+    <p>A list with four elements:</p><dl><dt>overall</dt>
+<dd><p>Single overall probability of detection across the
+whole area (the <code>pa</code> value used by <code><a href="cde.html">cde</a></code>).</p></dd>
+
+<dt>perTransectMeanSD</dt>
+<dd><p>Mean and SD of p(det) per transect, plus an
+overall row (see <code><a href="pa_CV.html">pa_CV</a></code>).</p></dd>
+
+<dt>meanOfAllTransects</dt>
+<dd><p>data.frame with <code>range_m</code> and
+<code>pDet</code>, averaged across transects – a 1D detection function
+vs. range, ignoring azimuth.</p></dd>
+
+<dt>allDetFunctions</dt>
+<dd><p>data.frame with <code>range_m</code> and one column
+per transect (named to match <code>TLlookup</code>, e.g. <code>tl0</code>,
+<code>tl90</code>, ...) giving p(det) at every range along every
+transect – the full 2D grid <code>meanOfAllTransects</code> was
+averaged down from. Feed this to
+<code><a href="plotPDetRadials.html">plotPDetRadials</a></code> for a directional detection-range
+footprint plot.</p></dd>
+
 
 </dl></div>
     <div class="section level2">

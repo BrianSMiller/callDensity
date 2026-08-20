@@ -139,7 +139,7 @@ truncDist <- matrix(R,nrow=1,ncol = length(radials))
 # Loop over each radial. find the range at which it encounters the coast, and
 # truncate (i.e. Distances beyond this range will be excluded from the analysis)
 for (i in 1:length(radials)){ 
-  rangeIx <- which(sin(radials[i]*pi/180)*range_m <= coast)[1]
+  rangeIx <- which(cos(radials[i]*pi/180)*range_m <= coast)[1]
   truncDist[i] <- ifelse(is.na(rangeIx),R,range_m[rangeIx])
 }
 
@@ -237,11 +237,11 @@ between detectors).*
 capHistTab<- simsTocaptureHistoryTable(subsampleDet1,subsampleDet2)
 
 # Total number of true positive detections for detector1 OR detector2
-nDetectedSubset <- with(capHistTab,sum(detect_table1 & groundTruth1 |   
-                                        detect_table2 & groundTruth2) )
+nDetectedSubset <- with(capHistTab,sum(detect_observer1 & groundTruth1 |   
+                                        detect_observer2 & groundTruth2) )
 
 # Total number of positive detections for detector1 OR detector2
-nPositiveSubset <- with(capHistTab,sum(detect_table1 | detect_table2))
+nPositiveSubset <- with(capHistTab,sum(detect_observer1 | detect_observer2))
 
 # Number positive detections in FULL set
 Nc <- sum(simDet2$detect_table)       
@@ -250,7 +250,7 @@ Nc <- sum(simDet2$detect_table)
 # ground truth. This is an observer ground (OG) so includes false positives from
 # detector1, but does not include detections from detector2 not detected on
 # detector1
-SNRinfo <- capHistTosnrInfo(capHistTab)
+SNRinfo <- chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2", timeCol = "t")
 ```
 
 ### Calculate call densities using callDensity package
@@ -261,12 +261,12 @@ VGAM package with the function ‘vglm’ (Yee et al. 2015).
 ``` r
 
 
-snrDetFun.glm <- callDensity::fitSNRdetectionFunc(SNRinfo,
-                                              modelType = "glm")
+snrDetFun.glm <- callDensity::fitDetFun(SNRinfo, modelType = "glm")
 
 results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
-                   SL = SL, TL = TL, A = A, modelType = 'glm', 
-                   truncationDistance = truncDist)
+                   SL = SL, TL = TL, A = A, k = k, T = Time, modelType = 'glm', 
+                   truncationDistance = truncDist,
+                   groundTruthCol = "detect_observer1", observerCol = "detect_observer2")
 ```
 
 ``` r
@@ -274,114 +274,71 @@ results.glm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
 
 ### Adjudicated capture recapture model
 adjudicated <- subset(capHistTab,capHistTab$groundTruth1 &
-                (capHistTab$detect_table1 | capHistTab$detect_table2))
-
-# Number of adjudicated positive detections
-n_adj <- dim(adjudicated)[1]
+                (capHistTab$detect_observer1 | capHistTab$detect_observer2))
 
 # Combine SNR of both detectors (shouldn't be necessary unless we've somehow
 # made them different)
 adjudicated$SNR <-   rowMeans(
   subset(adjudicated,select=c('snr1','snr2')) ,na.rm=T) #dB
 
-# Subset used for calculating false discovery rate of detector 2. Actually, we
-# use the fact that the false discovery rate is equal to (1-precision). 
-tp <- subset(capHistTab, as.logical(capHistTab$detect_table2), 
-              select = c('groundTruth2') )
-precision <- sum(tp)/dim(tp)[1]
-adj_c <- 1-precision
-
-observerNames = c("detect_table1", "detect_table2")
-snrDetFun.vglm <- fitSNRvglm(adjudicated, observerNames, 
-                             whichObserver = "detect_table2")
+observerNames = c("detect_observer1", "detect_observer2")
+snrDetFun.vglm <- fitDetFun(adjudicated, modelType = "vglm", yColNames = observerNames,
+                             whichObserver = "detect_observer2")
 
 # Best estimate of NL 
-NLadj <- nlFromSnrInfo(capHistTosnrInfo(capHistTab), snrDetFun.vglm)
+NLadj <- nlFromSnrInfo(chtToSNRinfo(capHistTab, groundTruth = "observer1", observers = "observer2", timeCol = "t"), snrDetFun.vglm)
 
-
-Pa.vglm <- callDensity::pDetInArea(snrDetFun.vglm, SL=SL, TLlookup = TL, NL=NLadj,
-           output.resolution.m=100,
-           outerloop = 100,
-           truncationDistance=truncDist, # in m
-           snrTruncationThreshold = -Inf)
-pa.vglm <- Pa.vglm$overall
-
-# Density estimation equation
-Dc.vglm <- (Nc * (1 - adj_c) )/( k * Atrunc * pa.vglm * Time )
-
-results.vglm <- data.frame(Dc=Dc.vglm, SampleSize=n_adj, A = Atrunc,# Environment
-                      NLmean = NLadj$mean, NLsd = NLadj$sd,# Noise
-                      # Detector params
-                        model='vglm', c=adj_c, Pa=pa.vglm,  
-                      row.names = paste('ACR',numTransects, "radial transects"))
+# groundTruthCol/observerCol point cde() at the simulated ground truth
+# (groundTruth2) directly, matching the manual fp/precision calculation
+# this replaces (fp/(fp+tp), the same definition falseDiscoveryRate()
+# already computes internally) -- no separate pDetInArea() call or
+# hand-derived Dc formula needed. returnPdetDetail=TRUE keeps the
+# per-transect detail available below for the same diagnostic plots
+# pDetInArea() itself would have given.
+results.vglm <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.vglm,
+                   SL = SL, TL = TL, NL = NLadj, A = Atrunc, k = k, T = Time,
+                   modelType = 'vglm', truncationDistance = truncDist,
+                   groundTruthCol = "groundTruth2", observerCol = "detect_observer2",
+                   returnPdetDetail = TRUE)
 ```
 
 ``` r
 
 
-results = data.frame(Dc = TrueCallDensity, SampleSize = n, A = A,# Environment 
-                      NLmean = NL$mean, NLsd = NL$sd,            # Noise
-                      model=det2params$func, c = det2params$c, # Detector params
-                      Pa = mean(simDet2$p_det,na.rm=TRUE), 
-                      row.names='Truth')
+resultsTrue <- data.frame(season='year', siteCode='', Nc=n, c=det2params$c,
+                          k=k, T=Time, A=A, pa=mean(simDet2$p_det,na.rm=TRUE),
+                          SLmean=SL$mean, SLsd=SL$sd, NLmean=NL$mean, NLsd=NL$sd,
+                          modelType=det2params$func, CV.Nc=0, CV.c=0, CV.pa=0,
+                          Dc=TrueCallDensity, CV.Dc=0)
 
-results<-rbind( results, results.vglm)
+results <- rbind(resultsTrue, results.glm, results.vglm)
 
-kableExtra::kbl(results, digits = c(4,3,0,1, 2, NA, 3, 4), 
-                col.names= c('Dc','(sub)Sample Size', 'A','NL_mean','NL_sd',
-                             'Model','c','P_a')) %>% 
+kableExtra::kbl(results[, c('Dc','Nc','A','NLmean','NLsd','modelType','c','pa','CV.Dc')],
+                digits = c(4,0,0,1,2,NA,3,4,4),
+                col.names= c('Dc','Sample Size','A','NL_mean','NL_sd',
+                             'Model','c','P_a','CV.Dc')) %>% 
   kableExtra::kable_classic(full_width=FALSE)
 ```
 
-|  | Dc | (sub)Sample Size | A | NL_mean | NL_sd | Model | c | P_a |
-|:---|---:|---:|---:|---:|---:|:---|---:|---:|
-| Truth | 0.3195 | 591874 | 1857798 | 84 | 4.00 | plogis | 0.300 | 0.0768 |
-| ACR 8 radial transects | 0.3321 | 1687 | 2004230 | 84 | 3.95 | vglm | 0.298 | 0.0689 |
+|     Dc | Sample Size |       A | NL_mean | NL_sd | Model  |     c |    P_a |  CV.Dc |
+|-------:|------------:|--------:|--------:|------:|:-------|------:|-------:|-------:|
+| 0.3195 |      591874 | 1857798 |    84.0 |  4.00 | plogis | 0.300 | 0.0768 | 0.0000 |
+| 0.3146 |       65160 | 1857798 |    84.2 |  3.95 | glm    | 0.443 | 0.0622 | 0.4567 |
+| 0.3330 |       65160 | 2004230 |    84.0 |  3.95 | vglm   | 0.298 | 0.0687 | 0.4313 |
 
 The estimate of Dc derived from the vglm model is very close to the true
-value for this simulation. The spatial exclusions and differing slopes
-of the detectors appear to have been modelled with acceptable accuracy.
+value for this simulation.
 
 ``` r
 
-SNR <- seq(-20,20,0.5);
-snrs <- data.frame(SNR)
 
-cols = colorRampPalette(c('#EDB120','#D95319','#0072BD','#7E2F8E','#77AC30',
-                        '#4DBEEE','#A2142F'))
-# preds.glm= predict(snrDetFun.glm, type='response',newdata=snrs)
-preds.vglm=predict(snrDetFun.vglm,type='response',newdata=snrs)
-preds.vglm0=predict(snrDetFun.vglm,type='response',newdata=snrs,
-                    type.fitted='onempall0')# One minus probability of all zeros
-pr =apply(cbind(preds.vglm[,2],preds.vglm0),1,prod)
-
-
-par(cex=0.8,mar=c(3.1,3.1,0.25,0),mgp=c(2.1,1,0))
-plot(snrs$SNR, xlim= c(-5,10),  ylim= c(0,1),
-     xlab="SNR", ylab = "P(Detection)", type='n')
-grid(nx = NULL, ny = NULL, lty = 2, col = "gray", lwd = 2)
-# lines(snrs$SNR,preds.glm,col=cols(7)[4],lwd=2)
-lines(snrs$SNR,preds.vglm[,1],col=cols(7)[5],lwd=2) # Percep bias detector1
-lines(snrs$SNR,preds.vglm[,2],col=cols(7)[6],lwd=2) # Percep bias detector2
-lines(snrs$SNR,preds.vglm0,col=cols(7)[2],lwd=2) # 1-
-lines(snrs$SNR,pr,col=cols(7)[1],lwd=2)    # vglm 1-p(all zero)
-points(simDet2$snr,simDet2$p_det,pch='.')     # Actual probability of detection
-legend( "bottomright", 
-        legend =c("Detection function TRUE",
-                  #"Detection function GLM",
-                  "Detection function VGLM",
-                  "Perception bias: detector1 (VGLM)",
-                  "Perception bias: detector2 (VGLM)",
-                  "1-p(all zeros) (VGLM)"
-                  ),
-        col=c('black', #cols(7)[4],
-              cols(7)[1], cols(7)[5], cols(7)[6], cols(7)[2]), 
-        lty=rep('solid',6),
-        lwd=rep(2,6)
-)
+plotPDetRadials(attr(results.vglm, "pDetResults"))
 ```
 
-![](callDensity_coast_files/figure-html/compare%20snr%20detection%20functions-1.png)
+![](callDensity_coast_files/figure-html/pdet%20radial-1.png)
+
+The spatial exclusions and differing slopes of the detectors appear to
+have been modelled with acceptable accuracy.
 
 ## References
 

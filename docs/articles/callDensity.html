@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">callDensity</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -270,7 +270,7 @@ similar manner to that of probability of detection.</p>
 <span>  location<span class="op">=</span><span class="fl">3</span>,    <span class="co"># AKA intercept?</span></span>
 <span>  scale<span class="op">=</span><span class="fl">2</span>,       <span class="co"># AKA slope?</span></span>
 <span>  func<span class="op">=</span><span class="st">'plogis'</span>, <span class="co"># logistic function</span></span>
-<span>  c<span class="op">=</span><span class="fl">0.1</span>,         <span class="co"># False discovery rate (1-precision)</span></span>
+<span>  c<span class="op">=</span><span class="fl">0.3</span>,         <span class="co"># False discovery rate (1-precision)</span></span>
 <span>  fpMean <span class="op">=</span> <span class="fl">0</span>,    <span class="co"># mean SNR of false positive distribution (dB)</span></span>
 <span>  fpSD <span class="op">=</span> <span class="fl">4</span>       <span class="co"># Standard deviation of false positive distribution (dB)</span></span>
 <span><span class="op">)</span></span>
@@ -290,18 +290,22 @@ similar manner to that of probability of detection.</p>
 <span><span class="co"># sure that this actually matters though.</span></span>
 <span></span>
 <span><span class="co"># SNR Distribution</span></span>
-<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span>data<span class="op">=</span><span class="va">sim</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x<span class="op">=</span><span class="va">snr</span>, group<span class="op">=</span><span class="va">group</span>, fill<span class="op">=</span><span class="va">group</span><span class="op">)</span> <span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_histogram.html" class="external-link">geom_histogram</a></span><span class="op">(</span>position <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/position_stack.html" class="external-link">position_stack</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span></span>
+<span><span class="fu"><a href="../reference/plotDetectionDistribution.html">plotDetectionDistribution</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></code></pre></div>
 <p><img src="callDensity_files/figure-html/view.detection.snr.histograms-1.png" class="r-plt" alt="" width="576"></p>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span></span>
-<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span>data<span class="op">=</span><span class="va">sim</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x<span class="op">=</span><span class="va">snr</span>, group<span class="op">=</span><span class="va">group</span>, fill<span class="op">=</span><span class="va">group</span><span class="op">)</span> <span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_histogram.html" class="external-link">geom_histogram</a></span><span class="op">(</span>position <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/position_identity.html" class="external-link">position_identity</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/facet_wrap.html" class="external-link">facet_wrap</a></span><span class="op">(</span><span class="va">group</span><span class="op">~</span><span class="va">.</span>, ncol<span class="op">=</span><span class="fl">1</span>,scales<span class="op">=</span><span class="st">"free_y"</span><span class="op">)</span></span></code></pre></div>
-<p><img src="callDensity_files/figure-html/view.detection.snr.histograms-2.png" class="r-plt" alt="" width="576"></p>
+<span></span>
+<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">datetime</span><span class="op">)</span>,<span class="op">]</span></span></code></pre></div>
+<p>Compare against the true spatial distribution shown in section 1:
+<code><a href="../reference/plotSpatialDetections.html">plotSpatialDetections()</a></code> shows the same map, weighted by
+what was actually detected rather than every simulated call. The gap
+between the two is the spatial signature of the detection process
+itself.</p>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span></span>
-<span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">datetime</span><span class="op">)</span>,<span class="op">]</span></span></code></pre></div>
+<span><span class="fu"><a href="../reference/plotSpatialDetections.html">plotSpatialDetections</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span></span></code></pre></div>
+<p><img src="callDensity_files/figure-html/spatial.detections-1.png" class="r-plt" alt="" width="576"></p>
 </div>
 <div class="section level3">
 <h3 id="subsample-data-for-detector-characterisation">8) Subsample data for detector characterisation<a class="anchor" aria-label="anchor" href="#subsample-data-for-detector-characterisation"></a>
@@ -312,24 +316,18 @@ for testing.</p>
 <code class="sourceCode R"><span></span>
 <span><span class="va">n_subsample</span> <span class="op">&lt;-</span> <span class="fl">1e4</span></span>
 <span></span>
-<span><span class="va">subsample</span> <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/sample.html" class="external-link">sample</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span>, <span class="va">n_subsample</span><span class="op">)</span>,<span class="op">]</span></span>
-<span></span>
-<span><span class="va">n_fp_subsample</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">subsample</span><span class="op">$</span><span class="va">groundTruth</span><span class="op">==</span><span class="cn">FALSE</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># False discovery rate is number.false.positives/number.predicted.positive</span></span>
-<span><span class="va">c_subsample</span> <span class="op">&lt;-</span> <span class="va">n_fp_subsample</span><span class="op">/</span><span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">subsample</span><span class="op">$</span><span class="va">detect_table</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">subsample</span> <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/sample.html" class="external-link">sample</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">sim</span><span class="op">)</span>, <span class="va">n_subsample</span><span class="op">)</span>,<span class="op">]</span></span></code></pre></div>
+<p><code><a href="../reference/chtToSNRinfo.html">chtToSNRinfo()</a></code> builds the SNRinfo table
+<code><a href="../reference/cde.html">cde()</a></code> needs downstream, filtering to real calls before
+fitting a detection function – unlike a plain column rename, this drops
+false-positive rows (which are detections by construction, so including
+them would bias the fitted curve toward “always detected”).</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span></span>
-<span><span class="va">SNRinfo</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/with.html" class="external-link">with</a></span><span class="op">(</span><span class="va">subsample</span>,</span>
-<span>                <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>                  Detected <span class="op">=</span> <span class="va">detect_table</span>,</span>
-<span>                  CallRL   <span class="op">=</span> <span class="va">SL</span><span class="op">-</span><span class="va">TL</span>,</span>
-<span>                  NoiseRL  <span class="op">=</span> <span class="va">noiseRMSdB</span>,</span>
-<span>                  SNR      <span class="op">=</span> <span class="va">snr</span>,</span>
-<span>                  t        <span class="op">=</span> <span class="va">datetime</span>,</span>
-<span>                  season   <span class="op">=</span> <span class="fu">callDensity</span><span class="fu">::</span><span class="fu"><a href="../reference/time2season.html">time2season</a></span><span class="op">(</span><span class="va">datetime</span><span class="op">)</span></span>
-<span>                <span class="op">)</span></span>
-<span><span class="op">)</span></span>
+<span><span class="va">subsample</span><span class="op">$</span><span class="va">CallRL</span> <span class="op">&lt;-</span> <span class="va">subsample</span><span class="op">$</span><span class="va">SL</span> <span class="op">-</span> <span class="va">subsample</span><span class="op">$</span><span class="va">TL</span></span>
+<span></span>
+<span><span class="va">SNRinfo</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/chtToSNRinfo.html">chtToSNRinfo</a></span><span class="op">(</span><span class="va">subsample</span>, groundTruth <span class="op">=</span> <span class="st">"groundTruth"</span>, observers <span class="op">=</span> <span class="st">"detect_table"</span>,</span>
+<span>                        signalCol <span class="op">=</span> <span class="st">"CallRL"</span>, noiseCol <span class="op">=</span> <span class="st">"noiseRMSdB"</span>, timeCol <span class="op">=</span> <span class="st">"datetime"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Estimate NL from detections</span></span>
 <span><span class="va">NLsamp</span> <span class="op">&lt;-</span> <span class="va">SNRinfo</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/summarise.html" class="external-link">summarise</a></span><span class="op">(</span>mean<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">NoiseRL</span>,na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
@@ -350,121 +348,115 @@ for testing.</p>
 good results.</p>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span></span>
-<span><span class="va">snrDetFun.glm</span> <span class="op">&lt;-</span> <span class="fu">callDensity</span><span class="fu">::</span><span class="fu"><a href="../reference/fitSNRdetectionFunc.html">fitSNRdetectionFunc</a></span><span class="op">(</span><span class="va">SNRinfo</span>,</span>
-<span>                                              modelType <span class="op">=</span> <span class="st">"glm"</span><span class="op">)</span></span>
-<span><span class="va">snrDetFun.glm</span><span class="op">$</span><span class="va">r.sq</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/with.html" class="external-link">with</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">snrDetFun.glm</span><span class="op">)</span>, <span class="fl">1</span> <span class="op">-</span> <span class="va">deviance</span><span class="op">/</span><span class="va">null.deviance</span><span class="op">)</span></span>
+<span><span class="va">snrDetFun.glm</span> <span class="op">&lt;-</span> <span class="fu">callDensity</span><span class="fu">::</span><span class="fu"><a href="../reference/fitDetFun.html">fitDetFun</a></span><span class="op">(</span><span class="va">SNRinfo</span>, modelType <span class="op">=</span> <span class="st">"glm"</span><span class="op">)</span></span></code></pre></div>
+<p><code><a href="../reference/showDetFun.html">showDetFun()</a></code> plots the fitted curve against the observed
+SNR distribution of detected and missed calls – worth looking at before
+jumping straight to a density estimate, since it’s the thing everything
+downstream depends on.</p>
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span></span>
+<span><span class="fu"><a href="../reference/showDetFun.html">showDetFun</a></span><span class="op">(</span><span class="va">snrDetFun.glm</span>, SNRinfo<span class="op">=</span><span class="va">SNRinfo</span>, distribution <span class="op">=</span> <span class="st">"density"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="callDensity_files/figure-html/GLM%20show%20detfun-1.png" class="r-plt" alt="" width="576"></p>
+<p><code><a href="../reference/cde.html">cde()</a></code> does the rest in one call: fits together
+<code>c</code> (false discovery rate), <code>p_a</code> (probability of
+detection in the area, via <code><a href="../reference/pDetInArea.html">pDetInArea()</a></code> internally), and
+<code>Dc</code> (call density) – along with each of their coefficients
+of variation, not just a point estimate.
+<code>returnDetFun</code>/<code>returnPdetDetail</code> are opt-in
+extras: the fitted curve and <code><a href="../reference/pDetInArea.html">pDetInArea()</a></code>’s full
+per-transect detail, attached as attributes rather than changing what
+<code><a href="../reference/cde.html">cde()</a></code> normally returns.</p>
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span></span>
+<span><span class="co"># outerloop is the same across all three model types below (glm/gam/scam) --</span></span>
+<span><span class="co"># a fair model comparison needs the same Monte Carlo precision for each, or</span></span>
+<span><span class="co"># any difference in CV.Dc could just be an artefact of iteration count</span></span>
+<span><span class="co"># rather than a genuine effect of model choice.</span></span>
+<span><span class="va">results.glm</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cde.html">cde</a></span><span class="op">(</span>Nc<span class="op">=</span><span class="va">Nc</span>, capHistTab <span class="op">=</span> <span class="va">subsample</span>, snrDetFun <span class="op">=</span> <span class="va">snrDetFun.glm</span>,</span>
+<span>                   SL <span class="op">=</span> <span class="va">SL</span>, TL <span class="op">=</span> <span class="va">TL</span>, NL <span class="op">=</span> <span class="va">NLsamp</span>, k <span class="op">=</span> <span class="va">k</span>, T <span class="op">=</span> <span class="va">Time</span>, A <span class="op">=</span> <span class="va">A</span>,</span>
+<span>                   modelType <span class="op">=</span> <span class="st">'glm'</span>, truncationDistance <span class="op">=</span> <span class="va">R</span>, outerloop <span class="op">=</span> <span class="fl">10</span>,</span>
+<span>                   groundTruthCol <span class="op">=</span> <span class="st">"groundTruth"</span>, observerCol <span class="op">=</span> <span class="st">"detect_table"</span>,</span>
+<span>                   snrColName <span class="op">=</span> <span class="st">"snr"</span>, timeCol <span class="op">=</span> <span class="st">"datetime"</span>,</span>
+<span>                   returnDetFun <span class="op">=</span> <span class="cn">TRUE</span>, returnPdetDetail <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">Pa.glm</span> <span class="op">&lt;-</span> <span class="fu">callDensity</span><span class="fu">::</span><span class="fu"><a href="../reference/pDetInArea.html">pDetInArea</a></span><span class="op">(</span><span class="va">snrDetFun.glm</span>, SL<span class="op">=</span><span class="va">SL</span>, TLlookup <span class="op">=</span> <span class="va">TL</span>, NL<span class="op">=</span><span class="va">NLsamp</span>,</span>
-<span>           output.resolution.m<span class="op">=</span><span class="fl">100</span>,</span>
-<span>           outerloop <span class="op">=</span> <span class="fl">100</span>,</span>
-<span>           truncationDistance<span class="op">=</span><span class="va">R</span>, <span class="co"># in m</span></span>
-<span>           snrTruncationThreshold <span class="op">=</span><span class="op">-</span><span class="cn">Inf</span><span class="op">)</span></span>
-<span><span class="va">pa.glm</span> <span class="op">&lt;-</span> <span class="va">Pa.glm</span><span class="op">$</span><span class="va">overall</span></span>
-<span></span>
-<span></span>
-<span><span class="co"># Density estimation equation</span></span>
-<span><span class="va">Dc.glm</span> <span class="op">&lt;-</span> <span class="op">(</span><span class="va">Nc</span> <span class="op">*</span> <span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="va">c_subsample</span><span class="op">)</span> <span class="op">)</span><span class="op">/</span><span class="op">(</span> <span class="va">k</span> <span class="op">*</span> <span class="va">A</span> <span class="op">*</span> <span class="va">pa.glm</span> <span class="op">*</span> <span class="va">Time</span> <span class="op">)</span></span>
-<span></span>
-<span><span class="va">results.glm</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Dc<span class="op">=</span><span class="va">Dc.glm</span>, SampleSize<span class="op">=</span><span class="va">n_subsample</span>, A <span class="op">=</span> <span class="va">A</span>,<span class="co"># Environment</span></span>
-<span>                      NLmean <span class="op">=</span> <span class="va">NLsamp</span><span class="op">$</span><span class="va">mean</span>, NLsd <span class="op">=</span> <span class="va">NLsamp</span><span class="op">$</span><span class="va">sd</span>,      <span class="co"># Noise</span></span>
-<span>                        <span class="co"># Detector params</span></span>
-<span>                        model<span class="op">=</span><span class="st">'glm'</span>, c<span class="op">=</span><span class="va">c_subsample</span>, Pa<span class="op">=</span><span class="va">pa.glm</span>,  </span>
-<span>                      row.names <span class="op">=</span> <span class="st">'Estimate1'</span><span class="op">)</span></span>
-<span></span>
-<span></span>
-<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span>data<span class="op">=</span><span class="va">Pa.glm</span><span class="op">$</span><span class="va">meanOfAllTransects</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x<span class="op">=</span><span class="va">range_m</span><span class="op">/</span><span class="fl">1e3</span>,y<span class="op">=</span><span class="va">pDet</span><span class="op">)</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_point.html" class="external-link">geom_point</a></span><span class="op">(</span>alpha<span class="op">=</span><span class="fl">0.1</span>, size<span class="op">=</span><span class="fl">0.1</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">xlab</a></span><span class="op">(</span><span class="st">"Range (km)"</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ylab</a></span><span class="op">(</span><span class="st">"Probability of detection\n(Mean across all transects)"</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_continuous.html" class="external-link">scale_x_log10</a></span><span class="op">(</span>limits<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>,<span class="fl">1000</span><span class="op">)</span>,</span>
-<span>                labels<span class="op">=</span><span class="fu"><a href="https://scales.r-lib.org/reference/label_log.html" class="external-link">label_log</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>                breaks<span class="op">=</span><span class="fl">10</span><span class="op">^</span><span class="op">(</span><span class="op">-</span><span class="fl">1</span><span class="op">:</span><span class="fl">7</span><span class="op">)</span>,</span>
-<span>                minor_breaks <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">9</span>,<span class="fl">6</span><span class="op">)</span><span class="op">*</span><span class="op">(</span><span class="fl">10</span><span class="op">^</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="op">-</span><span class="fl">2</span><span class="op">:</span><span class="fl">7</span>,each<span class="op">=</span><span class="fl">9</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/annotation_logticks.html" class="external-link">annotation_logticks</a></span><span class="op">(</span>sides<span class="op">=</span><span class="st">''</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_bw</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p><img src="callDensity_files/figure-html/GLM%20p.det-1.png" class="r-plt" alt="" width="576"></p>
+<span><span class="va">results.glm</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Dc"</span>,<span class="st">"Nc"</span>,<span class="st">"c"</span>,<span class="st">"pa"</span>,<span class="st">"CV.Dc"</span>,<span class="st">"CV.pa"</span>,<span class="st">"CV.c"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt;          Dc    Nc         c        pa      CV.Dc      CV.pa       CV.c</span></span>
+<span><span class="co">#&gt; 1 0.3344849 87368 0.3106796 0.0573122 0.07499507 0.05411405 0.05192234</span></span></code></pre></div>
 </div>
 <div class="section level4">
 <h4 id="b-gam-fit-to-snr-detection-function">b) GAM fit to SNR detection function<a class="anchor" aria-label="anchor" href="#b-gam-fit-to-snr-detection-function"></a>
 </h4>
 <p>A GAM should also be able to provide a good fit to a logistic
-function.</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+function. Same pattern as above, just swapping
+<code>modelType</code>.</p>
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span></span>
+<span><span class="va">snrDetFun.gam</span> <span class="op">&lt;-</span> <span class="fu">callDensity</span><span class="fu">::</span><span class="fu"><a href="../reference/fitDetFun.html">fitDetFun</a></span><span class="op">(</span><span class="va">SNRinfo</span>, modelType <span class="op">=</span> <span class="st">"gam"</span>, numKnots <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">snrDetFun.gam</span> <span class="op">&lt;-</span> <span class="fu">callDensity</span><span class="fu">::</span><span class="fu"><a href="../reference/fitSNRdetectionFunc.html">fitSNRdetectionFunc</a></span><span class="op">(</span><span class="va">SNRinfo</span>,</span>
-<span>                                              modelType <span class="op">=</span> <span class="st">"gam"</span>,</span>
-<span>                                              numKnots <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span>
+<span><span class="va">results.gam</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cde.html">cde</a></span><span class="op">(</span>Nc<span class="op">=</span><span class="va">Nc</span>, capHistTab <span class="op">=</span> <span class="va">subsample</span>, snrDetFun <span class="op">=</span> <span class="va">snrDetFun.gam</span>,</span>
+<span>                   SL <span class="op">=</span> <span class="va">SL</span>, TL <span class="op">=</span> <span class="va">TL</span>, NL <span class="op">=</span> <span class="va">NLsamp</span>, k <span class="op">=</span> <span class="va">k</span>, T <span class="op">=</span> <span class="va">Time</span>, A <span class="op">=</span> <span class="va">A</span>,</span>
+<span>                   modelType <span class="op">=</span> <span class="st">'gam'</span>, truncationDistance <span class="op">=</span> <span class="va">R</span>, outerloop <span class="op">=</span> <span class="fl">10</span>,</span>
+<span>                   groundTruthCol <span class="op">=</span> <span class="st">"groundTruth"</span>, observerCol <span class="op">=</span> <span class="st">"detect_table"</span>,</span>
+<span>                   snrColName <span class="op">=</span> <span class="st">"snr"</span>, timeCol <span class="op">=</span> <span class="st">"datetime"</span>,</span>
+<span>                   returnDetFun <span class="op">=</span> <span class="cn">TRUE</span>, returnPdetDetail <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">Pa.gam</span> <span class="op">&lt;-</span> <span class="fu">callDensity</span><span class="fu">::</span><span class="fu"><a href="../reference/pDetInArea.html">pDetInArea</a></span><span class="op">(</span><span class="va">snrDetFun.gam</span>, SL<span class="op">=</span><span class="va">SL</span>, TLlookup <span class="op">=</span> <span class="va">TL</span>, NL<span class="op">=</span><span class="va">NLsamp</span>,</span>
-<span>           output.resolution.m<span class="op">=</span><span class="fl">100</span>,</span>
-<span>           outerloop <span class="op">=</span> <span class="fl">10</span>,</span>
-<span>           truncationDistance<span class="op">=</span><span class="va">R</span>, <span class="co"># in m</span></span>
-<span>           snrTruncationThreshold <span class="op">=</span><span class="op">-</span><span class="cn">Inf</span><span class="op">)</span></span>
-<span><span class="va">pa.gam</span> <span class="op">&lt;-</span> <span class="va">Pa.gam</span><span class="op">$</span><span class="va">overall</span></span>
-<span></span>
-<span></span>
-<span><span class="co"># Density estimation equation</span></span>
-<span><span class="va">Dc.gam</span> <span class="op">&lt;-</span> <span class="op">(</span><span class="va">Nc</span> <span class="op">*</span> <span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="va">c_subsample</span><span class="op">)</span> <span class="op">)</span><span class="op">/</span><span class="op">(</span> <span class="va">k</span> <span class="op">*</span> <span class="va">A</span> <span class="op">*</span> <span class="va">pa.gam</span> <span class="op">*</span> <span class="va">Time</span> <span class="op">)</span></span>
-<span></span>
-<span><span class="va">results.gam</span><span class="op">&lt;-</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Dc<span class="op">=</span><span class="va">Dc.gam</span>, SampleSize<span class="op">=</span><span class="va">n_subsample</span>, A <span class="op">=</span> <span class="va">A</span>,<span class="co"># Environment</span></span>
-<span>                      NLmean <span class="op">=</span> <span class="va">NLsamp</span><span class="op">$</span><span class="va">mean</span>, NLsd <span class="op">=</span> <span class="va">NLsamp</span><span class="op">$</span><span class="va">sd</span>,    <span class="co"># Noise</span></span>
-<span>                        <span class="co"># Detector params</span></span>
-<span>                        model<span class="op">=</span><span class="st">'gam'</span>, c<span class="op">=</span><span class="va">c_subsample</span>, Pa<span class="op">=</span><span class="va">pa.gam</span>,  </span>
-<span>                      row.names <span class="op">=</span> <span class="st">'Estimate2'</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span>data<span class="op">=</span><span class="va">Pa.gam</span><span class="op">$</span><span class="va">meanOfAllTransects</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x<span class="op">=</span><span class="va">range_m</span><span class="op">/</span><span class="fl">1e3</span>,y<span class="op">=</span><span class="va">pDet</span><span class="op">)</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_point.html" class="external-link">geom_point</a></span><span class="op">(</span>alpha<span class="op">=</span><span class="fl">0.1</span>, size<span class="op">=</span><span class="fl">0.1</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">xlab</a></span><span class="op">(</span><span class="st">"Range (km)"</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ylab</a></span><span class="op">(</span><span class="st">"Probability of detection\n(Mean across all transects)"</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_continuous.html" class="external-link">scale_x_log10</a></span><span class="op">(</span>limits<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>,<span class="fl">1000</span><span class="op">)</span>,</span>
-<span>                labels<span class="op">=</span><span class="fu"><a href="https://scales.r-lib.org/reference/label_log.html" class="external-link">label_log</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>                breaks<span class="op">=</span><span class="fl">10</span><span class="op">^</span><span class="op">(</span><span class="op">-</span><span class="fl">1</span><span class="op">:</span><span class="fl">7</span><span class="op">)</span>,</span>
-<span>                minor_breaks <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">9</span>,<span class="fl">6</span><span class="op">)</span><span class="op">*</span><span class="op">(</span><span class="fl">10</span><span class="op">^</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="op">-</span><span class="fl">2</span><span class="op">:</span><span class="fl">7</span>,each<span class="op">=</span><span class="fl">9</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/annotation_logticks.html" class="external-link">annotation_logticks</a></span><span class="op">(</span>sides<span class="op">=</span><span class="st">''</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_bw</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p><img src="callDensity_files/figure-html/GAM%20p.det-1.png" class="r-plt" alt="" width="576"></p>
+<span><span class="va">results.gam</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Dc"</span>,<span class="st">"Nc"</span>,<span class="st">"c"</span>,<span class="st">"pa"</span>,<span class="st">"CV.Dc"</span>,<span class="st">"CV.pa"</span>,<span class="st">"CV.c"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt;          Dc    Nc         c         pa      CV.Dc      CV.pa       CV.c</span></span>
+<span><span class="co">#&gt; 1 0.3251656 87368 0.3106796 0.05895478 0.07582335 0.05525623 0.05192234</span></span></code></pre></div>
 </div>
 <div class="section level4">
 <h4 id="c-scam-fit-to-snr-detection-function">c) SCAM fit to SNR detection function<a class="anchor" aria-label="anchor" href="#c-scam-fit-to-snr-detection-function"></a>
 </h4>
 <p>Shape constrained additive models (SCAMs) should also provide a good
-fit to a logistic function.</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+fit to a logistic function. Same pattern again.</p>
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span></span>
+<span><span class="va">snrDetFun.scam</span> <span class="op">&lt;-</span> <span class="fu">callDensity</span><span class="fu">::</span><span class="fu"><a href="../reference/fitDetFun.html">fitDetFun</a></span><span class="op">(</span><span class="va">SNRinfo</span>, modelType <span class="op">=</span> <span class="st">"scam"</span>, numKnots <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">snrDetFun.scam</span> <span class="op">&lt;-</span> <span class="fu">callDensity</span><span class="fu">::</span><span class="fu"><a href="../reference/fitSNRdetectionFunc.html">fitSNRdetectionFunc</a></span><span class="op">(</span><span class="va">SNRinfo</span>,</span>
-<span>                                              modelType <span class="op">=</span> <span class="st">"scam"</span>,</span>
-<span>                                              numKnots <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
+<span><span class="va">results.scam</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cde.html">cde</a></span><span class="op">(</span>Nc<span class="op">=</span><span class="va">Nc</span>, capHistTab <span class="op">=</span> <span class="va">subsample</span>, snrDetFun <span class="op">=</span> <span class="va">snrDetFun.scam</span>,</span>
+<span>                   SL <span class="op">=</span> <span class="va">SL</span>, TL <span class="op">=</span> <span class="va">TL</span>, NL <span class="op">=</span> <span class="va">NLsamp</span>, k <span class="op">=</span> <span class="va">k</span>, T <span class="op">=</span> <span class="va">Time</span>, A <span class="op">=</span> <span class="va">A</span>,</span>
+<span>                   modelType <span class="op">=</span> <span class="st">'scam'</span>, truncationDistance <span class="op">=</span> <span class="va">R</span>, outerloop <span class="op">=</span> <span class="fl">10</span>,</span>
+<span>                   groundTruthCol <span class="op">=</span> <span class="st">"groundTruth"</span>, observerCol <span class="op">=</span> <span class="st">"detect_table"</span>,</span>
+<span>                   snrColName <span class="op">=</span> <span class="st">"snr"</span>, timeCol <span class="op">=</span> <span class="st">"datetime"</span>,</span>
+<span>                   returnDetFun <span class="op">=</span> <span class="cn">TRUE</span>, returnPdetDetail <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">Pa.scam</span> <span class="op">&lt;-</span> <span class="fu">callDensity</span><span class="fu">::</span><span class="fu"><a href="../reference/pDetInArea.html">pDetInArea</a></span><span class="op">(</span><span class="va">snrDetFun.scam</span>, SL<span class="op">=</span><span class="va">SL</span>, TLlookup <span class="op">=</span> <span class="va">TL</span>, NL<span class="op">=</span><span class="va">NLsamp</span>,</span>
-<span>           output.resolution.m<span class="op">=</span><span class="fl">100</span>,</span>
-<span>           outerloop <span class="op">=</span> <span class="fl">100</span>,</span>
-<span>           truncationDistance<span class="op">=</span><span class="va">R</span>, <span class="co"># in m</span></span>
-<span>           snrTruncationThreshold <span class="op">=</span><span class="op">-</span><span class="cn">Inf</span><span class="op">)</span></span>
-<span><span class="va">pa.scam</span> <span class="op">&lt;-</span> <span class="va">Pa.scam</span><span class="op">$</span><span class="va">overall</span></span>
-<span></span>
-<span></span>
-<span><span class="co"># Density estimation equation</span></span>
-<span><span class="va">Dc.scam</span> <span class="op">&lt;-</span> <span class="op">(</span><span class="va">Nc</span> <span class="op">*</span> <span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="va">c_subsample</span><span class="op">)</span> <span class="op">)</span><span class="op">/</span><span class="op">(</span> <span class="va">k</span> <span class="op">*</span> <span class="va">A</span> <span class="op">*</span> <span class="va">pa.scam</span> <span class="op">*</span> <span class="va">Time</span> <span class="op">)</span></span>
-<span></span>
-<span><span class="va">results.scam</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Dc<span class="op">=</span><span class="va">Dc.scam</span>, SampleSize<span class="op">=</span><span class="va">n_subsample</span>, A <span class="op">=</span> <span class="va">A</span>,   <span class="co"># Environment</span></span>
-<span>                      NLmean <span class="op">=</span> <span class="va">NLsamp</span><span class="op">$</span><span class="va">mean</span>, NLsd <span class="op">=</span> <span class="va">NLsamp</span><span class="op">$</span><span class="va">sd</span>,<span class="co"># Noise</span></span>
-<span>                      <span class="co"># Detector params</span></span>
-<span>                        model<span class="op">=</span><span class="st">'scam'</span>, c<span class="op">=</span><span class="va">c_subsample</span>, Pa<span class="op">=</span><span class="va">pa.scam</span>,  </span>
-<span>                      row.names <span class="op">=</span> <span class="st">'Estimate3'</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span>data<span class="op">=</span><span class="va">Pa.scam</span><span class="op">$</span><span class="va">meanOfAllTransects</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x<span class="op">=</span><span class="va">range_m</span><span class="op">/</span><span class="fl">1e3</span>,y<span class="op">=</span><span class="va">pDet</span><span class="op">)</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_point.html" class="external-link">geom_point</a></span><span class="op">(</span>alpha<span class="op">=</span><span class="fl">0.1</span>, size<span class="op">=</span><span class="fl">0.1</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">xlab</a></span><span class="op">(</span><span class="st">"Range (km)"</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ylab</a></span><span class="op">(</span><span class="st">"Probability of detection\n(Mean across all transects)"</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_continuous.html" class="external-link">scale_x_log10</a></span><span class="op">(</span>limits<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>,<span class="fl">1000</span><span class="op">)</span>,</span>
-<span>                labels<span class="op">=</span><span class="fu"><a href="https://scales.r-lib.org/reference/label_log.html" class="external-link">label_log</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>                breaks<span class="op">=</span><span class="fl">10</span><span class="op">^</span><span class="op">(</span><span class="op">-</span><span class="fl">1</span><span class="op">:</span><span class="fl">7</span><span class="op">)</span>,</span>
-<span>                minor_breaks <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">9</span>,<span class="fl">6</span><span class="op">)</span><span class="op">*</span><span class="op">(</span><span class="fl">10</span><span class="op">^</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="op">-</span><span class="fl">2</span><span class="op">:</span><span class="fl">7</span>,each<span class="op">=</span><span class="fl">9</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/annotation_logticks.html" class="external-link">annotation_logticks</a></span><span class="op">(</span>sides<span class="op">=</span><span class="st">''</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_bw</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p><img src="callDensity_files/figure-html/SCAM%20p.det-1.png" class="r-plt" alt="" width="576"></p>
+<span><span class="va">results.scam</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Dc"</span>,<span class="st">"Nc"</span>,<span class="st">"c"</span>,<span class="st">"pa"</span>,<span class="st">"CV.Dc"</span>,<span class="st">"CV.pa"</span>,<span class="st">"CV.c"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt;          Dc    Nc         c         pa     CV.Dc      CV.pa       CV.c</span></span>
+<span><span class="co">#&gt; 1 0.3263659 87368 0.3106796 0.05873796 0.1008904 0.08650399 0.05192234</span></span></code></pre></div>
+</div>
+<div class="section level4">
+<h4 id="comparing-the-three-curves">Comparing the three curves<a class="anchor" aria-label="anchor" href="#comparing-the-three-curves"></a>
+</h4>
+<p><code><a href="../reference/showDetFun.html">showDetFun()</a></code> also compares multiple fitted models
+directly, given as a named list. For a detector this well-behaved – a
+clean logistic response, no unusual SNR-dependent quirks – the three
+curves should sit almost on top of each other, and so should their
+<code>Dc</code> estimates and <code>CV.Dc</code> above: model choice
+matters little here. That’s the point of showing all three, not that
+they diverge. (<code>snrThreshold.Rmd</code> walks through a case where
+the model choice, and more specifically the <em>sample</em> it’s fit on,
+matters a great deal.)</p>
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span></span>
+<span><span class="fu"><a href="../reference/showDetFun.html">showDetFun</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>glm <span class="op">=</span> <span class="va">snrDetFun.glm</span>, gam <span class="op">=</span> <span class="va">snrDetFun.gam</span>, scam <span class="op">=</span> <span class="va">snrDetFun.scam</span><span class="op">)</span>,</span>
+<span>           distribution<span class="op">=</span><span class="st">'density'</span>,rug<span class="op">=</span><span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<p><img src="callDensity_files/figure-html/compare%20detfuns-1.png" class="r-plt" alt="" width="576"></p>
+</div>
+<div class="section level4">
+<h4 id="directional-detection-footprint">Directional detection footprint<a class="anchor" aria-label="anchor" href="#directional-detection-footprint"></a>
+</h4>
+<p><code><a href="../reference/plotPDetRadials.html">plotPDetRadials()</a></code> shows probability of detection as a
+function of both range and azimuth around the recorder – the spatial
+counterpart to the SNR-based curve above, and the natural bookend to the
+true-call and detected-call spatial maps in sections 1 and 7. This
+simulation is isotropic (spherical spreading, identical noise and
+detector at every azimuth), so the footprint below should come out close
+to circular; real, non-isotropic propagation (bathymetry, directional
+noise) would show up here as a genuinely lopsided footprint instead.</p>
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span></span>
+<span><span class="fu"><a href="../reference/plotPDetRadials.html">plotPDetRadials</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">results.scam</span>, <span class="st">"pDetResults"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="callDensity_files/figure-html/pdet%20radial-1.png" class="r-plt" alt="" width="576"></p>
 </div>
 </div>
 <div class="section level3">
@@ -474,32 +466,28 @@ fit to a logistic function.</p>
 compare to the true values. The only difference between the three
 estimates is type of model used to fit the SNR-detection function (glm,
 gam, scam).</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span></span>
-<span><span class="va">resultsTrue</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Dc <span class="op">=</span> <span class="va">TrueCallDensity</span>, SampleSize <span class="op">=</span> <span class="va">n</span>, A <span class="op">=</span> <span class="va">A</span>,<span class="co"># Environment </span></span>
-<span>                      NLmean <span class="op">=</span> <span class="va">NL</span><span class="op">$</span><span class="va">mean</span>, NLsd <span class="op">=</span> <span class="va">NL</span><span class="op">$</span><span class="va">sd</span>,            <span class="co"># Noise</span></span>
-<span>                        <span class="co"># Detector params</span></span>
-<span>                        model<span class="op">=</span><span class="va">det1params</span><span class="op">$</span><span class="va">func</span>, c <span class="op">=</span> <span class="va">det1params</span><span class="op">$</span><span class="va">c</span>, </span>
-<span>                        Pa <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">p_det</span>,na.rm <span class="op">=</span> <span class="cn">T</span><span class="op">)</span>, </span>
-<span>                      row.names<span class="op">=</span><span class="st">'Truth'</span><span class="op">)</span></span>
+<span><span class="va">resultsTrue</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>season<span class="op">=</span><span class="st">'year'</span>, siteCode<span class="op">=</span><span class="st">''</span>, Nc<span class="op">=</span><span class="va">n</span>, c<span class="op">=</span><span class="va">det1params</span><span class="op">$</span><span class="va">c</span>,</span>
+<span>                          k<span class="op">=</span><span class="fl">1</span>, T<span class="op">=</span><span class="va">Time</span>, A<span class="op">=</span><span class="va">A</span>, pa<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">p_det</span>,na.rm<span class="op">=</span><span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>                          SLmean<span class="op">=</span><span class="va">SL</span><span class="op">$</span><span class="va">mean</span>, SLsd<span class="op">=</span><span class="va">SL</span><span class="op">$</span><span class="va">sd</span>, NLmean<span class="op">=</span><span class="va">NL</span><span class="op">$</span><span class="va">mean</span>, NLsd<span class="op">=</span><span class="va">NL</span><span class="op">$</span><span class="va">sd</span>,</span>
+<span>                          modelType<span class="op">=</span><span class="st">'true'</span>, CV.Nc<span class="op">=</span><span class="fl">0</span>, CV.c<span class="op">=</span><span class="fl">0</span>, CV.pa<span class="op">=</span><span class="fl">0</span>,</span>
+<span>                          Dc<span class="op">=</span><span class="va">TrueCallDensity</span>, CV.Dc<span class="op">=</span><span class="fl">0</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">results</span><span class="op">&lt;-</span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span> <span class="va">resultsTrue</span>, <span class="va">results.glm</span>, <span class="va">results.gam</span>, <span class="va">results.scam</span><span class="op">)</span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span><span class="va">resultsTrue</span>, <span class="va">results.glm</span>, <span class="va">results.gam</span>, <span class="va">results.scam</span><span class="op">)</span></span>
 <span></span>
-<span></span>
-<span></span>
-<span><span class="fu">kableExtra</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/kableExtra/man/kbl.html" class="external-link">kbl</a></span><span class="op">(</span><span class="va">results</span>, digits <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4</span>,<span class="fl">3</span>,<span class="fl">0</span>,<span class="fl">1</span>, <span class="fl">2</span>, <span class="cn">NA</span>, <span class="fl">3</span>, <span class="fl">4</span><span class="op">)</span>, </span>
-<span>                col.names<span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">'Dc'</span>,<span class="st">'(sub)Sample Size'</span>, <span class="st">'A'</span>,<span class="st">'NL_mean'</span>,<span class="st">'NL_sd'</span>,</span>
-<span>                             <span class="st">'Model'</span>,<span class="st">'c'</span>,<span class="st">'P_a'</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> </span>
+<span><span class="fu">kableExtra</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/kableExtra/man/kbl.html" class="external-link">kbl</a></span><span class="op">(</span><span class="va">results</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">'Dc'</span>,<span class="st">'Nc'</span>,<span class="st">'A'</span>,<span class="st">'NLmean'</span>,<span class="st">'NLsd'</span>,<span class="st">'modelType'</span>,<span class="st">'c'</span>,<span class="st">'pa'</span>,<span class="st">'CV.Dc'</span><span class="op">)</span><span class="op">]</span>,</span>
+<span>                digits <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4</span>,<span class="fl">0</span>,<span class="fl">0</span>,<span class="fl">1</span>,<span class="fl">2</span>,<span class="cn">NA</span>,<span class="fl">3</span>,<span class="fl">4</span>,<span class="fl">4</span><span class="op">)</span>,</span>
+<span>                col.names<span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">'Dc'</span>,<span class="st">'Sample Size'</span>,<span class="st">'A'</span>,<span class="st">'NL_mean'</span>,<span class="st">'NL_sd'</span>,</span>
+<span>                             <span class="st">'Model'</span>,<span class="st">'c'</span>,<span class="st">'P_a'</span>,<span class="st">'CV.Dc'</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span> </span>
 <span>  <span class="fu">kableExtra</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/kableExtra/man/kable_classic.html" class="external-link">kable_classic</a></span><span class="op">(</span>full_width<span class="op">=</span><span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <table class="table  lightable-classic" style='font-family: "Arial Narrow", "Source Sans Pro", sans-serif; width: auto !important; margin-left: auto; margin-right: auto;'>
 <thead><tr>
-<th style="text-align:left;">
-</th>
 <th style="text-align:right;">
 Dc
 </th>
 <th style="text-align:right;">
-(sub)Sample Size
+Sample Size
 </th>
 <th style="text-align:right;">
 A
@@ -519,17 +507,17 @@ c
 <th style="text-align:right;">
 P_a
 </th>
+<th style="text-align:right;">
+CV.Dc
+</th>
 </tr></thead>
 <tbody>
 <tr>
-<td style="text-align:left;">
-Truth
-</td>
 <td style="text-align:right;">
 0.3183
 </td>
 <td style="text-align:right;">
-1e+06
+1000000
 </td>
 <td style="text-align:right;">
 3141593
@@ -541,24 +529,24 @@ Truth
 4.00
 </td>
 <td style="text-align:left;">
-plogis
+true
 </td>
 <td style="text-align:right;">
-0.10
+0.300
 </td>
 <td style="text-align:right;">
 0.0611
 </td>
+<td style="text-align:right;">
+0.0000
+</td>
 </tr>
 <tr>
-<td style="text-align:left;">
-Estimate1
+<td style="text-align:right;">
+0.3345
 </td>
 <td style="text-align:right;">
-0.3020
-</td>
-<td style="text-align:right;">
-1e+04
+87368
 </td>
 <td style="text-align:right;">
 3141593
@@ -567,27 +555,27 @@ Estimate1
 84
 </td>
 <td style="text-align:right;">
-4.02
+4.03
 </td>
 <td style="text-align:left;">
 glm
 </td>
 <td style="text-align:right;">
-0.09
+0.311
 </td>
 <td style="text-align:right;">
-0.0652
+0.0573
+</td>
+<td style="text-align:right;">
+0.0750
 </td>
 </tr>
 <tr>
-<td style="text-align:left;">
-Estimate2
+<td style="text-align:right;">
+0.3252
 </td>
 <td style="text-align:right;">
-0.2988
-</td>
-<td style="text-align:right;">
-1e+04
+87368
 </td>
 <td style="text-align:right;">
 3141593
@@ -596,27 +584,27 @@ Estimate2
 84
 </td>
 <td style="text-align:right;">
-4.02
+4.03
 </td>
 <td style="text-align:left;">
 gam
 </td>
 <td style="text-align:right;">
-0.09
+0.311
 </td>
 <td style="text-align:right;">
-0.0659
+0.0590
+</td>
+<td style="text-align:right;">
+0.0758
 </td>
 </tr>
 <tr>
-<td style="text-align:left;">
-Estimate3
+<td style="text-align:right;">
+0.3264
 </td>
 <td style="text-align:right;">
-0.3023
-</td>
-<td style="text-align:right;">
-1e+04
+87368
 </td>
 <td style="text-align:right;">
 3141593
@@ -625,16 +613,19 @@ Estimate3
 84
 </td>
 <td style="text-align:right;">
-4.02
+4.03
 </td>
 <td style="text-align:left;">
 scam
 </td>
 <td style="text-align:right;">
-0.09
+0.311
 </td>
 <td style="text-align:right;">
-0.0651
+0.0587
+</td>
+<td style="text-align:right;">
+0.1009
 </td>
 </tr>
 </tbody>
