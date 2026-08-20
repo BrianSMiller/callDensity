@@ -158,9 +158,16 @@
 #'   original behaviour. For a native matchbox table with adjudicated
 #'   verdicts, pass \code{'verdict'} (or \code{'detect_verdict'} --
 #'   both resolve the same column).
-#' @param observerCol Column in \code{capHistTab} for the detector under
-#'   evaluation, forwarded the same way as \code{groundTruthCol}. Default
-#'   \code{'detect_table2'}.
+#' @param observerCol Column(s) in \code{capHistTab} for the detector(s)
+#'   under evaluation, forwarded the same way as \code{groundTruthCol}.
+#'   Default \code{'detect_table2'} (a single column, matching original
+#'   behaviour). Pass a \emph{vector} of columns for a union call density
+#'   estimate across several detectors -- \code{Nc} then must be a union
+#'   count too (see \code{\link{unionDetections}}), and \code{snrDetFun}
+#'   (if supplied already fitted) must have \code{whichObserver = "any"}
+#'   set, matching this same set of detectors -- cde() checks this
+#'   pairing and refuses to silently combine a union \code{c} with a
+#'   single-detector \code{p_a} or vice versa.
 #' @param snrColName Column in \code{capHistTab} holding SNR, forwarded to
 #'   \code{falseDiscoveryRate()}. Default \code{'SNR'} (uppercase), matching
 #'   original behaviour -- raw simulation/detection tables typically carry
@@ -265,6 +272,39 @@ cde <- function (Nc,
       "Use countDetections(..., snrTruncationThreshold = ",
       snrTruncationThreshold, ", snrColName = <your SNR column>), then pass ",
       "NcIsTruncated = TRUE to confirm."))
+  }
+
+  # A union observerCol (>1 column, matching the union false-discovery-rate
+  # handling this feeds into below) must be paired with a snrDetFun whose
+  # own whichObserver is "any" (a union p_a -- see pDetInArea()). Mixing a
+  # union Nc/c with a single-detector p_a, or vice versa, silently combines
+  # two different estimands into one Dc. Only checked when snrDetFun is
+  # already fitted and is a vglm -- whichObserver has no meaning for glm/
+  # gam/scam, and when cde() fits its own model internally snrDetFun is
+  # NULL here, so this simply doesn't apply either way.
+  if (!is.null(snrDetFun) && isS4(snrDetFun)) {
+    whichObs <- snrDetFun@extra$whichObserver
+    isUnionObserverCol <- length(observerCol) > 1
+    isUnionWhichObs    <- identical(whichObs, "any")
+    if (isUnionObserverCol && !isUnionWhichObs) {
+      stop(
+        "cde: observerCol has ", length(observerCol), " columns (a union ",
+        "Nc/false-discovery-rate computation), but snrDetFun's ",
+        "whichObserver is '", whichObs, "', not 'any'. p_a would then be ",
+        "computed for a single detector while Nc/c reflect the union of ",
+        "several, silently mixing two different estimands. Fit snrDetFun ",
+        "with whichObserver = 'any' to match, or pass a single ",
+        "observerCol to match snrDetFun as it is.", call. = FALSE)
+    }
+    if (!isUnionObserverCol && isUnionWhichObs) {
+      stop(
+        "cde: snrDetFun's whichObserver is 'any' (a union p_a across ",
+        "several detectors), but observerCol is a single column, '",
+        observerCol, "'. Nc/c would then reflect just one detector while ",
+        "p_a reflects the union, silently mixing two different estimands. ",
+        "Pass a matching vector of observerCol columns, or fit snrDetFun ",
+        "for a single observer to match observerCol as it is.", call. = FALSE)
+    }
   }
 
   # c, CV_c---------------------------------------------------------------------
@@ -554,6 +594,20 @@ deploymentDurationFromsoundFolderCsv <- function(fullYearEffortFile,
 #'   detector1 is ground truth for detections within the specified season
 #' @export
 #'
+#' @param gtColName Column in \code{ch} treated as ground truth (0/1 or
+#'   logical).
+#' @param testColName Column(s) in \code{ch} for the detector(s) under
+#'   evaluation. A single column name (default) computes the false
+#'   discovery rate for that one detector, as always. A \emph{vector} of
+#'   column names computes it for the \emph{union} of those detectors
+#'   instead -- flagged positive if \emph{any} of them is -- matching the
+#'   union detection probability a \code{whichObserver = "any"} vglm model
+#'   already gives via \code{\link{pDetInArea}}. Same "vector means
+#'   combine" convention already used for \code{signalCol}/\code{noiseCol}
+#'   in \code{\link{chtToSNRinfo}} and \code{yColNames} in
+#'   \code{\link{fitDetFun}}.
+#' @param snrColName Column in \code{ch} holding SNR, used only if
+#'   \code{snrTruncationThreshold} is set.
 falseDiscoveryRate <- function(ch,
                                season='year',
                                snrTruncationThreshold=NULL,
@@ -569,8 +623,14 @@ falseDiscoveryRate <- function(ch,
 
   ch <- subsetByTimeCode(ch,ch$t,season)
 
-  FP <- sum(ch[,testColName] & !ch[,gtColName])
-  TP <- sum(ch[,testColName] & ch[,gtColName])
+  testPositive <- if (length(testColName) > 1) {
+    Reduce(`|`, as.list(ch[, testColName, drop = FALSE]))
+  } else {
+    ch[[testColName]]
+  }
+
+  FP <- sum(testPositive & !ch[,gtColName])
+  TP <- sum(testPositive & ch[,gtColName])
   c <- FP/(FP+TP)
   n <- FP + TP
 
@@ -579,6 +639,50 @@ falseDiscoveryRate <- function(ch,
   fdr = list(c=c, cv.c = cv.c)
 
   return(fdr)
+}
+
+#' Count of events flagged positive by at least one of several detectors
+#'
+#' @description
+#' The union-detector counterpart to \code{Nc}: rather than counting one
+#' detector's own positive predictions, counts events flagged positive by
+#' \emph{any} of \code{observerCols} across the \emph{full} capture history
+#' table -- the raw material a union call density estimate needs, matching
+#' a \code{whichObserver = "any"} vglm's own union detection probability
+#' (see \code{\link{pDetInArea}}).
+#'
+#' \code{cht} should be the full table (every detection each contributing
+#' detector made, whether adjudicated or not), not the small adjudicated
+#' subset used to fit the detection function itself -- the same distinction
+#' \code{Nc} already makes for a single detector.
+#'
+#' @param cht Capture history table (matchbox-native or otherwise) with one
+#'   logical column per contributing detector.
+#' @param observerCols Character vector of column names to union.
+#' @param fullCoverageConfirmed Logical, default \code{FALSE}. Every
+#'   contributing detector must have examined the same full extent of the
+#'   data for this count to be a meaningful union -- if one detector's own
+#'   run only covers, say, a 200-hour subsample while another covers a full
+#'   year, unioning their positive calls silently mixes two different
+#'   denominators. This can't be verified from the capture history table
+#'   alone -- there's no "did this detector examine this moment" column,
+#'   distinct from "did this detector flag this moment" -- so it must be
+#'   confirmed explicitly here, the same way \code{\link{cde}}'s
+#'   \code{NcIsTruncated} requires confirming SNR truncation was applied
+#'   consistently rather than silently assuming it.
+#'
+#' @returns Integer count.
+#'
+#' @export
+unionDetections <- function(cht, observerCols, fullCoverageConfirmed = FALSE) {
+  if (!isTRUE(fullCoverageConfirmed)) {
+    stop("unionDetections: every column in observerCols must come from a ",
+         "detector that examined the same full extent of the data -- this ",
+         "can't be verified from the table alone, so it must be confirmed ",
+         "explicitly. Check this yourself, then pass ",
+         "fullCoverageConfirmed = TRUE.", call. = FALSE)
+  }
+  sum(Reduce(`|`, as.list(cht[, observerCols, drop = FALSE])), na.rm = TRUE)
 }
 
 

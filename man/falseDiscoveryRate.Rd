@@ -24,25 +24,22 @@ estimate call density}
 (in dB)
 }}
 
-\item{gtColName}{\itemize{
-\item Column name that contains the ground truth detections (0
-for false positive and 1 for true positive) Default='detect_table1'.
-For an adjudicated capture-recapture analysis with two fallible
-observers, neither raw observer is ground truth: construct this column
-from the adjudicator's verdict instead, as \code{cde()}'s own
-documentation for \code{capHistTab} describes.
-}}
+\item{gtColName}{Column in \code{ch} treated as ground truth (0/1 or
+logical).}
 
-\item{testColName}{\itemize{
-\item Column name of the detections under investigation (i.e.
-that contains the detections from which to calculate false positives).
-Default='detect_table2')
-}}
+\item{testColName}{Column(s) in \code{ch} for the detector(s) under
+evaluation. A single column name (default) computes the false
+discovery rate for that one detector, as always. A \emph{vector} of
+column names computes it for the \emph{union} of those detectors
+instead -- flagged positive if \emph{any} of them is -- matching the
+union detection probability a \code{whichObserver = "any"} vglm model
+already gives via \code{\link{pDetInArea}}. Same "vector means
+combine" convention already used for \code{signalCol}/\code{noiseCol}
+in \code{\link{chtToSNRinfo}} and \code{yColNames} in
+\code{\link{fitDetFun}}.}
 
-\item{snrColName}{\itemize{
-\item Name of column that contains SNR estimates (only used if
-thresholding by SNR)
-}}
+\item{snrColName}{Column in \code{ch} holding SNR, used only if
+\code{snrTruncationThreshold} is set.}
 }
 \value{
 fdr, list containing false disovery rate, c, and it's CV. The false

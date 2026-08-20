@@ -182,9 +182,16 @@ original behaviour. For a native matchbox table with adjudicated
 verdicts, pass \code{'verdict'} (or \code{'detect_verdict'} --
 both resolve the same column).}
 
-\item{observerCol}{Column in \code{capHistTab} for the detector under
-evaluation, forwarded the same way as \code{groundTruthCol}. Default
-\code{'detect_table2'}.}
+\item{observerCol}{Column(s) in \code{capHistTab} for the detector(s)
+under evaluation, forwarded the same way as \code{groundTruthCol}.
+Default \code{'detect_table2'} (a single column, matching original
+behaviour). Pass a \emph{vector} of columns for a union call density
+estimate across several detectors -- \code{Nc} then must be a union
+count too (see \code{\link{unionDetections}}), and \code{snrDetFun}
+(if supplied already fitted) must have \code{whichObserver = "any"}
+set, matching this same set of detectors -- cde() checks this
+pairing and refuses to silently combine a union \code{c} with a
+single-detector \code{p_a} or vice versa.}
 
 \item{snrColName}{Column in \code{capHistTab} holding SNR, forwarded to
 \code{falseDiscoveryRate()}. Default \code{'SNR'} (uppercase), matching
