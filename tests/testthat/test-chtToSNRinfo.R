@@ -69,6 +69,54 @@ test_that("N-observer call keeps native detect_observerN columns intact for yCol
   expect_equal(out$Detected, out$detect_observer3)
 })
 
+# ---------------------------------------------------------------------------
+# Regression: a real matchbox+judgeDetections table is never fully
+# adjudicated -- most rows are unjudged (verdict = NA), and judgeDetections'
+# "OTHER" outcome (verdict = -1, neither a clean true nor false positive) is
+# a real third state, not just TRUE/FALSE. R's `df[cond, ]` inserts a
+# phantom all-NA row for every NA in `cond` rather than dropping it, and
+# `cht[[gtCol]] == 1` is exactly such a condition whenever gtCol has any NA
+# in it -- which every partially-adjudicated table does. No existing
+# fixture above has an NA or -1 verdict, so this was never exercised.
+# ---------------------------------------------------------------------------
+make_partially_adjudicated_cht <- function() {
+  # row  verdict  obs1  obs2   -- meaning
+  #  1      1       1     0     judged true positive (kept)
+  #  2      0       1     0     judged false positive (dropped)
+  #  3     -1       1     1     judged "OTHER" -- neither TP nor FP (dropped)
+  #  4     NA       1     0     unjudged (dropped, not a phantom row)
+  #  5     NA       0     1     unjudged (dropped, not a phantom row)
+  #  6      1       0     1     judged true positive (kept)
+  data.frame(
+    verdict          = c(1, 0, -1, NA, NA, 1),
+    detect_observer1 = c(1, 1,  1,  1,  0, 0),
+    detect_observer2 = c(0, 0,  1,  0,  1, 1),
+    t0               = 738000 + seq(0, by = 0.01, length.out = 6),
+    signalRMSdB      = c(120, 150, 122, 100, 100, 121),
+    noiseRMSdB       = rep(90, 6),
+    datetime         = as.POSIXct("2025-06-01", tz = "UTC") + 0:5 * 3600
+  )
+}
+
+test_that("unjudged (NA) rows are dropped, not inserted as phantom NA rows", {
+  cht <- make_partially_adjudicated_cht()
+  out <- chtToSNRinfo(cht, groundTruth = "verdict",
+                      observers = c("observer1", "observer2"))
+  expect_equal(nrow(out), 2)
+  expect_true(all(out$verdict == 1))
+  expect_false(anyNA(out$SNR))
+})
+
+test_that("judgeDetections' OTHER verdict (-1) is dropped, not miscounted as a true positive", {
+  # as.logical(-1) is TRUE in R, so any code treating verdict as a plain
+  # boolean (rather than testing == 1 explicitly) would misclassify this.
+  cht <- make_partially_adjudicated_cht()
+  out <- chtToSNRinfo(cht, groundTruth = "verdict",
+                      observers = c("observer1", "observer2"))
+  expect_false(-1 %in% out$verdict)
+  expect_equal(nrow(out), 2)
+})
+
 test_that("groundTruth/observers resolve bare suffixes and full column names identically", {
   cht <- make_toy_cht()
   bySuffix <- chtToSNRinfo(cht, groundTruth = "verdict", observers = "observer1")

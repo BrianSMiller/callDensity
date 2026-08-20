@@ -386,9 +386,15 @@ chtToSNRinfo <- function(cht,
   # evaluation), then restrict to ground-truth-positive rows. See the
   # function-level @description for why this order, and why it's correct
   # for both OG and CR rather than a compromise between them.
+  #
+  # which() rather than direct logical subsetting on both lines: gtCol may
+  # be NA (unjudged rows) or -1 (judgeDetections' "OTHER" verdict, neither
+  # true nor false positive), and R's `df[cond, ]` with an NA in `cond`
+  # inserts a phantom all-NA row rather than dropping it -- which()
+  # correctly drops NA instead of keeping a placeholder for it.
   keep <- Reduce(`|`, as.list(cht[c(gtCol, obsCols)]))
-  cht  <- cht[keep, ]
-  cht  <- cht[cht[[gtCol]] == 1, ]
+  cht  <- cht[which(keep), ]
+  cht  <- cht[which(cht[[gtCol]] == 1), ]
 
   CallRL  <- if (length(signalCol) == 1) as.numeric(cht[[signalCol]])
              else as.numeric(rowMeans(cht[, signalCol], na.rm = TRUE))
