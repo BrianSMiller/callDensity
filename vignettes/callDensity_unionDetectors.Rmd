@@ -148,19 +148,17 @@ The union curve sits above both individual curves at every SNR, as it must: the 
 
 # Three call density estimates
 
-`cde()` itself needs no new arguments for any of this beyond what already exists: `observerCol` becomes the vector `c("detect_observer1", "detect_observer2")` for the union case, matching the same detectors the model was fit with `whichObserver = "any"` for -- `cde()` checks that these two agree and refuses to silently combine a union false discovery rate with a single detector's own detection probability, or the reverse.
-
-One simplification made deliberately here: `NL` is passed as the true simulation noise level rather than left for `cde()` to estimate internally via `nlFromDetections()`. That estimator has its own, separate accuracy characteristics worth understanding on their own terms -- not something to entangle with the union-versus-individual comparison this vignette is actually about. `callDensity_CommonGround` shows the same "true NL" comparison for exactly this reason, alongside its own estimated-NL rows.
+`cde()` itself needs no new arguments for any of this beyond what already exists: `observerCol` becomes the vector `c("detect_observer1", "detect_observer2")` for the union case, matching the same detectors the model was fit with `whichObserver = "any"` for -- `cde()` checks that these two agree and refuses to silently combine a union false discovery rate with a single detector's own detection probability, or the reverse. `NL` is left for `cde()` to estimate internally via `nlFromDetections()`, exactly as it would for a single detector -- no special handling needed for the union case.
 
 ```{r cde.individual, warning=FALSE, message=FALSE}
 res1 <- cde(Nc = Nc1, capHistTab = capHistTab, snrDetFun = fitObs1,
-           SL = SL, TL = TL, NL = NL, A = A, T = Time, k = k,
+           SL = SL, TL = TL, A = A, T = Time, k = k,
            groundTruthCol = "groundTruth", observerCol = "detect_observer1",
            signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
            noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
 
 res2 <- cde(Nc = Nc2, capHistTab = capHistTab, snrDetFun = fitObs2,
-           SL = SL, TL = TL, NL = NL, A = A, T = Time, k = k,
+           SL = SL, TL = TL, A = A, T = Time, k = k,
            groundTruthCol = "groundTruth", observerCol = "detect_observer2",
            signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
            noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
@@ -168,7 +166,7 @@ res2 <- cde(Nc = Nc2, capHistTab = capHistTab, snrDetFun = fitObs2,
 
 ```{r cde.union, warning=FALSE, message=FALSE}
 resUnion <- cde(Nc = NcUnion, capHistTab = capHistTab, snrDetFun = fitUnion,
-                SL = SL, TL = TL, NL = NL, A = A, T = Time, k = k,
+                SL = SL, TL = TL, A = A, T = Time, k = k,
                 groundTruthCol = "groundTruth", observerCol = observerCols,
                 signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
                 noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
@@ -219,8 +217,10 @@ The union estimate's error bars ($\pm 1$ CV) are visibly narrower than either in
 
 The false discovery rate's own coefficient of variation is smaller for the union than for either individual detector, always -- it only depends on how many adjudicated events went into estimating it, and the union pools strictly more of them (every event either detector flagged) than either detector's own count alone does. That part of the improvement is guaranteed by construction, not a property of this particular simulation.
 
-The detection probability's own uncertainty is a different matter. The union curve is a genuinely new quantity, not simply a better-sampled version of either individual curve, and its own precision depends on how well the joint model's coefficients are estimated -- which is not guaranteed to be tighter than an individual detector's own curve when that detector is already very well characterised on its own. In this simulation the two detectors are similar enough in how well-identified their curves are that the union's tighter false discovery rate dominates and its overall $CV.D_c$ comes out ahead of both -- confirmed here across three different random seeds, not just the one shown above -- but this is not a proof that the union estimate is always the tighter one. The two components can pull in different directions in principle, and if one detector is dramatically better-characterised than the other, that detector's own estimate could conceivably beat the union's on precision even though the union's false discovery rate is still the more tightly estimated of the two.
+The detection probability's own uncertainty is a different matter, and it's the one that actually decides whether the union wins overall. The union curve is a genuinely new quantity, not simply a better-sampled version of either individual curve, and its own precision depends on how well the joint model's coefficients happen to be estimated in a given dataset -- which is not guaranteed to be tighter than an individual detector's own curve when that detector is already well characterised on its own. Running this same simulation across several random seeds makes the pattern concrete rather than hypothetical: the union's $CV.D_c$ came out below detector 1's every time, but only sometimes below detector 2's -- detector 2 (the higher-threshold, noisier detector by construction here) happens to have a well-identified curve of its own in some replicates, tight enough that its own $CV.D_c$ beats the union's despite the union's false discovery rate still being the more precisely estimated of the two. Detector 1's own estimate, by contrast, never won outright in any replicate tried.
 
-What the union approach always buys is using detections that a single-detector analysis discards outright: a call caught only by detector 2 contributes nothing to a "detector 1 alone" estimate's own count, adjudicated sample, or detection function, even though it is exactly the kind of information adjudicated capture-recapture was introduced to make use of.
+So the honest summary is: the union's false discovery rate is unconditionally tighter, and the union is never worse than the *worse* of the two detectors here -- but it is not a guarantee of beating the *better* one, since that comes down to how well that detector's own curve happens to be identified in a given dataset, a separate question from the union's own construction.
+
+What the union approach always buys, regardless of how that particular contest goes, is using detections that a single-detector analysis discards outright: a call caught only by detector 2 contributes nothing to a "detector 1 alone" estimate's own count, adjudicated sample, or detection function, even though it is exactly the kind of information adjudicated capture-recapture was introduced to make use of.
 
 # References
