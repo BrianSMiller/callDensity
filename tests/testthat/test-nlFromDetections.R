@@ -70,6 +70,42 @@ test_that("nlFromDetections returns the same shape as nlFromSnrInfo", {
   expect_named(est, c("mean", "sd", "sampleSize"))
 })
 
+test_that("nlFromDetections filters to Detected==TRUE internally when that column is present", {
+  # Regression: cde() passes chtToSNRinfo()'s full output straight through --
+  # every event a capture history table records, not just this detector's own
+  # catches -- so nlFromDetections() has to do its own filtering rather than
+  # assume its input already is detections only. Skipping this doesn't error;
+  # it overcorrects an already-mostly-unbiased mean as if it still needed the
+  # same correction, landing well past the true value rather than on it.
+  skip_on_cran()
+
+  TL <- tlSpherical()
+  set.seed(3)
+  n   <- 1e5
+  r   <- 1e6 * sqrt(runif(n))
+  sl  <- rnorm(n, testSL$mean, testSL$sd)
+  nl  <- rnorm(n, 84, 4)
+  snr <- sl - 20 * log10(r) - nl
+  det <- runif(n) < testDetector(snr)
+
+  # Every event, detected or missed, with a Detected column -- exactly the
+  # shape chtToSNRinfo() produces and cde() passes straight through.
+  snrInfoAll <- data.frame(NoiseRL = nl, SNR = snr, Detected = det)
+
+  estCorrect   <- nlFromDetections(snrInfoAll, testDetector, testSL, TL)
+  estUnfiltered <- nlFromDetections(subset(snrInfoAll, select = -Detected),
+                                    testDetector, testSL, TL)
+
+  # With Detected present, filtering happens automatically and recovers the
+  # true value about as well as calling it correctly by hand always has.
+  expect_lt(abs(estCorrect$mean - 84), 1)
+
+  # Without a Detected column to filter on, the same call overcorrects an
+  # already-close-to-unbiased mean -- confirming the two genuinely differ,
+  # not just that one runs without error.
+  expect_gt(abs(estUnfiltered$mean - 84), abs(estCorrect$mean - 84))
+})
+
 test_that("nlFromDetections errors clearly on a missing column", {
   TL <- tlSpherical()
   expect_error(nlFromDetections(data.frame(x = 1), testDetector, testSL, TL),

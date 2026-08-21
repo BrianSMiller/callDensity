@@ -44,6 +44,21 @@ predictSampledNL <- function(mu, sigma, detFun, SL, TL,
 #' Noise levels measured at detections are biased low, because detections
 #' over-represent quiet periods. This undoes that bias.
 #'
+#' If \code{snrInfo} has a \code{Detected} column (as
+#' \code{\link{chtToSNRinfo}}'s output always does), this filters to
+#' \code{Detected == TRUE} before doing anything else -- the bias-correction
+#' below only makes sense applied to noise measured \emph{at detections}
+#' specifically, matching this function's own name, not at every event a
+#' capture history table happens to record (which, for a table built around
+#' adjudicated ground truth rather than one detector's own raw positives,
+#' can be mostly missed events). Skipping this filter doesn't error -- the
+#' \code{uniroot} search still finds \emph{a} root -- it just corrects a mean
+#' that's already close to unbiased as if it still needed the same
+#' correction, overshooting past the true value rather than landing on it.
+#' If no \code{Detected} column is present, \code{snrInfo} is assumed to
+#' already contain only detections (matching \code{\link{simulateDetectedNoise}}'s
+#' own output, which never carries one).
+#'
 #' Replaces `nlFromSnrInfo`, which corrected the same bias by adding the SNR at
 #' which the detection function reaches 0.5. That quantity is a property of the
 #' detector. The bias is a property of the propagation geometry and the noise
@@ -55,7 +70,7 @@ predictSampledNL <- function(mu, sigma, detFun, SL, TL,
 #' mean is not. This leaves one unknown, found by `stats::uniroot`.
 #'
 #' @param snrInfo Table of SNR information containing a column of noise level
-#'   measurements in dB.
+#'   measurements in dB, and optionally a \code{Detected} column (see above).
 #' @param snrDetFun Detection function, as passed to `pDetInArea`.
 #' @param SL Source level distribution, with elements named mean and sd.
 #' @param TL Transmission loss table. First column ranges in metres, remaining
@@ -75,6 +90,10 @@ nlFromDetections <- function(snrInfo, snrDetFun, SL, TL,
                              truncationDistance = max(TL[[1]]),
                              nlColumn = "NoiseRL",
                              searchWidth = 25, ...) {
+
+  if (!is.null(snrInfo[["Detected"]])) {
+    snrInfo <- subset(snrInfo, Detected)
+  }
 
   if (is.null(snrInfo[[nlColumn]])) {
     stop(sprintf("snrInfo has no column named '%s'", nlColumn))

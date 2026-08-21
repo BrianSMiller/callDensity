@@ -376,9 +376,12 @@ nlFromSnrInfo <- function(snrInfo, snrDetFun){
 #' @returns SNRinfo data.frame: the resolved \code{groundTruth} and all
 #'   \code{observers} columns (kept intact, unrenamed -- ready to pass as
 #'   \code{yColNames} to \code{fitDetFun(modelType = 'vglm')}), plus
-#'   \code{Detected} (the last-named observer, for the single-observer
-#'   OG case and backward compatibility), \code{CallRL}, \code{NoiseRL},
-#'   \code{SNR}, \code{t}, \code{month}, and \code{season}.
+#'   \code{Detected} (\code{TRUE} if \emph{any} of \code{observers} caught
+#'   the event -- identical to the single-observer OG case when
+#'   \code{observers} has length 1, and correctly the union when it
+#'   doesn't, matching the same detector(s) a \code{whichObserver = "any"}
+#'   model's own union probability describes), \code{CallRL},
+#'   \code{NoiseRL}, \code{SNR}, \code{t}, \code{month}, and \code{season}.
 #' @export
 chtToSNRinfo <- function(cht,
                           groundTruth = 'verdict',
@@ -425,7 +428,7 @@ chtToSNRinfo <- function(cht,
   t <- if (timeCol == 't0') mat2Rdate(cht[[timeCol]]) else cht[[timeCol]]
 
   SNRinfo <- data.frame(cht[, c(gtCol, obsCols), drop = FALSE],
-                        Detected = cht[[utils::tail(obsCols, 1)]],
+                        Detected = Reduce(`|`, as.list(cht[obsCols])),
                         CallRL = CallRL, NoiseRL = NoiseRL, SNR = SNR,
                         t = t,
                         month  = time2monthCode(t),

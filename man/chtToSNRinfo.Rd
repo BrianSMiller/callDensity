@@ -56,9 +56,12 @@ for the legacy pre-computed-time shape.}
 SNRinfo data.frame: the resolved \code{groundTruth} and all
 \code{observers} columns (kept intact, unrenamed -- ready to pass as
 \code{yColNames} to \code{fitDetFun(modelType = 'vglm')}), plus
-\code{Detected} (the last-named observer, for the single-observer
-OG case and backward compatibility), \code{CallRL}, \code{NoiseRL},
-\code{SNR}, \code{t}, \code{month}, and \code{season}.
+\code{Detected} (\code{TRUE} if \emph{any} of \code{observers} caught
+the event -- identical to the single-observer OG case when
+\code{observers} has length 1, and correctly the union when it
+doesn't, matching the same detector(s) a \code{whichObserver = "any"}
+model's own union probability describes), \code{CallRL},
+\code{NoiseRL}, \code{SNR}, \code{t}, \code{month}, and \code{season}.
 }
 \description{
 Canonical converter from a capture history table to the 'SNRinfo' format

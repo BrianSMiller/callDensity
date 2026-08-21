@@ -65,8 +65,17 @@ test_that("N-observer call keeps native detect_observerN columns intact for yCol
                       observers = c("observer1","observer2","observer3"))
   expect_true(all(c("verdict","detect_observer1","detect_observer2","detect_observer3")
                   %in% names(out)))
-  # Detected defaults to the last-named observer
-  expect_equal(out$Detected, out$detect_observer3)
+  # Detected is TRUE if any named observer caught the event -- identical to
+  # a single observer's own column when there's only one (see the dedicated
+  # union test below), and the union across all three here.
+  expectedUnion <- out$detect_observer1 | out$detect_observer2 | out$detect_observer3
+  expect_equal(out$Detected, expectedUnion)
+})
+
+test_that("Detected is identical to the single observer's own column when observers has length 1", {
+  cht <- make_toy_cht()
+  out <- chtToSNRinfo(cht, groundTruth = "verdict", observers = "observer2")
+  expect_equal(as.logical(out$Detected), as.logical(out$detect_observer2))
 })
 
 # ---------------------------------------------------------------------------
