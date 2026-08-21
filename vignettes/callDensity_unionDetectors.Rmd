@@ -1,0 +1,226 @@
+---
+title: "Using all available information: a union call density estimate"
+output: 
+  html_document: default
+  pdf_document: default
+  rmarkdown::html_vignette:
+    vignette: >
+      %\VignetteEncoding{UTF-8}
+      %\VignetteIndexEntry{Using all available information: a union call density estimate}
+      %\VignetteEngine{knitr::rmarkdown}
+bibliography: references.bib
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  fig.width = 6,
+  fig.height = 4,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(callDensity)
+library(VGAM)
+library(dplyr)
+library(ggplot2)
+library(kableExtra)
+```
+
+# Left on the table
+
+@miller2026 introduced adjudicated capture-recapture (CR) as a way to characterise detectors without assuming any one observer is ground truth, and argued that the method "readily accommodates all available information from multiple observers and/or detectors, if more than one of either is available." What the paper actually demonstrated, though, was CR producing a call density estimate *for* each detector -- CR1S, CR2S, CRAS and so on in its own terminology -- never a single estimate that draws on more than one detector's own detections at once. The claim about using all available information was true of the underlying capture-recapture model (which is exactly what lets it estimate a false discovery rate without a trusted observer in the first place), but the density estimates built on top of it stayed one-detector-at-a-time throughout.
+
+This vignette closes that gap directly. The capture-recapture model already estimates, as a normal step in fitting it, the probability that *at least one* of several detectors would catch a given call -- this is a standard quantity in double-observer distance sampling, and callDensity's own `vglmDetectionProb()` already computes it internally as an intermediate step toward each individual detector's own detection probability. Surfacing it directly, rather than discarding it, gives a union detection function: fit one capture-recapture model jointly on two (or more) detectors, and read off not just "detector 1's own probability of detecting a call" or "detector 2's own probability," but "the probability that detector 1 *or* detector 2 detects it." Paired with the union of their own raw detection counts -- how many calls did *either* detector flag, across the full dataset -- this gives a call density estimate that uses both detectors' information at once, rather than two separate, redundant analyses of the same underlying calls.
+
+The simulation below follows exactly the same setup as `vignette("callDensity_CommonGround")` -- the same call population, the same two detectors, the same adjudicated-subsample workflow -- so the two vignettes can be read side by side. What's new here is entirely in how the existing per-detector pieces (`Nc`, false discovery rate, detection probability) get combined into one union estimate, not in how any of them are individually derived.
+
+# Simulate a shared call population and two detectors
+
+The call population, source level, noise level, and transmission loss are exactly as in `callDensity_CommonGround`: a uniform distribution of calls in space and time, with acoustic properties following the passive sonar equation.
+
+```{r simulate.calls, warning=FALSE, message=FALSE}
+n <- 2e5        # number of simulated calls, whether detected or not
+R <- 1e6        # radius in m
+k <- 1          # number of sensors
+minDate <- as.POSIXct("2025-01-01")
+maxDate <- as.POSIXct("2026-01-01")
+Time <- as.numeric(difftime(maxDate, minDate, unit = "days")) / 365
+
+A <- studyArea(R / 1e3)
+TrueCallDensity <- n / (A * Time)
+
+set.seed(1)
+sim <- simCallLocation(n = n, R = R, minDate = minDate, maxDate = maxDate)
+
+SL <- data.frame(mean = 190, sd = 4, sampleSize = 350)
+NL <- data.frame(mean = 84, sd = 4, sampleSize = n)
+tlFunc <- function(r) 20 * log10(r)
+sim <- simCallAcoustics(sim, SL, NL, TL = tlFunc)
+
+TL <- simTLradials_20logR(maxRange = R, rangeStep = 100, numTransects = 8)
+
+cat("Study area (km^2):", A, "\n")
+cat("True call density (calls / km^2 / year):", TrueCallDensity, "\n")
+```
+
+Two detectors, with the same parameters as `callDensity_CommonGround`: detector 1 is the more sensitive, more reliable of the two (lower threshold, lower false discovery rate); detector 2 is noisier on both counts.
+
+```{r parameterise.detectors}
+det1params <- data.frame(location = 1, scale = 2, func = 'plogis',
+                         c = 0.1, fpMean = 0, fpSD = 2)
+det2params <- data.frame(location = 2, scale = 4, func = 'plogis',
+                         c = 0.3, fpMean = 0, fpSD = 2)
+
+simDet1 <- simulateDetector(det1params, sim)
+simDet2 <- simulateDetector(det2params, sim)
+```
+
+# Two capture history tables: full year, and adjudicated subsample
+
+Two different tables are needed here, matching a distinction that already exists for a single detector -- `Nc` always comes from the full dataset, while the capture history table used to fit a detection function and estimate a false discovery rate comes from a small adjudicated subsample. The union case needs both, in the same shapes as before: a full-year table across both detectors for the union `Nc`, and an adjudicated subsample across both detectors for the joint capture-recapture fit.
+
+```{r match.full.year}
+# Full year, both detectors -- this is what the union Nc comes from. Both
+# detectors examined the exact same simulated year, so unionDetections()'s
+# fullCoverageConfirmed requirement is satisfied here by construction (see
+# ?unionDetections for why this can't be verified automatically from the
+# table alone, and has to be confirmed explicitly instead).
+capHistTabFull <- simsTocaptureHistoryTable(simDet1, simDet2)
+
+observerCols <- c("detect_observer1", "detect_observer2")
+
+Nc1     <- sum(simDet1$detect_table)
+Nc2     <- sum(simDet2$detect_table)
+NcUnion <- unionDetections(capHistTabFull, observerCols, fullCoverageConfirmed = TRUE)
+
+cat("Nc, detector 1 alone: ", Nc1, "\n")
+cat("Nc, detector 2 alone: ", Nc2, "\n")
+cat("Nc, union of both:    ", NcUnion,
+    " (between max(Nc1,Nc2) and Nc1+Nc2, as it must be)\n")
+```
+
+```{r match.subsample}
+# Adjudicated subsample, both detectors -- matches callDensity_CommonGround's
+# own 1-hour-in-41 subsampling. groundTruth here is the simulated ground
+# truth standing in for a judge's verdict, exactly as in that vignette.
+subsampleDet1 <- subsampleSimInTime(simDet1, interval = "41 hour")
+subsampleDet2 <- subsampleSimInTime(simDet2, interval = "41 hour")
+
+capHistTab <- simsTocaptureHistoryTable(subsampleDet1, subsampleDet2)
+# cde()'s own false-discovery-rate handling needs a single consolidated SNR
+# column -- a separate mechanism from chtToSNRinfo()'s signalCol/noiseCol
+# averaging used below.
+capHistTab$SNR <- rowMeans(capHistTab[, c("snr_observer1", "snr_observer2")], na.rm = TRUE)
+
+adjudicated <- subset(capHistTab, capHistTab$groundTruth &
+                        (capHistTab$detect_observer1 | capHistTab$detect_observer2))
+
+cat("Adjudicated subsample:", nrow(adjudicated), "true-positive events\n")
+```
+
+# One joint model, three ways to read it
+
+Fitting a capture-recapture model with both detectors' columns as the two occasions estimates their detection probabilities jointly -- this part doesn't change at all from a normal two-detector CR analysis. What's new is asking for three different things back from the same fit, via `whichObserver`: detector 1's own probability, detector 2's own probability, and `"any"` for the probability that at least one of them detects the call.
+
+```{r fit.joint.model, warning=FALSE, message=FALSE}
+fitObs1  <- fitDetFun(adjudicated, modelType = "vglm", yColNames = observerCols,
+                      whichObserver = "detect_observer1")
+fitObs2  <- fitDetFun(adjudicated, modelType = "vglm", yColNames = observerCols,
+                      whichObserver = "detect_observer2")
+fitUnion <- fitDetFun(adjudicated, modelType = "vglm", yColNames = observerCols,
+                      whichObserver = "any")
+```
+
+```{r plot.detection.functions, warning=FALSE, fig.height=4}
+models <- list("Detector 1" = fitObs1, "Detector 2" = fitObs2, "Union (either)" = fitUnion)
+
+# distribution="none": a union model's own "missed" set is empty by
+# construction here (adjudicated is already filtered to events flagged by
+# at least one detector, so nothing is left to be "missed by the union"),
+# which the density panels below have no data for. The three curves
+# themselves make the point without needing that panel.
+showDetFun(models, distribution = "none", rug = FALSE)
+```
+
+The union curve sits above both individual curves at every SNR, as it must: the probability that *either* detector catches a call can never be lower than either detector's own probability on its own.
+
+# Three call density estimates
+
+`cde()` itself needs no new arguments for any of this beyond what already exists: `observerCol` becomes the vector `c("detect_observer1", "detect_observer2")` for the union case, matching the same detectors the model was fit with `whichObserver = "any"` for -- `cde()` checks that these two agree and refuses to silently combine a union false discovery rate with a single detector's own detection probability, or the reverse.
+
+One simplification made deliberately here: `NL` is passed as the true simulation noise level rather than left for `cde()` to estimate internally via `nlFromDetections()`. That estimator has its own, separate accuracy characteristics worth understanding on their own terms -- not something to entangle with the union-versus-individual comparison this vignette is actually about. `callDensity_CommonGround` shows the same "true NL" comparison for exactly this reason, alongside its own estimated-NL rows.
+
+```{r cde.individual, warning=FALSE, message=FALSE}
+res1 <- cde(Nc = Nc1, capHistTab = capHistTab, snrDetFun = fitObs1,
+           SL = SL, TL = TL, NL = NL, A = A, T = Time, k = k,
+           groundTruthCol = "groundTruth", observerCol = "detect_observer1",
+           signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+           noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
+
+res2 <- cde(Nc = Nc2, capHistTab = capHistTab, snrDetFun = fitObs2,
+           SL = SL, TL = TL, NL = NL, A = A, T = Time, k = k,
+           groundTruthCol = "groundTruth", observerCol = "detect_observer2",
+           signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+           noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
+```
+
+```{r cde.union, warning=FALSE, message=FALSE}
+resUnion <- cde(Nc = NcUnion, capHistTab = capHistTab, snrDetFun = fitUnion,
+                SL = SL, TL = TL, NL = NL, A = A, T = Time, k = k,
+                groundTruthCol = "groundTruth", observerCol = observerCols,
+                signalCol = c("signalRMSdB_observer1", "signalRMSdB_observer2"),
+                noiseCol  = c("noiseRMSdB_observer1",  "noiseRMSdB_observer2"))
+```
+
+# Results
+
+```{r results.table, echo=TRUE, warning=FALSE}
+resultsTrue <- data.frame(model = "Truth", Nc = n, c = NA, pa = NA,
+                          Dc = TrueCallDensity, CV.Dc = 0)
+
+results <- rbind(
+  resultsTrue,
+  data.frame(model = "Detector 1 alone", Nc = Nc1, c = res1$c, pa = res1$pa,
+            Dc = res1$Dc, CV.Dc = res1$CV.Dc),
+  data.frame(model = "Detector 2 alone", Nc = Nc2, c = res2$c, pa = res2$pa,
+            Dc = res2$Dc, CV.Dc = res2$CV.Dc),
+  data.frame(model = "Union (both)", Nc = NcUnion, c = resUnion$c, pa = resUnion$pa,
+            Dc = resUnion$Dc, CV.Dc = resUnion$CV.Dc)
+)
+results$DcFraction <- results$Dc / TrueCallDensity
+
+kableExtra::kbl(results, digits = c(NA, 0, 3, 4, 4, 3, 2), row.names = FALSE,
+                col.names = c("Model", "$N_c$", "$\\hat{c}$", "$\\hat{p}_a$",
+                             "$D_c$", "$CV.D_c$", "$D_c$ / true $D_c$")) %>%
+  kableExtra::kable_classic(full_width = FALSE)
+```
+
+```{r results.plot, fig.height=3.5}
+plotData <- subset(results, model != "Truth")
+plotData$model <- factor(plotData$model, levels = plotData$model)
+
+ggplot2::ggplot(plotData, ggplot2::aes(x = model, y = Dc, fill = model)) +
+  ggplot2::geom_col(width = 0.6) +
+  ggplot2::geom_errorbar(ggplot2::aes(ymin = Dc * (1 - CV.Dc), ymax = Dc * (1 + CV.Dc)),
+                        width = 0.15) +
+  ggplot2::geom_hline(yintercept = TrueCallDensity, linetype = "dashed", colour = "grey30") +
+  ggplot2::annotate("text", x = 0.6, y = TrueCallDensity, label = "Truth",
+                    vjust = -0.5, hjust = 0, colour = "grey30", size = 3) +
+  ggplot2::labs(x = NULL, y = expression(D[c]~(calls~km^-2~year^-1)), fill = NULL) +
+  ggplot2::theme_bw() +
+  ggplot2::theme(legend.position = "none")
+```
+
+The union estimate's error bars ($\pm 1$ CV) are visibly narrower than either individual detector's own -- the direct consequence of the union false discovery rate being estimated from more adjudicated events than either detector's own count alone (every event either detector flagged, rather than just one detector's own flags), which is the one piece of this that improves unconditionally regardless of what the two detectors' own probability curves happen to look like.
+
+# When this helps, and when it might not
+
+The false discovery rate's own coefficient of variation is smaller for the union than for either individual detector, always -- it only depends on how many adjudicated events went into estimating it, and the union pools strictly more of them (every event either detector flagged) than either detector's own count alone does. That part of the improvement is guaranteed by construction, not a property of this particular simulation.
+
+The detection probability's own uncertainty is a different matter. The union curve is a genuinely new quantity, not simply a better-sampled version of either individual curve, and its own precision depends on how well the joint model's coefficients are estimated -- which is not guaranteed to be tighter than an individual detector's own curve when that detector is already very well characterised on its own. In this simulation the two detectors are similar enough in how well-identified their curves are that the union's tighter false discovery rate dominates and its overall $CV.D_c$ comes out ahead of both -- confirmed here across three different random seeds, not just the one shown above -- but this is not a proof that the union estimate is always the tighter one. The two components can pull in different directions in principle, and if one detector is dramatically better-characterised than the other, that detector's own estimate could conceivably beat the union's on precision even though the union's false discovery rate is still the more tightly estimated of the two.
+
+What the union approach always buys is using detections that a single-detector analysis discards outright: a call caught only by detector 2 contributes nothing to a "detector 1 alone" estimate's own count, adjudicated sample, or detection function, even though it is exactly the kind of information adjudicated capture-recapture was introduced to make use of.
+
+# References
