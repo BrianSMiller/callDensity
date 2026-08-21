@@ -227,13 +227,14 @@ What the union approach always buys, regardless of how that particular contest g
 
 Automated detectors are becoming a commodity for some species and call types -- running ten mediocre detectors costs little more than running two, unlike the human observer effort adjudicated capture-recapture was originally built around. If that's the actual situation, the two-detector case above is really a lower bound on what's available. This section repeats the same union analysis for 3, 6, and 10 detectors of varying quality, sharing the same underlying call population, to see how the false discovery rate's guaranteed improvement (more adjudicated positives to estimate it from) plays out as the pool grows.
 
-The ten detectors span a plausible "commodity" range in threshold and false discovery rate, from fairly good to fairly mediocre -- but *not* in `scale`: capture-recapture uses detectors as recapture partners for each other, and a detector's own `scale` (how gradual its detection curve is, rather than a near step-function) directly affects how much information it contributes to that joint estimation, shallower curves being more informative partners. Varying `scale` alongside detector count would confound "more detectors" with "better-partnered detectors," so it's held fixed here at a middling value while threshold and false discovery rate still vary -- confirmed this doesn't change the qualitative result below, whether `scale` is held fixed, allowed to vary with detector count, or reversed. The 3/6/10-detector comparisons use the first 3, first 6, and all 10 of the same pool, so adding detectors here means literally adding to the same set rather than swapping in a different one.
+Ten detectors, with threshold, steepness, and false discovery rate all drawn randomly from a plausible "commodity" range inspired by prior estimates (e.g. @miller2026's own observed detectors), rather than assigned as a deliberate sequence -- a fixed, ordered progression of qualities across detector count risks tying "more detectors" to "detectors added later happen to be better or worse," which is a property of the specific sequence chosen, not of pooling more detectors. Random, independent draws avoid that. The 3/6/10-detector comparisons use the first 3, first 6, and all 10 of the same drawn pool, so adding detectors here means literally adding to the same set rather than swapping in a different one.
 
 ```{r ndetectors.setup}
 nMax <- 10
-locations <- seq(1, 4, length.out = nMax)
-scales    <- rep(3, nMax)
-fdrs      <- seq(0.1, 0.4, length.out = nMax)
+set.seed(42)
+locations <- rnorm(nMax, mean = 2.5, sd = 1)
+scales    <- pmax(rnorm(nMax, mean = 3, sd = 1), 0.5)  # guard against a nonsensical near-zero scale
+fdrs      <- runif(nMax, 0.1, 0.4)
 
 detParamsN <- lapply(seq_len(nMax), function(i) {
   data.frame(location = locations[i], scale = scales[i], func = 'plogis',
@@ -291,7 +292,7 @@ ggplot2::ggplot(scalingResults, ggplot2::aes(x = N, y = CV.Dc)) +
   ggplot2::theme_bw()
 ```
 
-$CV.D_c$ falls overall as the detector pool grows -- confirmed as a general pattern across several random seeds during development, not just the one run shown here -- though not perfectly monotonically at every single step (the two- to three-detector step above is a small, genuine wobble, not smoothed over). The reason is the same one from the two-detector case, just compounding: each additional detector adds more events to the union's adjudicated positive set, which is what the false discovery rate's precision depends on directly. Ten mediocre commodity detectors pooled this way substantially outprecision two decent ones -- an argument for breadth over quality when detectors are genuinely cheap to run in parallel.
+$CV.D_c$ falls with detector count -- confirmed as a general pattern across several random detector-parameter draws during development, not just the one run shown here. The reason is the same one from the two-detector case, just compounding: each additional detector adds more events to the union's adjudicated positive set, which is what the false discovery rate's precision depends on directly. Ten randomly-drawn commodity detectors pooled this way substantially outprecision two decent ones -- an argument for breadth over quality when detectors are genuinely cheap to run in parallel.
 
 # SNR and detector agreement
 
