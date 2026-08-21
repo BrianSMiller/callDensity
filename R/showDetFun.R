@@ -263,9 +263,18 @@ extractSNRinfo <- function(model) {
            "detected/missed outcome can't be recovered automatically -- ",
            "pass SNRinfo explicitly.", call. = FALSE)
     }
+    # "any" (union mode -- see vglmDetectionProb()) has no single column of
+    # its own in @y to read Detected from; the union's own Detected is
+    # whether *any* modeled occasion caught the call, matching the same
+    # union semantic pDetInArea()/cde() already use for this model.
+    detected <- if (identical(whichObserver, "any")) {
+      apply(model@y, 1, any)
+    } else {
+      model@y[, whichObserver]
+    }
     return(data.frame(
       SNR      = model@x[, "SNR"],
-      Detected = as.logical(model@y[, whichObserver])
+      Detected = as.logical(detected)
     ))
   }
 

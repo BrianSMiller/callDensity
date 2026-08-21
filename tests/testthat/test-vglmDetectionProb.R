@@ -92,3 +92,33 @@ test_that("pDetInArea() with whichObserver='any' produces a higher p_a than any 
   expect_true(pa_union$overall > pa_individual$overall)
   expect_true(pa_union$overall <= 1)
 })
+
+test_that("extractSNRinfo() handles whichObserver='any' (union mode), not just a single observer", {
+  # Regression: extractSNRinfo() previously tried model@y[, "any"] directly
+  # for a union-mode model, which errors ("subscript out of bounds") since
+  # "any" isn't a real column of @y -- found while building
+  # callDensity_unionDetectors.Rmd's showDetFun() comparison plot, where
+  # predictDetFunList()'s default-range calculation calls extractSNRinfo()
+  # on every model in a list, including a union one.
+  skip_if_not_installed("VGAM")
+
+  d <- make_n_observer_data(n_subsample = 600, n_observers = 3, seed = 42)
+  obsCols <- paste0("detect_observer", 1:3)
+  fit <- suppressWarnings(fitDetFun(d, modelType = "vglm", yColNames = obsCols))
+  fitUnion <- fit
+  fitUnion@extra$whichObserver <- "any"
+
+  info <- expect_no_error(callDensity:::extractSNRinfo(fitUnion))
+  expect_true(all(c("SNR", "Detected") %in% names(info)))
+
+  # Detected should be the union across all three occasions, not any single
+  # one -- so it must be >= each individual occasion's own Detected count,
+  # and equal to the OR of all three.
+  infoEach <- lapply(obsCols, function(col) {
+    f <- fit
+    f@extra$whichObserver <- col
+    callDensity:::extractSNRinfo(f)
+  })
+  expectedUnion <- Reduce(`|`, lapply(infoEach, function(x) x$Detected))
+  expect_equal(info$Detected, expectedUnion)
+})
