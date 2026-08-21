@@ -122,16 +122,15 @@ TL <- simTLradials_20logR(maxRange=R, rangeStep=100, numTransects=4)
 
 ```
 
-Here's the code from the callDensity package used to simulate sonar eq parameters for calls
-
-`simCallAcoustics<-` 
-```{r, code=simTLradials_20logR, eval=FALSE}
+Code from the callDensity package used to simulate sonar eq parameters and to simulate TL: `simCallAcoustics<-` 
+<details>
+```{r, code=simCallAcoustics, eval=FALSE}
 ```
-And the code for the fucntion to simulate TL
 
 `simTLradials_20logR <- ` 
 ```{r, code=simTLradials_20logR, eval=FALSE}
 ```
+</details>
 
 ## Simulate detection process
 
@@ -195,19 +194,16 @@ Now we create a function that will take the detector parameters above and simula
 
 ```{r simulate.detectors, warning=FALSE, message=FALSE}
 
-
-
 # Simulate two detectors each with the different parameters
 simDet1<- simulateDetector(det1params,sim)
 simDet2<- simulateDetector(det2params,sim)
 
 ```
 
-Code used to simulate the detection process:
-`simulateDetector <- `
+Code used to simulate the detection process:`simulateDetector <- ` <details>
 ```{r, code=simulateDetector, eval=FALSE}
 ```
-
+</details>
 
 View the spatial detection density (which is not the same as spatial call density since it accounts for neither detection probability nor time).
 
@@ -232,7 +228,14 @@ gridExtra::grid.arrange(dist1,dist2,nrow=1)
 subsampleDet1 <- subsampleSimInTime(simDet1,interval = "41 hour")
 subsampleDet2 <- subsampleSimInTime(simDet2,interval = "41 hour")
 
-# Plot to validate that we've subsetted the data sensibly by time.
+```
+
+ Code used to implement subsampling and plot to validate that we've subsetted the data sensibly by time: `subsampleSimInTime <- ` <details>
+
+```{r, code=subsampleSimInTime, eval=FALSE}
+```
+
+```{r }
 ggplot(subsampleDet1, aes(x=datetime, weights=detect_table) )+
   # geom_point(size=1,alpha=0.1)
   geom_histogram(breaks=seq(from=minDate,to=maxDate,by='12 h'))
@@ -243,10 +246,7 @@ ggplot(subsampleDet2, aes(x=datetime, weights=detect_table) )+
 
 ```
 
-Code used to implement subsampling:
-`subsampleSimInTime <- `
-```{r, code=subsampleSimInTime, eval=FALSE}
-```
+</details>
 
 ## Detection matching between detector 1 and 2
 
@@ -272,10 +272,10 @@ capHistTab$SNR <- rowMeans(capHistTab[, c("snr_observer1", "snr_observer2")], na
 
 ```
 
-Code used to merge simulated detections into a capture history table:
-`simsTocaptureHistoryTable <- `
+Code used to merge simulated detections into a capture history table: `simsTocaptureHistoryTable <- `<details>
 ```{r, code=simsTocaptureHistoryTable, eval=FALSE}
 ```
+</details>
 
 Convert this capture history table into an SNRinfo table, and treat detector1 as ground truth.
 
@@ -324,10 +324,11 @@ The detector was a logistic function, so fitting a GLM should provide good resul
 
 A GAM or SCAM should also be able to provide a good fit to a logistic function, but to keep this concise we leave fitting those as an exercise for the reader (see callDensity vignette).
 
-The callDensity package provides a convenience function fitDetFun to fit GLM, GAM, and SCAM models:
-`fitDetFun <- `
+The callDensity package provides a convenience function fitDetFun to fit GLM, GAM, and SCAM models: `fitDetFun <- `<details>
+
 ```{r, code=fitDetFun, eval=FALSE}
 ```
+</details>
 
 ```{r GLM p.det, warning=FALSE, message=FALSE}
 
@@ -380,7 +381,6 @@ Here, we correct for the over-representation of detections with lower NL in our 
 
 ```{r GLM p.det with independently estimated NL, warning=FALSE, message=FALSE}
 
-
 # 'Independent' estimate of NL 
 NLind <- callDensity::nlFromDetections(SNRinfo, snrDetFun.glm, SL, TL)
 
@@ -392,11 +392,10 @@ results.NLind <- cde(Nc=Nc, capHistTab = capHistTab, snrDetFun = snrDetFun.glm,
 
 ```
 
-CallDensity package code for correcting NL distribution bias that occurs due to higher probability of detecting calls when NL is low.
-`nlFromSnrInfo <- `
+CallDensity package code for correcting NL distribution bias that occurs due to higher probability of detecting calls when NL is low. See  `vignette("callDensity_noiseLevels")`. Function code: `nlFromSnrInfo <- `<details>
 ```{r, code=nlFromDetections, eval=FALSE}
 ```
-
+</details>
 
 ```{r}
 
@@ -421,16 +420,18 @@ Adjudicated capture-recapture models can make use of all information from multip
 
 Here we simulate perfect adjudication by removing all false positives from both detectors and retaining all true positives from both detectors in our capture history table.
 
-We fit a capture-recapture model to these adjudicated data using the VGAM package with the function 'vglm' [@yee2015].
+We fit a capture-recapture model to these adjudicated data using the VGAM package with the function `vglm` [@yee2015].
+
+VGLMs work a bit differently. We still pass in a capture history table. But now
+the ground-truth column is in a column separate from `detect_observer1` (here
+`groundTruth`). we want to include in our CH table all predicted positive
+detections from either detector, not just the ground-truth. We fit the vglm
+detection function outside of the call to cde, and pass it in as a parameter.
 
 ```{r VGLM p.det, warning=FALSE, message=FALSE}
 library(VGAM)
 
-#VGLMs work a bit differently. We still pass in a capture history table. But now
-#the ground-truth column is in a column separate from detect_observer1 (here
-#groundTruth). we want to include in our CH table all predicted positive
-#detections from either detector, not just the ground-truth. We fit the vglm
-#detection function outside of the call to cde, and pass it in as a parameter.
+
 #For the vglm fit, we want only adjudicated positive detections (no false
 #positives). cde()'s groundTruthCol/observerCol arguments point it directly at
 #groundTruth/detect_observer2, on a capHistTab restricted to rows flagged by
@@ -463,8 +464,6 @@ adj_c <- fp2/pp2
 observerNames = c("detect_observer1", "detect_observer2")
 snrDetFun.vglm <- fitDetFun(adjudicated, modelType = "vglm", yColNames = observerNames,
                             whichObserver = "detect_observer2")
-# Best estimate of NL 
-# NLadj <- nlFromSnrInfo(adjudicated, snrDetFun.vglm)
 
 results.vglm <- cde(Nc=Nc, capHistTab = ch, snrDetFun = snrDetFun.vglm,
                    SL = SL, TL = TL, A = A, modelType = 'vglm',
@@ -535,16 +534,8 @@ models <- list(
 names(models)[2] <- paste0("VGLM (", snrDetFun.vglm@extra$whichObserver, ")")
 names(models)[3] <- paste0("VGLM (", other_observer, ")")
  
-# xlim built in here -- top/main/bottom panels (and the fitted curves'
-# own prediction grid) are all constructed from this one shared range,
-# so they can't drift the way they would if the range were only changed
-# on the main panel after compositing.
 p <- showDetFun(models, distribution = 'density', rug = TRUE, xlim = c(-20, 20))
  
-# geom_line()/scale_linetype_manual()/theme()/labs() still need to target
-# the main panel explicitly -- patchwork's "+" applies non-xlim layers to
-# whichever panel was added LAST (the bottom "Missed" panel here), not the
-# visual middle one. xlim no longer needs to be in this chain at all.
 p <- p +
   ggplot2::geom_line(data = truth, alpha = 1, inherit.aes = FALSE, linewidth = .75,
                      ggplot2::aes(x = SNR, y = p_det, linetype = group)) +

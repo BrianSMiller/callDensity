@@ -145,7 +145,11 @@ SNR for each call is stored in the simulation data.frame in a column named 'snr'
 ggplot(data=sim, aes(x=snr))+
   geom_histogram()+
   xlab("SNR (dB)")
+```
 
+And if it helps, We can also view the SNR distribution as a function of distance.
+<details>
+```{r snr.distance.check, warning=FALSE, message=FALSE}
 # SNR as a function of distance
 ggplot(data=sim, aes(x=d/1e3, y=snr))+
   # geom_point(alpha=0.1,size=0.1)+
@@ -162,6 +166,8 @@ ggplot(data=sim, aes(x=d/1e3, y=snr))+
   theme_bw()
 
 ```
+
+</details>
 
 ## 7) Simulate detection process (including false positives)
 
