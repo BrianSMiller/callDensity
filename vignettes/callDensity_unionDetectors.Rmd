@@ -227,12 +227,12 @@ What the union approach always buys, regardless of how that particular contest g
 
 Automated detectors are becoming a commodity for some species and call types -- running ten mediocre detectors costs little more than running two, unlike the human observer effort adjudicated capture-recapture was originally built around. If that's the actual situation, the two-detector case above is really a lower bound on what's available. This section repeats the same union analysis for 3, 6, and 10 detectors of varying quality, sharing the same underlying call population, to see how the false discovery rate's guaranteed improvement (more adjudicated positives to estimate it from) plays out as the pool grows.
 
-The ten detectors span a plausible "commodity" range -- threshold, steepness, and false discovery rate all spread from fairly good to fairly mediocre -- and the 3/6/10-detector comparisons below use the first 3, first 6, and all 10 of the same pool, so adding detectors here means literally adding to the same set rather than swapping in a different one.
+The ten detectors span a plausible "commodity" range in threshold and false discovery rate, from fairly good to fairly mediocre -- but *not* in `scale`: capture-recapture uses detectors as recapture partners for each other, and a detector's own `scale` (how gradual its detection curve is, rather than a near step-function) directly affects how much information it contributes to that joint estimation, shallower curves being more informative partners. Varying `scale` alongside detector count would confound "more detectors" with "better-partnered detectors," so it's held fixed here at a middling value while threshold and false discovery rate still vary -- confirmed this doesn't change the qualitative result below, whether `scale` is held fixed, allowed to vary with detector count, or reversed. The 3/6/10-detector comparisons use the first 3, first 6, and all 10 of the same pool, so adding detectors here means literally adding to the same set rather than swapping in a different one.
 
 ```{r ndetectors.setup}
 nMax <- 10
 locations <- seq(1, 4, length.out = nMax)
-scales    <- seq(2, 4, length.out = nMax)
+scales    <- rep(3, nMax)
 fdrs      <- seq(0.1, 0.4, length.out = nMax)
 
 detParamsN <- lapply(seq_len(nMax), function(i) {
@@ -293,36 +293,29 @@ ggplot2::ggplot(scalingResults, ggplot2::aes(x = N, y = CV.Dc)) +
 
 $CV.D_c$ falls overall as the detector pool grows -- confirmed as a general pattern across several random seeds during development, not just the one run shown here -- though not perfectly monotonically at every single step (the two- to three-detector step above is a small, genuine wobble, not smoothed over). The reason is the same one from the two-detector case, just compounding: each additional detector adds more events to the union's adjudicated positive set, which is what the false discovery rate's precision depends on directly. Ten mediocre commodity detectors pooled this way substantially outprecision two decent ones -- an argument for breadth over quality when detectors are genuinely cheap to run in parallel.
 
-# Detector agreement and false positive rate
+# SNR and detector agreement
 
-@miller2026 noted, without demonstrating it directly, an inverse relationship between how many detectors flag a given event and how likely that event is to be a false positive. The ten-detector pool above gives enough range in "how many agreed" (0 through 10) to check this directly: for every event flagged by at least one of the ten, how many detectors flagged it, and was it actually real?
+@miller2026's Figure 3 showed the SNR distribution of adjudicated detections split by how many observers/detectors agreed on them, with true and false positives plotted as mirrored half-violins at each agreement count. The false-positive half isn't reproduced here: in this simulation, each detector's own false positives are independently, randomly timed, so two of them coinciding by chance is vanishingly unlikely by construction -- an event two or more simulated detectors agree on is, definitionally, almost always a real call here, which would make any true-vs-false comparison at higher agreement counts an artifact of the simulation rather than a real finding. That's a simulation limitation already on record as a to-do in `callDensity_CommonGround`, not a new one -- worth a proper mechanism for correlating false positives across detectors before revisiting the false-positive half specifically.
 
-```{r agreement.analysis}
-# runUnionAnalysis() above builds its own capture history table internally
-# and doesn't return it -- rebuilding the N=10 case explicitly here, rather
-# than threading it out as an extra return value for a one-off use.
+The true-positive half doesn't have that problem, since it says nothing about false positives at all -- just whether genuine calls caught by more detectors tend to sit at higher SNR, which is true by the ordinary logic of every detector improving with SNR, independent of how any detector's false positives happen to be simulated.
+
+```{r snr.agreement.violin, warning=FALSE}
 detsSubset10 <- simDetsN[1:10]
 subsampled10 <- lapply(detsSubset10, function(d) subsampleSimInTime(d, interval = "41 hour"))
 capHistTab10 <- do.call(simsTocaptureHistoryTable, subsampled10)
+capHistTab10$SNR <- rowMeans(capHistTab10[, paste0("snr_observer", 1:10)], na.rm = TRUE)
 observerCols10 <- paste0("detect_observer", 1:10)
 
-unionPositive <- subset(capHistTab10, Reduce(`|`, as.list(capHistTab10[observerCols10])))
-unionPositive$nAgree <- rowSums(unionPositive[, observerCols10])
+adjudicatedPositive <- subset(capHistTab10, capHistTab10$groundTruth &
+                                Reduce(`|`, as.list(capHistTab10[observerCols10])))
+adjudicatedPositive$nAgree <- rowSums(adjudicatedPositive[, observerCols10])
 
-agreementTable <- unionPositive %>%
-  dplyr::group_by(nAgree) %>%
-  dplyr::summarise(nEvents = dplyr::n(),
-                   fpRate = mean(!groundTruth))
-
-ggplot2::ggplot(agreementTable, ggplot2::aes(x = nAgree, y = fpRate)) +
-  ggplot2::geom_col(fill = "steelblue") +
-  ggplot2::geom_text(ggplot2::aes(label = nEvents), vjust = -0.3, size = 3) +
-  ggplot2::scale_x_continuous(breaks = 1:10) +
-  ggplot2::labs(x = "Number of detectors agreeing", y = "Empirical false positive rate",
-               caption = "Label above each bar: number of events at that agreement count") +
+ggplot2::ggplot(adjudicatedPositive, ggplot2::aes(x = factor(nAgree), y = SNR)) +
+  ggplot2::geom_violin(fill = "steelblue", alpha = 0.6) +
+  ggplot2::labs(x = "Number of detectors agreeing", y = "SNR (dB)") +
   ggplot2::theme_bw()
 ```
 
-The direction is exactly as expected -- agreement concentrated entirely among single-detector events, and the false positive rate drops from most of that single-detector bucket to essentially none of it once two or more detectors agree. But the shape here is sharper than real data is likely to show, and it's worth being explicit about why: in this simulation, each detector's own false positives are independently, randomly timed, so two detectors' false alarms coinciding by chance is vanishingly unlikely by construction -- any event two or more detectors agree on here is, definitionally, almost certain to be a real call. Real false alarms are not always like that. A shared, correlated source -- another species' overlapping calls, a consistent noise transient, ice or vessel noise with its own predictable signature -- could plausibly fool several detectors at once, especially ones built on similar underlying features. The direction of the relationship (more agreement, fewer false positives) should still hold, since it follows from genuine calls being the one thing every detector is actually built to find, but the real-data version of this curve likely declines more gradually than the near step-function shown here, rather than dropping to exactly zero after the first additional detector agrees.
+Higher-SNR calls are the ones every detector in the pool is more likely to catch, so as more detectors agree, the SNR distribution shifts up and narrows -- calls at the far right, caught by all ten, sit well clear of the noise floor; calls caught by only one sit close to it, exactly the population where any individual detector's own threshold is doing the most work.
 
 # References
