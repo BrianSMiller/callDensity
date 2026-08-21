@@ -223,4 +223,106 @@ So the honest summary is: the union's false discovery rate is unconditionally ti
 
 What the union approach always buys, regardless of how that particular contest goes, is using detections that a single-detector analysis discards outright: a call caught only by detector 2 contributes nothing to a "detector 1 alone" estimate's own count, adjudicated sample, or detection function, even though it is exactly the kind of information adjudicated capture-recapture was introduced to make use of.
 
+# Scaling to more detectors
+
+Automated detectors are becoming a commodity for some species and call types -- running ten mediocre detectors costs little more than running two, unlike the human observer effort adjudicated capture-recapture was originally built around. If that's the actual situation, the two-detector case above is really a lower bound on what's available. This section repeats the same union analysis for 3, 6, and 10 detectors of varying quality, sharing the same underlying call population, to see how the false discovery rate's guaranteed improvement (more adjudicated positives to estimate it from) plays out as the pool grows.
+
+The ten detectors span a plausible "commodity" range -- threshold, steepness, and false discovery rate all spread from fairly good to fairly mediocre -- and the 3/6/10-detector comparisons below use the first 3, first 6, and all 10 of the same pool, so adding detectors here means literally adding to the same set rather than swapping in a different one.
+
+```{r ndetectors.setup}
+nMax <- 10
+locations <- seq(1, 4, length.out = nMax)
+scales    <- seq(2, 4, length.out = nMax)
+fdrs      <- seq(0.1, 0.4, length.out = nMax)
+
+detParamsN <- lapply(seq_len(nMax), function(i) {
+  data.frame(location = locations[i], scale = scales[i], func = 'plogis',
+            c = fdrs[i], fpMean = 0, fpSD = 2)
+})
+
+simDetsN <- lapply(seq_len(nMax), function(i) simulateDetector(detParamsN[[i]], sim))
+```
+
+```{r ndetectors.analysis, warning=FALSE, message=FALSE}
+runUnionAnalysis <- function(N) {
+  detsSubset <- simDetsN[1:N]
+  subsampled <- lapply(detsSubset, function(d) subsampleSimInTime(d, interval = "41 hour"))
+
+  capHistTabFullN <- do.call(simsTocaptureHistoryTable, detsSubset)
+  capHistTabN <- do.call(simsTocaptureHistoryTable, subsampled)
+  capHistTabN$SNR <- rowMeans(capHistTabN[, paste0("snr_observer", seq_len(N))], na.rm = TRUE)
+
+  observerColsN <- paste0("detect_observer", seq_len(N))
+  signalColsN   <- paste0("signalRMSdB_observer", seq_len(N))
+  noiseColsN    <- paste0("noiseRMSdB_observer", seq_len(N))
+
+  NcUnionN <- unionDetections(capHistTabFullN, observerColsN, fullCoverageConfirmed = TRUE)
+
+  adjudicatedN <- subset(capHistTabN, capHistTabN$groundTruth &
+                           Reduce(`|`, as.list(capHistTabN[observerColsN])))
+
+  fitUnionN <- fitDetFun(adjudicatedN, modelType = "vglm", yColNames = observerColsN,
+                         whichObserver = "any")
+
+  resUnionN <- cde(Nc = NcUnionN, capHistTab = capHistTabN, snrDetFun = fitUnionN,
+                   SL = SL, TL = TL, A = A, T = Time, k = k,
+                   groundTruthCol = "groundTruth", observerCol = observerColsN,
+                   signalCol = signalColsN, noiseCol = noiseColsN)
+
+  data.frame(N = N, Nc = NcUnionN, c = resUnionN$c, pa = resUnionN$pa,
+            Dc = resUnionN$Dc, CV.Dc = resUnionN$CV.Dc,
+            DcFraction = resUnionN$Dc / TrueCallDensity)
+}
+
+scalingResults <- do.call(rbind, lapply(c(2, 3, 6, 10), runUnionAnalysis))
+
+kableExtra::kbl(scalingResults, digits = c(0, 0, 3, 4, 4, 3, 2), row.names = FALSE,
+                col.names = c("N detectors", "$N_c$", "$\\hat{c}$", "$\\hat{p}_a$",
+                             "$D_c$", "$CV.D_c$", "$D_c$ / true $D_c$")) %>%
+  kableExtra::kable_classic(full_width = FALSE)
+```
+
+```{r ndetectors.plot, fig.height=3.5}
+ggplot2::ggplot(scalingResults, ggplot2::aes(x = N, y = CV.Dc)) +
+  ggplot2::geom_line() +
+  ggplot2::geom_point(size = 2) +
+  ggplot2::scale_x_continuous(breaks = scalingResults$N) +
+  ggplot2::labs(x = "Number of detectors in the union", y = expression(CV.D[c])) +
+  ggplot2::theme_bw()
+```
+
+$CV.D_c$ falls overall as the detector pool grows -- confirmed as a general pattern across several random seeds during development, not just the one run shown here -- though not perfectly monotonically at every single step (the two- to three-detector step above is a small, genuine wobble, not smoothed over). The reason is the same one from the two-detector case, just compounding: each additional detector adds more events to the union's adjudicated positive set, which is what the false discovery rate's precision depends on directly. Ten mediocre commodity detectors pooled this way substantially outprecision two decent ones -- an argument for breadth over quality when detectors are genuinely cheap to run in parallel.
+
+# Detector agreement and false positive rate
+
+@miller2026 noted, without demonstrating it directly, an inverse relationship between how many detectors flag a given event and how likely that event is to be a false positive. The ten-detector pool above gives enough range in "how many agreed" (0 through 10) to check this directly: for every event flagged by at least one of the ten, how many detectors flagged it, and was it actually real?
+
+```{r agreement.analysis}
+# runUnionAnalysis() above builds its own capture history table internally
+# and doesn't return it -- rebuilding the N=10 case explicitly here, rather
+# than threading it out as an extra return value for a one-off use.
+detsSubset10 <- simDetsN[1:10]
+subsampled10 <- lapply(detsSubset10, function(d) subsampleSimInTime(d, interval = "41 hour"))
+capHistTab10 <- do.call(simsTocaptureHistoryTable, subsampled10)
+observerCols10 <- paste0("detect_observer", 1:10)
+
+unionPositive <- subset(capHistTab10, Reduce(`|`, as.list(capHistTab10[observerCols10])))
+unionPositive$nAgree <- rowSums(unionPositive[, observerCols10])
+
+agreementTable <- unionPositive %>%
+  dplyr::group_by(nAgree) %>%
+  dplyr::summarise(nEvents = dplyr::n(),
+                   fpRate = mean(!groundTruth))
+
+ggplot2::ggplot(agreementTable, ggplot2::aes(x = nAgree, y = fpRate)) +
+  ggplot2::geom_col(fill = "steelblue") +
+  ggplot2::geom_text(ggplot2::aes(label = nEvents), vjust = -0.3, size = 3) +
+  ggplot2::scale_x_continuous(breaks = 1:10) +
+  ggplot2::labs(x = "Number of detectors agreeing", y = "Empirical false positive rate",
+               caption = "Label above each bar: number of events at that agreement count") +
+  ggplot2::theme_bw()
+```
+
+The direction is exactly as expected -- agreement concentrated entirely among single-detector events, and the false positive rate drops from most of that single-detector bucket to essentially none of it once two or more detectors agree. But the shape here is sharper than real data is likely to show, and it's worth being explicit about why: in this simulation, each detector's own false positives are independently, randomly timed, so two detectors' false alarms coinciding by chance is vanishingly unlikely by construction -- any event two or more detectors agree on here is, definitionally, almost certain to be a real call. Real false alarms are not always like that. A shared, correlated source -- another species' overlapping calls, a consistent noise transient, ice or vessel noise with its own predictable signature -- could plausibly fool several detectors at once, especially ones built on similar underlying features. The direction of the relationship (more agreement, fewer false positives) should still hold, since it follows from genuine calls being the one thing every detector is actually built to find, but the real-data version of this curve likely declines more gradually than the near step-function shown here, rather than dropping to exactly zero after the first additional detector agrees.
+
 # References
