@@ -1,3 +1,105 @@
+# callDensity 1.3.0
+
+## New features
+
+* **Union call density estimation.** Until now, every capture-recapture
+  density estimate -- however many observers or detectors were fit
+  jointly -- was still reported *for one of them*: `whichObserver`
+  picked which detector's own detection probability to read off the
+  fitted model, and `cde()`'s `observerCol` picked which detector's own
+  raw counts and false discovery rate to use. The joint model always
+  computed the probability that *at least one* detector caught a given
+  call as an internal step toward each individual detector's own
+  probability (`VGAM::posbernoulli.t`'s `type.fitted = "onempall0"`) --
+  this was simply never surfaced. It now is.
+
+  `whichObserver = "any"` (matching the same argument's existing
+  single-observer values, not a new mechanism) requests the union
+  detection probability directly. Paired with the matching union of raw
+  detections (new `unionDetections()`) and a union false discovery rate
+  (`falseDiscoveryRate()`'s `testColName` now accepts a vector, and
+  `chtToSNRinfo()`'s `Detected` is the union across all named
+  `observers`, not just the last one -- identical to previous behaviour
+  when only one is named), `cde()`'s `observerCol` accepts the matching
+  vector of detector columns and computes a single call density estimate
+  drawing on every detector's own detections at once, rather than several
+  separate, partially-redundant analyses of the same underlying calls.
+  `cde()` checks that a vector `observerCol` and a `whichObserver = "any"`
+  model agree with each other, and refuses to silently combine a union
+  false discovery rate with a single detector's own detection
+  probability, or the reverse.
+
+  New vignette `callDensity_unionDetectors.Rmd` demonstrates this
+  end to end against simulated data: fits one joint model, reads off
+  each detector's own curve and the union curve from it, and compares
+  all three against known truth. The union's false discovery rate is
+  unconditionally more precisely estimated than any individual
+  detector's own (it pools every event any detector flagged, rather
+  than just one detector's own flags) -- confirmed always tighter across
+  several replicates -- but the union's overall `CV.Dc` is not
+  guaranteed to beat an already-well-identified individual detector's
+  own estimate, since detection probability's own uncertainty is a
+  separate quantity the union construction doesn't unconditionally
+  improve. Both are shown, not just the favourable case. A further
+  section extends the comparison to 3, 6, and 10 detectors of randomly
+  varied quality, and a violin plot of adjudicated-true-positive SNR by
+  number of detectors agreeing, in the spirit of Miller et al. (2026)'s
+  Figure 3 (the false-positive half of that figure is not reproduced:
+  this simulation's detectors generate false positives independently of
+  each other, so two or more agreeing on a false alarm is essentially
+  impossible by construction, which would make that comparison an
+  artifact of the simulation rather than a real finding).
+
+* **`simsTocaptureHistoryTable()` accepts any number of detectors** (was
+  fixed at exactly two), via `...` rather than named arguments -- every
+  existing two-argument call site is unaffected. Output is matchbox-
+  native throughout: `key`, `t0`/`tEnd` as genuine MATLAB datenums (new
+  `Rdate2mat()`, the inverse of `mat2Rdate()` -- a plain POSIXct under
+  the same column name silently breaks `chtToSNRinfo()`'s default
+  `timeCol = 't0'` and `cde()`'s auto-detection, both of which
+  unconditionally convert anything literally named `t0`), `detect_<suffix>`
+  (always clean logical), and every other column suffixed per detector
+  rather than pre-averaged -- downstream consolidation (e.g. averaging
+  SNR) is `chtToSNRinfo()`'s job now, via its existing `signalCol`/
+  `noiseCol` vector-averaging. `groundTruth` is coalesced into a single
+  event-level column alongside the per-observer copies: unlike SNR or a
+  detector's own true/false-positive label, ground truth is a property
+  of the event itself, and every contributing detector's own copy of it
+  agrees whenever more than one is present.
+
+## Bug fixes
+
+* **`chtToSNRinfo()`: unjudged and "OTHER" (`verdict = -1`) rows were
+  silently inserted as phantom all-NA rows.** `cht[cht[[gtCol]] == 1, ]`
+  produces `NA` wherever `gtCol` (verdict) is `NA`, and R's `df[cond, ]`
+  with an `NA` in `cond` inserts a placeholder row for it rather than
+  dropping it -- on a table with mostly-unjudged rows (the normal shape
+  of a real capture history table), this could return far more rows than
+  there were genuine true positives, nearly all of them garbage. Fixed
+  with `which()` in place of direct logical indexing, which correctly
+  drops `NA` instead of keeping a placeholder for it.
+
+* **`nlFromDetections()` now filters to `Detected == TRUE` internally**
+  when that column is present, rather than assuming its caller already
+  had. `cde()` was passing `chtToSNRinfo()`'s full (detected and missed)
+  output straight through unfiltered; `nlFromDetections()`'s own bias
+  correction assumes it's been handed noise measured at detections
+  specifically, so an unfiltered input overcorrects an already-close-to-
+  unbiased mean. Invisible in the existing observer-ground-truth
+  convention (a relatively balanced detected/missed split keeps the
+  effect under a dB, unnoticeable against ordinary simulation noise),
+  but substantial -- several dB, a large swing in the resulting `Dc` --
+  for a capture history table with a more lopsided split, which the
+  union convention's coalesced ground truth (every real call, not just
+  ones some detector already flagged) produces.
+
+* **`showDetFun()`'s internal `extractSNRinfo()` errored on a
+  `whichObserver = "any"` model** (`model@y[, "any"]`: no such column).
+  Detected is now the union across every modeled occasion for this case,
+  matching the same semantic `vglmDetectionProb()`/`pDetInArea()`/
+  `cde()` already use for it.
+
+
 # callDensity 1.2.0 
 
 ## New features
